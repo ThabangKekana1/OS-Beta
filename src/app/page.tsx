@@ -1,15 +1,12 @@
 import Link from "next/link";
-import { Shield, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function LandingPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4">
       <div className="max-w-lg text-center">
-        <div className="mb-8 flex justify-center">
-          <Shield size={48} className="text-primary" />
-        </div>
-        <h1 className="text-3xl font-bold tracking-tight">Foundation-1</h1>
+        <h1 className="font-centauri text-3xl tracking-[0.28em]">OS-BETA</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Energy-as-a-service distribution platform
         </p>

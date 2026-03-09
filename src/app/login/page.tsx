@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,8 +65,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <Shield size={32} className="mx-auto mb-3 text-primary" />
-          <h1 className="text-lg font-semibold">Foundation-1</h1>
+          <h1 className="font-centauri text-lg tracking-[0.28em]">OS-BETA</h1>
           <p className="text-xs text-muted-foreground">Pilot Command Centre</p>
           <p className="mt-2 text-[11px] text-muted-foreground">
             One application with role-based dashboard access.

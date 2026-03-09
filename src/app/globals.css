@@ -94,3 +94,9 @@
     @apply font-sans;
   }
 }
+
+@layer utilities {
+  .font-centauri {
+    font-family: "Centauri", var(--font-sans), sans-serif;
+  }
+}
