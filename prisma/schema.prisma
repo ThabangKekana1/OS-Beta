@@ -1,0 +1,557 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ──────────────────────────────────────────────
+// Enums
+// ──────────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMINISTRATOR
+  SALES_REPRESENTATIVE
+  BUSINESS_USER
+}
+
+enum UserStatus {
+  ACTIVE
+  INVITED
+  DISABLED
+  PENDING
+}
+
+enum QualificationStatus {
+  UNASSESSED
+  EARLY_INTEREST
+  REGISTERED
+  DOCUMENTS_PENDING
+  QUALIFIED
+  DISQUALIFIED
+}
+
+enum BusinessStatus {
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+enum DealHealthStatus {
+  HEALTHY
+  AT_RISK
+  STALLED
+  OVERDUE
+  WAITING_ON_BUSINESS
+  WAITING_ON_ADMINISTRATOR
+  WAITING_ON_PARTNER
+}
+
+enum DealPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum DocumentReviewStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum DocumentDirection {
+  ADMIN_TO_BUSINESS
+  BUSINESS_TO_ADMIN
+}
+
+enum DocumentPurpose {
+  REQUESTED_DOCUMENT
+  DELIVERED_DOCUMENT
+  SIGNED_RETURN
+  SUPPORTING_DOCUMENT
+}
+
+enum DocumentExchangePhase {
+  EXPRESSION_OF_INTEREST
+  UTILITY_BILL
+  PROPOSAL
+  TERM_SHEET
+  KNOW_YOUR_CUSTOMER
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  BLOCKED
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum NoteType {
+  INTERNAL
+  CUSTOMER_VISIBLE
+}
+
+enum NotificationSeverity {
+  INFO
+  WARNING
+  URGENT
+  SUCCESS
+}
+
+enum LeadStatus {
+  NEW
+  INVITE_SENT
+  REGISTERED
+  CONVERTED
+  DEAD
+}
+
+enum OnboardingStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum StageCategory {
+  EARLY_LEAD
+  REGISTRATION
+  EXPRESSION_OF_INTEREST
+  UTILITY_REVIEW
+  PROPOSAL
+  TERM_SHEET
+  KNOW_YOUR_CUSTOMER
+  APPROVAL
+  DELIVERY
+  LIVE_SUPPORT
+  CLOSED
+}
+
+// ──────────────────────────────────────────────
+// User & Profiles
+// ──────────────────────────────────────────────
+
+model User {
+  id            String     @id @default(cuid())
+  firstName     String
+  lastName      String
+  email         String     @unique
+  passwordHash  String
+  role          UserRole
+  status        UserStatus @default(PENDING)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  lastLoginAt   DateTime?
+
+  salesRepProfile   SalesRepresentativeProfile?
+  businessUserProfile BusinessUserProfile?
+
+  // Relations
+  sourcedBusinesses     Business[]       @relation("SourceSalesRep")
+  assignedBusinesses    Business[]       @relation("AssignedAdmin")
+  sourcedDeals          DealPipeline[]   @relation("DealSourceSalesRep")
+  assignedDeals         DealPipeline[]   @relation("DealAssignedAdmin")
+  uploadedDocuments     DocumentSubmission[] @relation("UploadedBy")
+  reviewedDocuments     DocumentSubmission[] @relation("ReviewedBy")
+  assignedTasks         Task[]           @relation("TaskAssignedTo")
+  createdTasks          Task[]           @relation("TaskCreatedBy")
+  notifications         Notification[]
+  activityLogs          ActivityLog[]    @relation("ActivityActor")
+  stageChanges          PipelineStageHistory[] @relation("StageChangedBy")
+  leads                 Lead[]
+  notes                 Note[]
+
+  @@index([role])
+  @@index([status])
+  @@index([email])
+}
+
+model SalesRepresentativeProfile {
+  id                String           @id @default(cuid())
+  userId            String           @unique
+  uniqueReferralCode String          @unique
+  phoneNumber       String?
+  onboardingStatus  OnboardingStatus @default(PENDING)
+  pilotCohort       String?          @default("PILOT_1")
+  notes             String?
+  performanceScore  Float?           @default(0)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([uniqueReferralCode])
+}
+
+model BusinessUserProfile {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  businessId       String
+  title            String?
+  canSignDocuments Boolean  @default(false)
+  isPrimaryContact Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@index([businessId])
+}
+
+// ──────────────────────────────────────────────
+// Lead (pre-registration)
+// ──────────────────────────────────────────────
+
+model Lead {
+  id                      String     @id @default(cuid())
+  salesRepresentativeId   String
+  businessName            String
+  contactName             String
+  contactEmail            String
+  contactPhone            String?
+  status                  LeadStatus @default(NEW)
+  inviteSentAt            DateTime?
+  registeredBusinessId    String?
+  deadReason              String?
+  createdAt               DateTime   @default(now())
+  updatedAt               DateTime   @updatedAt
+
+  salesRepresentative User      @relation(fields: [salesRepresentativeId], references: [id])
+  registeredBusiness  Business? @relation(fields: [registeredBusinessId], references: [id])
+
+  @@index([salesRepresentativeId])
+  @@index([status])
+  @@index([contactEmail])
+}
+
+// ──────────────────────────────────────────────
+// Business
+// ──────────────────────────────────────────────
+
+model Business {
+  id                           String              @id @default(cuid())
+  legalName                    String
+  tradingName                  String?
+  registrationNumber           String              @unique
+  industry                     String?
+  monthlyElectricitySpendEstimate Float?
+  contactPersonName            String
+  contactPersonEmail           String
+  contactPersonPhone           String?
+  physicalAddress              String?
+  city                         String?
+  province                     String?
+  status                       BusinessStatus      @default(ACTIVE)
+  qualificationStatus          QualificationStatus @default(UNASSESSED)
+  disqualificationReason       String?
+  sourceSalesRepresentativeId  String
+  assignedAdministratorId      String?
+  currentStageId               String?
+  createdAt                    DateTime            @default(now())
+  updatedAt                    DateTime            @updatedAt
+
+  sourceSalesRepresentative User                  @relation("SourceSalesRep", fields: [sourceSalesRepresentativeId], references: [id])
+  assignedAdministrator     User?                 @relation("AssignedAdmin", fields: [assignedAdministratorId], references: [id])
+  currentStage              PipelineStageDefinition? @relation(fields: [currentStageId], references: [id])
+  businessUsers             BusinessUserProfile[]
+  dealPipeline              DealPipeline?
+  documents                 DocumentSubmission[]
+  tasks                     Task[]
+  notes                     Note[]
+  leads                     Lead[]
+
+  @@index([sourceSalesRepresentativeId])
+  @@index([assignedAdministratorId])
+  @@index([qualificationStatus])
+  @@index([registrationNumber])
+  @@index([currentStageId])
+}
+
+// ──────────────────────────────────────────────
+// Pipeline & Stages
+// ──────────────────────────────────────────────
+
+model PipelineStageDefinition {
+  id              String        @id @default(cuid())
+  code            String        @unique
+  name            String
+  description     String?
+  orderIndex      Int
+  ownerRole       UserRole
+  category        StageCategory
+  isTerminal      Boolean       @default(false)
+  isActive        Boolean       @default(true)
+  isCustomerVisible Boolean     @default(true)
+  targetDurationHours Int?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  businesses      Business[]
+  currentDeals    DealPipeline[] @relation("DealCurrentStage")
+  fromHistory     PipelineStageHistory[] @relation("FromStage")
+  toHistory       PipelineStageHistory[] @relation("ToStage")
+  requiredDocuments DocumentTypeDefinition[]
+
+  @@index([code])
+  @@index([orderIndex])
+  @@index([category])
+}
+
+model DealPipeline {
+  id                        String          @id @default(cuid())
+  businessId                String          @unique
+  sourceSalesRepresentativeId String
+  assignedAdministratorId   String?
+  currentStageId            String
+  stageEnteredAt            DateTime        @default(now())
+  isStalled                 Boolean         @default(false)
+  stalledAt                 DateTime?
+  stallReasonCode           String?
+  nextRequiredAction        String?
+  nextRequiredActionOwner   UserRole?
+  priority                  DealPriority    @default(MEDIUM)
+  healthStatus              DealHealthStatus @default(HEALTHY)
+  createdAt                 DateTime        @default(now())
+  updatedAt                 DateTime        @updatedAt
+
+  business                Business              @relation(fields: [businessId], references: [id])
+  sourceSalesRepresentative User                @relation("DealSourceSalesRep", fields: [sourceSalesRepresentativeId], references: [id])
+  assignedAdministrator   User?                 @relation("DealAssignedAdmin", fields: [assignedAdministratorId], references: [id])
+  currentStage            PipelineStageDefinition @relation("DealCurrentStage", fields: [currentStageId], references: [id])
+  stallReason             StallReasonDefinition?  @relation(fields: [stallReasonCode], references: [code])
+  stageHistory            PipelineStageHistory[]
+  documents               DocumentSubmission[]
+  tasks                   Task[]
+  notes                   Note[]
+
+  @@index([currentStageId])
+  @@index([sourceSalesRepresentativeId])
+  @@index([assignedAdministratorId])
+  @@index([isStalled])
+  @@index([healthStatus])
+  @@index([priority])
+}
+
+model PipelineStageHistory {
+  id                       String   @id @default(cuid())
+  dealPipelineId           String
+  fromStageId              String?
+  toStageId                String
+  changedByUserId          String
+  changedAt                DateTime @default(now())
+  previousStageDurationHours Float?
+  note                     String?
+
+  dealPipeline DealPipeline          @relation(fields: [dealPipelineId], references: [id])
+  fromStage    PipelineStageDefinition? @relation("FromStage", fields: [fromStageId], references: [id])
+  toStage      PipelineStageDefinition  @relation("ToStage", fields: [toStageId], references: [id])
+  changedBy    User                     @relation("StageChangedBy", fields: [changedByUserId], references: [id])
+
+  @@index([dealPipelineId])
+  @@index([changedAt])
+}
+
+// ──────────────────────────────────────────────
+// Document Types & Submissions
+// ──────────────────────────────────────────────
+
+model DocumentTypeDefinition {
+  id                         String  @id @default(cuid())
+  code                       String  @unique
+  name                       String
+  description                String?
+  requiredForStageId         String?
+  visibleToBusiness          Boolean @default(true)
+  visibleToSalesRepresentative Boolean @default(false)
+  visibleToAdministrator     Boolean @default(true)
+  canBusinessUpload          Boolean @default(false)
+  canAdministratorUpload     Boolean @default(true)
+  requiresReview             Boolean @default(true)
+  isActive                   Boolean @default(true)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  requiredForStage PipelineStageDefinition? @relation(fields: [requiredForStageId], references: [id])
+  submissions      DocumentSubmission[]
+
+  @@index([code])
+}
+
+model DocumentSubmission {
+  id                    String               @id @default(cuid())
+  businessId            String
+  dealPipelineId        String?
+  parentSubmissionId    String?
+  documentTypeId        String
+  uploadedByUserId      String
+  direction             DocumentDirection      @default(BUSINESS_TO_ADMIN)
+  purpose               DocumentPurpose        @default(SUPPORTING_DOCUMENT)
+  exchangePhase         DocumentExchangePhase  @default(EXPRESSION_OF_INTEREST)
+  visibleToBusiness     Boolean              @default(true)
+  visibleToAdministrator Boolean             @default(true)
+  visibleToSalesRepresentative Boolean       @default(false)
+  businessActionRequired Boolean             @default(false)
+  adminReviewRequired   Boolean              @default(true)
+  partnerHandoffRequired Boolean             @default(false)
+  fileUrl               String
+  originalFileName      String
+  mimeType              String?
+  fileSize              Int?
+  versionNumber         Int                  @default(1)
+  reviewStatus          DocumentReviewStatus @default(PENDING_REVIEW)
+  businessDownloadedAt  DateTime?
+  returnedSignedAt      DateTime?
+  reviewedByUserId      String?
+  reviewedAt            DateTime?
+  rejectionReason       String?
+  forwardedToPartnerAt  DateTime?
+  returnedFromPartnerAt DateTime?
+  partnerStatus         String?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  business     Business              @relation(fields: [businessId], references: [id])
+  dealPipeline DealPipeline?         @relation(fields: [dealPipelineId], references: [id])
+  parentSubmission DocumentSubmission? @relation("DocumentSubmissionLineage", fields: [parentSubmissionId], references: [id])
+  childSubmissions DocumentSubmission[] @relation("DocumentSubmissionLineage")
+  documentType DocumentTypeDefinition @relation(fields: [documentTypeId], references: [id])
+  uploadedBy   User                  @relation("UploadedBy", fields: [uploadedByUserId], references: [id])
+  reviewedBy   User?                 @relation("ReviewedBy", fields: [reviewedByUserId], references: [id])
+
+  @@index([businessId])
+  @@index([dealPipelineId])
+  @@index([parentSubmissionId])
+  @@index([documentTypeId])
+  @@index([direction, purpose, exchangePhase])
+  @@index([businessActionRequired, exchangePhase])
+  @@index([reviewStatus])
+  @@index([versionNumber])
+}
+
+// ──────────────────────────────────────────────
+// Stall Reasons
+// ──────────────────────────────────────────────
+
+model StallReasonDefinition {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String?
+  category    String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  deals DealPipeline[]
+
+  @@index([code])
+}
+
+// ──────────────────────────────────────────────
+// Tasks
+// ──────────────────────────────────────────────
+
+model Task {
+  id               String       @id @default(cuid())
+  dealPipelineId   String?
+  businessId       String?
+  assignedToUserId String?
+  createdByUserId  String
+  title            String
+  description      String?
+  taskType         String?
+  dueAt            DateTime?
+  completedAt      DateTime?
+  status           TaskStatus   @default(OPEN)
+  priority         TaskPriority @default(MEDIUM)
+  ownerRole        UserRole?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  dealPipeline DealPipeline? @relation(fields: [dealPipelineId], references: [id])
+  business     Business?     @relation(fields: [businessId], references: [id])
+  assignedTo   User?         @relation("TaskAssignedTo", fields: [assignedToUserId], references: [id])
+  createdBy    User          @relation("TaskCreatedBy", fields: [createdByUserId], references: [id])
+
+  @@index([dealPipelineId])
+  @@index([businessId])
+  @@index([assignedToUserId])
+  @@index([status])
+  @@index([dueAt])
+}
+
+// ──────────────────────────────────────────────
+// Activity Log
+// ──────────────────────────────────────────────
+
+model ActivityLog {
+  id           String   @id @default(cuid())
+  entityType   String
+  entityId     String
+  actionType   String
+  actorUserId  String?
+  metadataJson String?
+  createdAt    DateTime @default(now())
+
+  actor User? @relation("ActivityActor", fields: [actorUserId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([actorUserId])
+  @@index([actionType])
+  @@index([createdAt])
+}
+
+// ──────────────────────────────────────────────
+// Notifications
+// ──────────────────────────────────────────────
+
+model Notification {
+  id        String               @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  severity  NotificationSeverity @default(INFO)
+  isRead    Boolean              @default(false)
+  link      String?
+  createdAt DateTime             @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+}
+
+// ──────────────────────────────────────────────
+// Notes / Comments
+// ──────────────────────────────────────────────
+
+model Note {
+  id             String   @id @default(cuid())
+  dealPipelineId String?
+  businessId     String?
+  authorUserId   String
+  noteType       NoteType @default(INTERNAL)
+  body           String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  dealPipeline DealPipeline? @relation(fields: [dealPipelineId], references: [id])
+  business     Business?     @relation(fields: [businessId], references: [id])
+  author       User          @relation(fields: [authorUserId], references: [id])
+
+  @@index([dealPipelineId])
+  @@index([businessId])
+  @@index([authorUserId])
+  @@index([noteType])
+}

@@ -35,7 +35,11 @@ yarn-error.log*
 
 # vercel
 .vercel
+.playwright-cli/
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+/src/generated/prisma
+.env*.local
