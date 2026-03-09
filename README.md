@@ -69,7 +69,6 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5432/foundation1?schema=p
 DIRECT_URL="postgresql://postgres:postgres@localhost:5432/foundation1?schema=public"
 AUTH_URL="http://localhost:3001"
 AUTH_SECRET="generate-a-secure-random-string"
-SEED_PASSWORD="Password123!"
 ALLOW_DEMO_SEED="false"
 ```
 
@@ -236,7 +235,6 @@ DIRECT_URL="postgresql://user:password@ep-example.eu-west-1.aws.neon.tech/neondb
 - `DATABASE_URL_UNPOOLED` or `DIRECT_URL`
 - `AUTH_SECRET`
 - `AUTH_URL`
-- `SEED_PASSWORD` only if you intentionally seed a demo environment
 - `ALLOW_DEMO_SEED` only when you intentionally run the pilot seed against Neon
 
 ### 3. Push schema or run migrations
