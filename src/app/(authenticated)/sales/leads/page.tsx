@@ -23,6 +23,14 @@ export default async function LeadsPage() {
   return (
     <div>
       <PageHeader title="My Leads" description={`${activeLeads.length} active leads`} />
+      <Card className="mb-4 border-border">
+        <CardContent className="p-4">
+          <p className="text-xs font-medium">Registration links are not emailed automatically.</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Select the invite action to generate the registration link, then copy and send it manually to the prospect.
+          </p>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">

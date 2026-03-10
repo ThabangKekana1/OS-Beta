@@ -6,6 +6,11 @@ import { logActivity } from "@/lib/audit";
 import { leadSchema } from "@/lib/validation";
 import { revalidatePath } from "next/cache";
 
+function getRegistrationLink(referralCode: string) {
+  const appUrl = (process.env.AUTH_URL ?? "http://localhost:3001").replace(/\/$/, "");
+  return `${appUrl}/register/${referralCode}`;
+}
+
 export async function createLead(formData: FormData) {
   const session = await requireRole(["SALES_REPRESENTATIVE"]);
 
@@ -60,9 +65,23 @@ export async function sendInviteLink(leadId: string) {
 
   const lead = await prisma.lead.findFirst({
     where: { id: leadId, salesRepresentativeId: session.user.id },
+    include: {
+      salesRepresentative: {
+        include: {
+          salesRepProfile: true,
+        },
+      },
+    },
   });
 
   if (!lead) return { error: "Lead not found" };
+  if (!lead.salesRepresentative.salesRepProfile?.uniqueReferralCode) {
+    return { error: "Sales Representative referral code is not configured" };
+  }
+
+  const registrationLink = getRegistrationLink(
+    lead.salesRepresentative.salesRepProfile.uniqueReferralCode
+  );
 
   await prisma.lead.update({
     where: { id: leadId },
@@ -74,10 +93,19 @@ export async function sendInviteLink(leadId: string) {
     entityId: leadId,
     actionType: "LEAD_INVITE_SENT",
     actorUserId: session.user.id,
+    metadata: {
+      deliveryMethod: "MANUAL_COPY",
+      registrationLink,
+    },
   });
 
   revalidatePath("/sales/leads");
-  return { success: true };
+  revalidatePath("/sales/dashboard");
+  return {
+    success: true,
+    registrationLink,
+    message: "Registration link generated. Copy and send manually.",
+  };
 }
 
 export async function killLead(leadId: string, reason: string) {

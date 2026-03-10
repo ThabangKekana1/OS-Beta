@@ -8,8 +8,18 @@ import { Send, X } from "lucide-react";
 export function LeadActions({ leadId, status }: { leadId: string; status: string }) {
   async function handleSendInvite() {
     const result = await sendInviteLink(leadId);
-    if (result.error) toast.error(result.error);
-    else toast.success("Invite link sent");
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+
+    if (result.registrationLink) {
+      try {
+        await navigator.clipboard.writeText(result.registrationLink);
+      } catch {}
+    }
+
+    toast.success(result.message ?? "Registration link generated. Copy and send manually.");
   }
 
   async function handleKill() {
@@ -21,7 +31,7 @@ export function LeadActions({ leadId, status }: { leadId: string; status: string
   return (
     <div className="flex items-center gap-1">
       {status === "NEW" && (
-        <Button onClick={handleSendInvite} variant="ghost" size="icon" className="h-6 w-6" title="Send invite">
+        <Button onClick={handleSendInvite} variant="ghost" size="icon" className="h-6 w-6" title="Generate registration link">
           <Send size={12} />
         </Button>
       )}
