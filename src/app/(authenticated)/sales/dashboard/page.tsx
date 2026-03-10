@@ -12,6 +12,7 @@ import { Users, UserPlus, Building2, CheckCircle, AlertTriangle } from "lucide-r
 import { createCommunicationThread, replyToCommunicationThread } from "@/actions/communication-actions";
 import { COMMUNICATION_STATUS_LABELS } from "@/lib/communication";
 import { formatDistanceToNow } from "date-fns";
+import { ReferralLinkCard } from "@/components/sales/referral-link-card";
 
 export default async function SalesDashboard() {
   const session = await auth();
@@ -26,6 +27,10 @@ export default async function SalesDashboard() {
     (b) => b.dealPipeline?.isStalled || b.qualificationStatus === "EARLY_INTEREST"
   );
   const escalationThreads = escalationData.threads;
+  const appUrl = (process.env.AUTH_URL ?? "http://localhost:3001").replace(/\/$/, "");
+  const referralLink = data.profile
+    ? `${appUrl}/register/${data.profile.uniqueReferralCode}`
+    : null;
 
   return (
     <div>
@@ -43,19 +48,13 @@ export default async function SalesDashboard() {
       </div>
 
       {/* Referral Code */}
-      {data.profile && (
+      {data.profile && referralLink && (
         <Card className="mt-4 border-border">
-          <CardContent className="flex items-center justify-between p-4">
-            <div>
-              <p className="text-xs text-muted-foreground">Your Referral Code</p>
-              <p className="text-sm font-mono font-semibold">{data.profile.uniqueReferralCode}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-muted-foreground">Registration Link</p>
-              <code className="text-[10px] text-muted-foreground">
-                {`/register/${data.profile.uniqueReferralCode}`}
-              </code>
-            </div>
+          <CardContent className="p-0">
+            <ReferralLinkCard
+              referralCode={data.profile.uniqueReferralCode}
+              referralLink={referralLink}
+            />
           </CardContent>
         </Card>
       )}

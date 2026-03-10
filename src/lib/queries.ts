@@ -184,6 +184,43 @@ export async function getSalesRepDashboardData(userId: string) {
   return { leads, businesses, profile, stats: { totalLeads, invitesSent, registered, qualified, stalled } };
 }
 
+export async function getSalesRepEarningsData(userId: string) {
+  const payments = await prisma.salesRepPayment.findMany({
+    where: {
+      salesRepresentativeId: userId,
+      status: { in: ["PENDING", "PAID"] },
+    },
+    include: {
+      business: { select: { id: true, legalName: true } },
+      lead: { select: { id: true, businessName: true } },
+      dealPipeline: {
+        select: {
+          id: true,
+          currentStage: { select: { name: true } },
+        },
+      },
+    },
+    orderBy: [{ status: "asc" }, { dueAt: "asc" }, { paidAt: "desc" }, { createdAt: "desc" }],
+  });
+
+  const pendingPayments = payments.filter((payment) => payment.status === "PENDING");
+  const completedPayments = payments.filter((payment) => payment.status === "PAID");
+  const pendingAmountCents = pendingPayments.reduce((total, payment) => total + payment.amountCents, 0);
+  const completedAmountCents = completedPayments.reduce((total, payment) => total + payment.amountCents, 0);
+
+  return {
+    pendingPayments,
+    completedPayments,
+    stats: {
+      pendingCount: pendingPayments.length,
+      pendingAmountCents,
+      completedCount: completedPayments.length,
+      completedAmountCents,
+      totalAmountCents: pendingAmountCents + completedAmountCents,
+    },
+  };
+}
+
 export async function getBusinessDashboardData(userId: string) {
   const profile = await prisma.businessUserProfile.findUnique({
     where: { userId },
@@ -396,6 +433,44 @@ export async function getAllUsers() {
     },
     orderBy: { createdAt: "desc" },
   });
+}
+
+export async function getSuperAdminPaymentsData() {
+  const payments = await prisma.salesRepPayment.findMany({
+    where: {
+      status: { in: ["PENDING", "PAID"] },
+    },
+    include: {
+      salesRepresentative: {
+        select: { id: true, firstName: true, lastName: true, email: true },
+      },
+      business: { select: { id: true, legalName: true } },
+      lead: { select: { id: true, businessName: true } },
+      dealPipeline: {
+        select: {
+          id: true,
+          currentStage: { select: { name: true } },
+        },
+      },
+    },
+    orderBy: [{ status: "asc" }, { dueAt: "asc" }, { paidAt: "desc" }, { createdAt: "desc" }],
+  });
+
+  const pendingPayments = payments.filter((payment) => payment.status === "PENDING");
+  const completedPayments = payments.filter((payment) => payment.status === "PAID");
+  const pendingAmountCents = pendingPayments.reduce((total, payment) => total + payment.amountCents, 0);
+  const completedAmountCents = completedPayments.reduce((total, payment) => total + payment.amountCents, 0);
+
+  return {
+    pendingPayments,
+    completedPayments,
+    stats: {
+      pendingCount: pendingPayments.length,
+      pendingAmountCents,
+      completedCount: completedPayments.length,
+      completedAmountCents,
+    },
+  };
 }
 
 const communicationThreadInclude = {

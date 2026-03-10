@@ -24,7 +24,7 @@ export function AppShell({ user, children }: AppShellProps) {
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="dashboard-light min-h-screen bg-background text-foreground">
       <SidebarNav role={user.role} />
       <div className="pl-56">
         <TopBar user={user} onSignOut={handleSignOut} />

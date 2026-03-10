@@ -46,7 +46,7 @@ export default async function UsersPage() {
                       <Badge variant="outline" className="text-[10px]">{roleLabels[user.role] ?? user.role}</Badge>
                     </td>
                     <td className="px-4 py-3">
-                      <Badge variant="outline" className={`text-[10px] ${user.status === "ACTIVE" ? "border-white/40" : "border-white/10"}`}>
+                      <Badge variant="outline" className={`text-[10px] ${user.status === "ACTIVE" ? "border-border" : "border-border text-muted-foreground"}`}>
                         {user.status}
                       </Badge>
                     </td>

@@ -418,9 +418,9 @@ export default async function BusinessDetailPage({ params }: { params: Promise<{
                           <Badge
                             variant="outline"
                             className={`text-[10px] ${
-                              doc.reviewStatus === "APPROVED" ? "border-white/40" :
+                              doc.reviewStatus === "APPROVED" ? "border-border" :
                               doc.reviewStatus === "REJECTED" ? "border-destructive/40 text-destructive" :
-                              "border-white/20"
+                              "border-border text-muted-foreground"
                             }`}
                           >
                             {doc.reviewStatus.replace(/_/g, " ")}
@@ -464,7 +464,7 @@ export default async function BusinessDetailPage({ params }: { params: Promise<{
                         {task.dueAt && ` · Due ${formatDistanceToNow(task.dueAt, { addSuffix: true })}`}
                       </p>
                     </div>
-                    <Badge variant="outline" className={`text-[10px] ${task.status === "COMPLETED" ? "border-white/40" : ""}`}>
+                    <Badge variant="outline" className={`text-[10px] ${task.status === "COMPLETED" ? "border-border" : "border-border text-muted-foreground"}`}>
                       {task.status}
                     </Badge>
                   </div>

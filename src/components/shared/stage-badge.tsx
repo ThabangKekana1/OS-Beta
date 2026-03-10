@@ -9,21 +9,21 @@ interface StageBadgeProps {
 }
 
 const categoryStyles: Record<string, string> = {
-  EARLY_LEAD: "border-white/20 text-white/70",
-  REGISTRATION: "border-white/30 text-white/80",
-  EXPRESSION_OF_INTEREST: "border-white/40 text-white/80",
-  UTILITY_REVIEW: "border-white/40 text-white/80",
-  PROPOSAL: "border-white/50 text-white/90",
-  TERM_SHEET: "border-white/50 text-white/90",
-  KNOW_YOUR_CUSTOMER: "border-white/50 text-white/90",
-  APPROVAL: "border-white/60 text-white",
-  DELIVERY: "border-white/70 text-white",
-  LIVE_SUPPORT: "border-white/80 text-white",
-  CLOSED: "border-white/10 text-white/50",
+  EARLY_LEAD: "border-border text-muted-foreground bg-muted/50",
+  REGISTRATION: "border-border text-foreground bg-muted/30",
+  EXPRESSION_OF_INTEREST: "border-border text-foreground bg-accent/60",
+  UTILITY_REVIEW: "border-border text-foreground bg-accent/60",
+  PROPOSAL: "border-border text-foreground bg-accent/80",
+  TERM_SHEET: "border-border text-foreground bg-accent/80",
+  KNOW_YOUR_CUSTOMER: "border-border text-foreground bg-accent/80",
+  APPROVAL: "border-border text-foreground bg-foreground/10",
+  DELIVERY: "border-border text-foreground bg-foreground/10",
+  LIVE_SUPPORT: "border-border text-foreground bg-foreground/10",
+  CLOSED: "border-border text-muted-foreground bg-muted/60",
 };
 
 export function StageBadge({ stageName, category, className }: StageBadgeProps) {
-  const style = category ? categoryStyles[category] ?? "" : "border-white/30 text-white/80";
+  const style = category ? categoryStyles[category] ?? "" : "border-border text-foreground bg-muted/40";
 
   return (
     <Badge

@@ -14,9 +14,10 @@ import {
   UserPlus,
   Zap,
   ClipboardList,
-  Shield,
   AlertTriangle,
   MessageSquare,
+  Wallet,
+  BookOpen,
 } from "lucide-react";
 
 interface NavItem {
@@ -37,6 +38,7 @@ const adminNav: NavItem[] = [
 
 const superAdminNav: NavItem[] = [
   ...adminNav,
+  { label: "Payments", href: "/super-admin/payments", icon: <Wallet size={18} /> },
   { label: "Users", href: "/super-admin/users", icon: <Users size={18} /> },
   { label: "Stage Config", href: "/super-admin/settings/stages", icon: <ClipboardList size={18} /> },
   { label: "Doc Config", href: "/super-admin/settings/documents", icon: <FileText size={18} /> },
@@ -48,11 +50,14 @@ const salesNav: NavItem[] = [
   { label: "Dashboard", href: "/sales/dashboard", icon: <LayoutDashboard size={18} /> },
   { label: "Leads", href: "/sales/leads", icon: <UserPlus size={18} /> },
   { label: "My Businesses", href: "/sales/businesses", icon: <Building2 size={18} /> },
+  { label: "Earnings", href: "/sales/earnings", icon: <Wallet size={18} /> },
+  { label: "Resources", href: "/sales/resources", icon: <BookOpen size={18} /> },
 ];
 
 const businessNav: NavItem[] = [
   { label: "Dashboard", href: "/business/dashboard", icon: <LayoutDashboard size={18} /> },
   { label: "Documents", href: "/business/documents", icon: <FileText size={18} /> },
+  { label: "Resources", href: "/business/resources", icon: <BookOpen size={18} /> },
   { label: "Profile", href: "/business/profile", icon: <Building2 size={18} /> },
 ];
 
@@ -78,9 +83,8 @@ export function SidebarNav({ role }: { role: string }) {
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-screen w-56 flex-col border-r border-border bg-sidebar">
       <div className="flex h-14 items-center border-b border-border px-4">
-        <Link href="/" className="flex items-center gap-2">
-          <Shield size={20} className="text-primary" />
-          <span className="text-sm font-semibold tracking-tight">Foundation-1</span>
+        <Link href="/" className="flex items-center">
+          <span className="font-centauri text-sm tracking-[0.22em]">OS-BETA</span>
         </Link>
       </div>
       <nav className="flex-1 space-y-0.5 p-3">

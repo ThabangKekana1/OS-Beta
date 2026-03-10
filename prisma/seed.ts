@@ -362,6 +362,72 @@ async function main() {
     },
   });
 
+  const pilotPayments = [
+    {
+      referenceCode: "PILOT-PAY-001",
+      description: "Registration conversion payout",
+      amountCents: 125000,
+      currency: "ZAR",
+      status: "PAID" as const,
+      dueAt: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000),
+      paidAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000),
+      notes: "Paid after registration completion review.",
+    },
+    {
+      referenceCode: "PILOT-PAY-002",
+      description: "Utility bill document completion payout",
+      amountCents: 175000,
+      currency: "ZAR",
+      status: "PENDING" as const,
+      dueAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+      paidAt: null,
+      notes: "Awaiting finance release after administrator review.",
+    },
+    {
+      referenceCode: "PILOT-PAY-003",
+      description: "Proposal handoff payout",
+      amountCents: 225000,
+      currency: "ZAR",
+      status: "PENDING" as const,
+      dueAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      paidAt: null,
+      notes: "Scheduled once signed proposal is forwarded to partner.",
+    },
+  ];
+
+  for (const payment of pilotPayments) {
+    await prisma.salesRepPayment.upsert({
+      where: { referenceCode: payment.referenceCode },
+      update: {
+        salesRepresentativeId: salesRepresentative.id,
+        businessId: business.id,
+        leadId: lead.id,
+        dealPipelineId: dealPipeline.id,
+        description: payment.description,
+        amountCents: payment.amountCents,
+        currency: payment.currency,
+        status: payment.status,
+        dueAt: payment.dueAt,
+        paidAt: payment.paidAt,
+        notes: payment.notes,
+      },
+      create: {
+        referenceCode: payment.referenceCode,
+        salesRepresentativeId: salesRepresentative.id,
+        businessId: business.id,
+        leadId: lead.id,
+        dealPipelineId: dealPipeline.id,
+        description: payment.description,
+        amountCents: payment.amountCents,
+        currency: payment.currency,
+        status: payment.status,
+        dueAt: payment.dueAt,
+        paidAt: payment.paidAt,
+        notes: payment.notes,
+      },
+    });
+  }
+
   await prisma.communicationThread.deleteMany({
     where: {
       subject: {

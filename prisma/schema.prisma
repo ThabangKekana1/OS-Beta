@@ -156,6 +156,12 @@ enum CommunicationStatus {
   CLOSED
 }
 
+enum PaymentStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
 // ──────────────────────────────────────────────
 // User & Profiles
 // ──────────────────────────────────────────────
@@ -191,6 +197,7 @@ model User {
   notes                 Note[]
   createdCommunicationThreads CommunicationThread[] @relation("CommunicationThreadCreatedBy")
   communicationMessages CommunicationMessage[] @relation("CommunicationMessageAuthor")
+  salesRepPayments      SalesRepPayment[]     @relation("SalesRepPayments")
 
   @@index([role])
   @@index([status])
@@ -251,6 +258,7 @@ model Lead {
   salesRepresentative User      @relation(fields: [salesRepresentativeId], references: [id])
   registeredBusiness  Business? @relation(fields: [registeredBusinessId], references: [id])
   communicationThreads CommunicationThread[]
+  payments            SalesRepPayment[]
 
   @@index([salesRepresentativeId])
   @@index([status])
@@ -293,6 +301,7 @@ model Business {
   notes                     Note[]
   leads                     Lead[]
   communicationThreads      CommunicationThread[]
+  payments                  SalesRepPayment[]
 
   @@index([sourceSalesRepresentativeId])
   @@index([assignedAdministratorId])
@@ -358,6 +367,7 @@ model DealPipeline {
   tasks                   Task[]
   notes                   Note[]
   communicationThreads    CommunicationThread[]
+  payments                SalesRepPayment[]
 
   @@index([currentStageId])
   @@index([sourceSalesRepresentativeId])
@@ -625,4 +635,33 @@ model CommunicationMessage {
 
   @@index([threadId, createdAt])
   @@index([authorUserId])
+}
+
+model SalesRepPayment {
+  id                    String        @id @default(cuid())
+  referenceCode         String        @unique
+  salesRepresentativeId String
+  businessId            String?
+  leadId                String?
+  dealPipelineId        String?
+  description           String
+  amountCents           Int
+  currency              String        @default("ZAR")
+  status                PaymentStatus @default(PENDING)
+  dueAt                 DateTime?
+  paidAt                DateTime?
+  notes                 String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  salesRepresentative User          @relation("SalesRepPayments", fields: [salesRepresentativeId], references: [id])
+  business            Business?     @relation(fields: [businessId], references: [id])
+  lead                Lead?         @relation(fields: [leadId], references: [id])
+  dealPipeline        DealPipeline? @relation(fields: [dealPipelineId], references: [id])
+
+  @@index([salesRepresentativeId, status])
+  @@index([status, dueAt])
+  @@index([businessId])
+  @@index([leadId])
+  @@index([dealPipelineId])
 }
