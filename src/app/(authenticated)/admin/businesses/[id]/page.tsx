@@ -1,8 +1,10 @@
 import { redirect, notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { createCommunicationThread, replyToCommunicationThread, updateCommunicationThreadStatus } from "@/actions/communication-actions";
 import { deliverDocumentToBusiness, requestDocumentFromBusiness } from "@/actions/document-actions";
+import { COMMUNICATION_STATUS_LABELS, COMMUNICATION_THREAD_LABELS } from "@/lib/communication";
 import { DOCUMENT_PHASE_LABELS, getAdminExchangeGroups, getBusinessExchangeGroups, getDocumentPurposeLabel } from "@/lib/document-exchange";
-import { getBusinessDetail, getStageDefinitions, getStallReasonDefinitions } from "@/lib/queries";
+import { getBusinessCommunicationThreadsForAdmin, getBusinessDetail, getStageDefinitions, getStallReasonDefinitions } from "@/lib/queries";
 import { computeStageAge } from "@/lib/stage-engine";
 import { PageHeader } from "@/components/shared/page-header";
 import { StageBadge } from "@/components/shared/stage-badge";
@@ -22,10 +24,11 @@ export default async function BusinessDetailPage({ params }: { params: Promise<{
   }
 
   const { id } = await params;
-  const [business, stages, stallReasons] = await Promise.all([
+  const [business, stages, stallReasons, communicationThreads] = await Promise.all([
     getBusinessDetail(id),
     getStageDefinitions(),
     getStallReasonDefinitions(),
+    getBusinessCommunicationThreadsForAdmin(id),
   ]);
 
   if (!business) notFound();
@@ -294,6 +297,96 @@ export default async function BusinessDetailPage({ params }: { params: Promise<{
       </div>
 
       {/* Documents */}
+      <div className="mt-6">
+        <Card className="border-border">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium">Communications</CardTitle>
+              <Badge variant="outline" className="text-[10px]">{communicationThreads.length}</Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-2">
+              <form action={async (formData) => {
+                "use server";
+                await createCommunicationThread(formData);
+              }} className="space-y-2 rounded-md border border-border p-3">
+                <input type="hidden" name="threadType" value="BUSINESS_SUPPORT" />
+                <input type="hidden" name="businessId" value={business.id} />
+                {deal && <input type="hidden" name="dealPipelineId" value={deal.id} />}
+                <p className="text-xs font-medium">Create Business Support Thread</p>
+                <input name="subject" required placeholder="Subject" className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-xs" />
+                <textarea name="body" required placeholder="Message to business..." className="h-20 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-xs" />
+                <Button type="submit" size="sm">Create support thread</Button>
+              </form>
+              <form action={async (formData) => {
+                "use server";
+                await createCommunicationThread(formData);
+              }} className="space-y-2 rounded-md border border-border p-3">
+                <input type="hidden" name="threadType" value="INTERNAL_ADMIN_NOTE" />
+                <input type="hidden" name="businessId" value={business.id} />
+                {deal && <input type="hidden" name="dealPipelineId" value={deal.id} />}
+                <p className="text-xs font-medium">Create Internal Administrator Note</p>
+                <input name="subject" required placeholder="Subject" className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-xs" />
+                <textarea name="body" required placeholder="Internal note..." className="h-20 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-xs" />
+                <Button type="submit" size="sm" variant="outline">Create internal note</Button>
+              </form>
+            </div>
+            {communicationThreads.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No communication threads linked to this business.</p>
+            ) : (
+              <div className="space-y-3">
+                {communicationThreads.map((thread) => (
+                  <div key={thread.id} className="rounded-md border border-border p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-medium">{thread.subject ?? "Untitled thread"}</p>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-[10px]">{COMMUNICATION_THREAD_LABELS[thread.threadType]}</Badge>
+                        <Badge variant="outline" className="text-[10px]">{COMMUNICATION_STATUS_LABELS[thread.status]}</Badge>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      Last updated {formatDistanceToNow(thread.lastMessageAt, { addSuffix: true })}
+                    </p>
+                    <div className="space-y-2">
+                      {thread.messages.slice(-6).map((message) => (
+                        <div key={message.id} className="rounded-md border border-border p-2.5">
+                          <p className="text-[10px] text-muted-foreground">
+                            {message.author.firstName} {message.author.lastName} · {message.author.role.replace(/_/g, " ")} · {formatDistanceToNow(message.createdAt, { addSuffix: true })}
+                          </p>
+                          <p className="mt-1 text-xs">{message.body}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <form action={async (formData) => {
+                      "use server";
+                      await replyToCommunicationThread(formData);
+                    }} className="space-y-2">
+                      <input type="hidden" name="threadId" value={thread.id} />
+                      <textarea name="body" required placeholder="Reply..." className="h-16 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-xs" />
+                      <Button type="submit" size="sm" variant="outline">Reply</Button>
+                    </form>
+                    <form action={async (formData) => {
+                      "use server";
+                      await updateCommunicationThreadStatus(formData);
+                    }} className="flex items-center gap-2">
+                      <input type="hidden" name="threadId" value={thread.id} />
+                      <select name="status" defaultValue={thread.status} className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-xs">
+                        <option value="OPEN">Open</option>
+                        <option value="PENDING">Pending</option>
+                        <option value="RESOLVED">Resolved</option>
+                        <option value="CLOSED">Closed</option>
+                      </select>
+                      <Button type="submit" size="sm" variant="outline">Update status</Button>
+                    </form>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="mt-6">
         <Card className="border-border">
           <CardHeader className="pb-3">

@@ -397,3 +397,166 @@ export async function getAllUsers() {
     orderBy: { createdAt: "desc" },
   });
 }
+
+const communicationThreadInclude = {
+  business: { select: { id: true, legalName: true, sourceSalesRepresentativeId: true } },
+  lead: { select: { id: true, businessName: true, salesRepresentativeId: true } },
+  dealPipeline: { select: { id: true, sourceSalesRepresentativeId: true } },
+  createdBy: { select: { id: true, firstName: true, lastName: true, role: true } },
+  messages: {
+    include: {
+      author: { select: { id: true, firstName: true, lastName: true, role: true } },
+    },
+    orderBy: { createdAt: "asc" as const },
+    take: 30,
+  },
+};
+
+export async function getAdminCommunicationSummary() {
+  const unresolvedStatuses: ("OPEN" | "PENDING")[] = ["OPEN", "PENDING"];
+  const unresolvedFilter = { status: { in: unresolvedStatuses } };
+  const [recentUnresolved, businessSupportOpen, salesEscalationOpen, internalAdminOpen] =
+    await Promise.all([
+      prisma.communicationThread.findMany({
+        where: unresolvedFilter,
+        include: communicationThreadInclude,
+        orderBy: { lastMessageAt: "desc" },
+        take: 8,
+      }),
+      prisma.communicationThread.count({
+        where: { ...unresolvedFilter, threadType: "BUSINESS_SUPPORT" },
+      }),
+      prisma.communicationThread.count({
+        where: { ...unresolvedFilter, threadType: "SALES_ESCALATION" },
+      }),
+      prisma.communicationThread.count({
+        where: { ...unresolvedFilter, threadType: "INTERNAL_ADMIN_NOTE" },
+      }),
+    ]);
+
+  return {
+    recentUnresolved,
+    counts: {
+      businessSupportOpen,
+      salesEscalationOpen,
+      internalAdminOpen,
+      unresolvedTotal:
+        businessSupportOpen + salesEscalationOpen + internalAdminOpen,
+    },
+  };
+}
+
+export async function getAdminCommunicationOverview(filters?: {
+  threadType?: string;
+  status?: string;
+  businessId?: string;
+  leadId?: string;
+}) {
+  const where: Record<string, unknown> = {};
+  if (filters?.threadType) where.threadType = filters.threadType;
+  if (filters?.status) where.status = filters.status;
+  if (filters?.businessId) where.businessId = filters.businessId;
+  if (filters?.leadId) where.leadId = filters.leadId;
+
+  const [threads, businesses, leads, deals] = await Promise.all([
+    prisma.communicationThread.findMany({
+      where,
+      include: communicationThreadInclude,
+      orderBy: [{ status: "asc" }, { lastMessageAt: "desc" }],
+      take: 120,
+    }),
+    prisma.business.findMany({
+      select: { id: true, legalName: true },
+      orderBy: { legalName: "asc" },
+      take: 200,
+    }),
+    prisma.lead.findMany({
+      select: { id: true, businessName: true },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    }),
+    prisma.dealPipeline.findMany({
+      select: {
+        id: true,
+        business: { select: { legalName: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    }),
+  ]);
+
+  return { threads, businesses, leads, deals };
+}
+
+export async function getBusinessSupportThreads(userId: string) {
+  const profile = await prisma.businessUserProfile.findUnique({
+    where: { userId },
+    select: {
+      businessId: true,
+      business: {
+        select: {
+          id: true,
+          legalName: true,
+          dealPipeline: { select: { id: true } },
+        },
+      },
+    },
+  });
+
+  if (!profile) return null;
+
+  const threads = await prisma.communicationThread.findMany({
+    where: {
+      threadType: "BUSINESS_SUPPORT",
+      visibilityScope: "BUSINESS_ADMIN",
+      businessId: profile.businessId,
+    },
+    include: communicationThreadInclude,
+    orderBy: [{ status: "asc" }, { lastMessageAt: "desc" }],
+    take: 60,
+  });
+
+  return { profile, threads };
+}
+
+export async function getSalesEscalationThreads(userId: string) {
+  const [threads, leads, businesses] = await Promise.all([
+    prisma.communicationThread.findMany({
+      where: {
+        threadType: "SALES_ESCALATION",
+        visibilityScope: "SALES_ADMIN",
+        OR: [
+          { lead: { is: { salesRepresentativeId: userId } } },
+          { business: { is: { sourceSalesRepresentativeId: userId } } },
+          { dealPipeline: { is: { sourceSalesRepresentativeId: userId } } },
+        ],
+      },
+      include: communicationThreadInclude,
+      orderBy: [{ status: "asc" }, { lastMessageAt: "desc" }],
+      take: 80,
+    }),
+    prisma.lead.findMany({
+      where: { salesRepresentativeId: userId },
+      select: { id: true, businessName: true, status: true },
+      orderBy: { createdAt: "desc" },
+      take: 80,
+    }),
+    prisma.business.findMany({
+      where: { sourceSalesRepresentativeId: userId },
+      select: { id: true, legalName: true, registrationNumber: true },
+      orderBy: { createdAt: "desc" },
+      take: 80,
+    }),
+  ]);
+
+  return { threads, leads, businesses };
+}
+
+export async function getBusinessCommunicationThreadsForAdmin(businessId: string) {
+  return prisma.communicationThread.findMany({
+    where: { businessId },
+    include: communicationThreadInclude,
+    orderBy: [{ status: "asc" }, { lastMessageAt: "desc" }],
+    take: 80,
+  });
+}

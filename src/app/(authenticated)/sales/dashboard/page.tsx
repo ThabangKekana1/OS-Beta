@@ -1,23 +1,31 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { getSalesRepDashboardData } from "@/lib/queries";
+import { getSalesEscalationThreads, getSalesRepDashboardData } from "@/lib/queries";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { StageBadge } from "@/components/shared/stage-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Users, UserPlus, Building2, CheckCircle, AlertTriangle } from "lucide-react";
+import { createCommunicationThread, replyToCommunicationThread } from "@/actions/communication-actions";
+import { COMMUNICATION_STATUS_LABELS } from "@/lib/communication";
+import { formatDistanceToNow } from "date-fns";
 
 export default async function SalesDashboard() {
   const session = await auth();
   if (!session || session.user.role !== "SALES_REPRESENTATIVE") redirect("/login");
 
-  const data = await getSalesRepDashboardData(session.user.id);
+  const [data, escalationData] = await Promise.all([
+    getSalesRepDashboardData(session.user.id),
+    getSalesEscalationThreads(session.user.id),
+  ]);
 
   const needsFollowUp = data.businesses.filter(
     (b) => b.dealPipeline?.isStalled || b.qualificationStatus === "EARLY_INTEREST"
   );
+  const escalationThreads = escalationData.threads;
 
   return (
     <div>
@@ -156,6 +164,81 @@ export default async function SalesDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="mt-6 border-border">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-medium">Escalation Threads</CardTitle>
+            <Badge variant="outline" className="text-[10px]">{escalationThreads.length}</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <form action={async (formData) => {
+            "use server";
+            await createCommunicationThread(formData);
+          }} className="space-y-2 rounded-md border border-border p-3">
+            <input type="hidden" name="threadType" value="SALES_ESCALATION" />
+            <select name="businessId" className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-xs">
+              <option value="">Link business (optional)</option>
+              {escalationData.businesses.map((business) => (
+                <option key={business.id} value={business.id}>{business.legalName}</option>
+              ))}
+            </select>
+            <select name="leadId" required className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-xs">
+              <option value="">Select lead to escalate</option>
+              {escalationData.leads.map((lead) => (
+                <option key={lead.id} value={lead.id}>
+                  {lead.businessName} ({lead.status.replace(/_/g, " ")})
+                </option>
+              ))}
+            </select>
+            <input name="subject" required placeholder="Escalation subject" className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-xs" />
+            <textarea name="body" required placeholder="Describe the issue or stuck lead context..." className="h-20 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-xs" />
+            <Button type="submit" size="sm">Create escalation</Button>
+          </form>
+
+          {escalationThreads.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No escalation threads yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {escalationThreads.map((thread) => {
+                const latestMessage = thread.messages[thread.messages.length - 1];
+                const latestAdministratorReply = [...thread.messages]
+                  .reverse()
+                  .find((message) => ["ADMINISTRATOR", "SUPER_ADMIN"].includes(message.author.role));
+
+                return (
+                  <div key={thread.id} className="rounded-md border border-border p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-medium">{thread.subject ?? "Untitled escalation thread"}</p>
+                      <Badge variant="outline" className="text-[10px]">{COMMUNICATION_STATUS_LABELS[thread.status]}</Badge>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      {thread.lead ? `Lead: ${thread.lead.businessName}` : thread.business ? `Business: ${thread.business.legalName}` : "Linked context"}
+                      {latestMessage ? ` · Updated ${formatDistanceToNow(latestMessage.createdAt, { addSuffix: true })}` : ""}
+                    </p>
+                    {latestAdministratorReply ? (
+                      <p className="text-[10px] text-muted-foreground">
+                        Latest administrator reply: {latestAdministratorReply.body}
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground">No administrator reply yet.</p>
+                    )}
+                    <form action={async (formData) => {
+                      "use server";
+                      await replyToCommunicationThread(formData);
+                    }} className="space-y-2">
+                      <input type="hidden" name="threadId" value={thread.id} />
+                      <textarea name="body" required placeholder="Reply..." className="h-16 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-xs" />
+                      <Button type="submit" size="sm" variant="outline">Reply</Button>
+                    </form>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

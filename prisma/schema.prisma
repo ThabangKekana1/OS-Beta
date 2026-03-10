@@ -137,6 +137,25 @@ enum StageCategory {
   CLOSED
 }
 
+enum CommunicationThreadType {
+  BUSINESS_SUPPORT
+  SALES_ESCALATION
+  INTERNAL_ADMIN_NOTE
+}
+
+enum CommunicationVisibilityScope {
+  BUSINESS_ADMIN
+  SALES_ADMIN
+  ADMIN_ONLY
+}
+
+enum CommunicationStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  CLOSED
+}
+
 // ──────────────────────────────────────────────
 // User & Profiles
 // ──────────────────────────────────────────────
@@ -170,6 +189,8 @@ model User {
   stageChanges          PipelineStageHistory[] @relation("StageChangedBy")
   leads                 Lead[]
   notes                 Note[]
+  createdCommunicationThreads CommunicationThread[] @relation("CommunicationThreadCreatedBy")
+  communicationMessages CommunicationMessage[] @relation("CommunicationMessageAuthor")
 
   @@index([role])
   @@index([status])
@@ -229,6 +250,7 @@ model Lead {
 
   salesRepresentative User      @relation(fields: [salesRepresentativeId], references: [id])
   registeredBusiness  Business? @relation(fields: [registeredBusinessId], references: [id])
+  communicationThreads CommunicationThread[]
 
   @@index([salesRepresentativeId])
   @@index([status])
@@ -270,6 +292,7 @@ model Business {
   tasks                     Task[]
   notes                     Note[]
   leads                     Lead[]
+  communicationThreads      CommunicationThread[]
 
   @@index([sourceSalesRepresentativeId])
   @@index([assignedAdministratorId])
@@ -334,6 +357,7 @@ model DealPipeline {
   documents               DocumentSubmission[]
   tasks                   Task[]
   notes                   Note[]
+  communicationThreads    CommunicationThread[]
 
   @@index([currentStageId])
   @@index([sourceSalesRepresentativeId])
@@ -554,4 +578,51 @@ model Note {
   @@index([businessId])
   @@index([authorUserId])
   @@index([noteType])
+}
+
+model CommunicationThread {
+  id               String                       @id @default(cuid())
+  threadType       CommunicationThreadType
+  visibilityScope  CommunicationVisibilityScope
+  businessId       String?
+  leadId           String?
+  dealPipelineId   String?
+  createdByUserId  String
+  recipientRole    UserRole?
+  subject          String?
+  status           CommunicationStatus          @default(OPEN)
+  lastMessageAt    DateTime                     @default(now())
+  lastRespondedByRole UserRole?
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @updatedAt
+
+  business         Business?                    @relation(fields: [businessId], references: [id])
+  lead             Lead?                        @relation(fields: [leadId], references: [id])
+  dealPipeline     DealPipeline?                @relation(fields: [dealPipelineId], references: [id])
+  createdBy        User                         @relation("CommunicationThreadCreatedBy", fields: [createdByUserId], references: [id])
+  messages         CommunicationMessage[]
+
+  @@index([threadType, status])
+  @@index([visibilityScope, status])
+  @@index([businessId, status])
+  @@index([leadId, status])
+  @@index([dealPipelineId, status])
+  @@index([createdByUserId])
+  @@index([lastMessageAt])
+}
+
+model CommunicationMessage {
+  id             String               @id @default(cuid())
+  threadId       String
+  authorUserId   String
+  body           String
+  isSystemMessage Boolean             @default(false)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  thread         CommunicationThread  @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  author         User                 @relation("CommunicationMessageAuthor", fields: [authorUserId], references: [id])
+
+  @@index([threadId, createdAt])
+  @@index([authorUserId])
 }

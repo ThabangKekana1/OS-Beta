@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { getAdminDashboardStats, getAdminDocumentExchangeOverview, getAdminPipelineDeals } from "@/lib/queries";
+import { getAdminCommunicationSummary, getAdminDashboardStats, getAdminDocumentExchangeOverview, getAdminPipelineDeals } from "@/lib/queries";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { StageBadge } from "@/components/shared/stage-badge";
@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { STAGE_GROUPS } from "@/lib/constants";
 import { computeStageAge } from "@/lib/stage-engine";
+import { COMMUNICATION_THREAD_LABELS } from "@/lib/communication";
 import Link from "next/link";
 import {
   Zap,
@@ -26,10 +27,11 @@ export default async function AdminDashboard() {
     redirect("/login");
   }
 
-  const [stats, recentDeals, documentExchange] = await Promise.all([
+  const [stats, recentDeals, documentExchange, communicationSummary] = await Promise.all([
     getAdminDashboardStats(),
     getAdminPipelineDeals(),
     getAdminDocumentExchangeOverview(),
+    getAdminCommunicationSummary(),
   ]);
 
   const stalledDeals = recentDeals.filter((d) => d.isStalled);
@@ -103,6 +105,48 @@ export default async function AdminDashboard() {
               <div className="rounded-md border border-border p-3"><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Awaiting signed return</p><p className="mt-1 text-lg font-semibold">{documentExchange.groups.deliveredAwaitingSignedReturn.length}</p></div>
               <div className="rounded-md border border-border p-3"><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Signed returns awaiting partner</p><p className="mt-1 text-lg font-semibold">{documentExchange.groups.signedReturnsAwaitingForward.length}</p></div>
               <div className="rounded-md border border-border p-3"><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Partner returned, not yet shared</p><p className="mt-1 text-lg font-semibold">{documentExchange.groups.partnerReturnedAwaitingUpload.length}</p></div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="mt-6">
+        <Card className="border-border">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium">Communication Queues</CardTitle>
+              <Link href="/admin/communications" className="text-xs text-muted-foreground hover:text-foreground">
+                Open communications →
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 md:grid-cols-4">
+              <div className="rounded-md border border-border p-3"><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Business support open</p><p className="mt-1 text-lg font-semibold">{communicationSummary.counts.businessSupportOpen}</p></div>
+              <div className="rounded-md border border-border p-3"><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Sales escalation open</p><p className="mt-1 text-lg font-semibold">{communicationSummary.counts.salesEscalationOpen}</p></div>
+              <div className="rounded-md border border-border p-3"><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Internal notes open</p><p className="mt-1 text-lg font-semibold">{communicationSummary.counts.internalAdminOpen}</p></div>
+              <div className="rounded-md border border-border p-3"><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Total unresolved</p><p className="mt-1 text-lg font-semibold">{communicationSummary.counts.unresolvedTotal}</p></div>
+            </div>
+            <div className="mt-4 space-y-2">
+              {communicationSummary.recentUnresolved.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No unresolved communication threads.</p>
+              ) : (
+                communicationSummary.recentUnresolved.slice(0, 5).map((thread) => (
+                  <Link
+                    key={thread.id}
+                    href={thread.businessId ? `/admin/businesses/${thread.businessId}` : "/admin/communications"}
+                    className="flex items-center justify-between rounded-md border border-border p-2.5 transition-colors hover:bg-accent/30"
+                  >
+                    <div>
+                      <p className="text-xs font-medium">{thread.subject ?? "Untitled thread"}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {COMMUNICATION_THREAD_LABELS[thread.threadType]}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="text-[10px]">{thread.status}</Badge>
+                  </Link>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>

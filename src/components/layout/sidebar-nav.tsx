@@ -16,6 +16,7 @@ import {
   ClipboardList,
   Shield,
   AlertTriangle,
+  MessageSquare,
 } from "lucide-react";
 
 interface NavItem {
@@ -30,6 +31,7 @@ const adminNav: NavItem[] = [
   { label: "Businesses", href: "/admin/businesses", icon: <Building2 size={18} /> },
   { label: "Tasks", href: "/admin/tasks", icon: <ListTodo size={18} /> },
   { label: "Documents", href: "/admin/documents", icon: <FileText size={18} /> },
+  { label: "Communications", href: "/admin/communications", icon: <MessageSquare size={18} /> },
   { label: "Analytics", href: "/admin/analytics", icon: <BarChart3 size={18} /> },
 ];
 

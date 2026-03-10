@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { PrismaClient, UserRole, StageCategory } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import bcrypt from "bcryptjs";
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -25,6 +26,12 @@ function isLocalDatabase(url: string) {
 
 async function main() {
   console.log("Seeding Foundation-1 configuration...");
+  const seedPilotCommunication = process.env.SEED_PILOT_COMMUNICATION === "true";
+  const allowDemoSeed = process.env.ALLOW_DEMO_SEED === "true";
+
+  if (seedPilotCommunication && !isLocalDatabase(databaseConnectionString) && !allowDemoSeed) {
+    throw new Error("Refusing pilot communication seed on a non-local database without ALLOW_DEMO_SEED=true");
+  }
 
   // ── Stage Definitions ──
   const stages = [
@@ -126,7 +133,330 @@ async function main() {
     });
   }
   console.log(`  ${stallReasons.length} stall reason definitions seeded`);
-  console.log("  No demo users or sample business records created");
+  if (!seedPilotCommunication) {
+    console.log("  No demo users or sample business records created");
+    console.log("\nSeed completed successfully!");
+    console.log("  Set SEED_PILOT_COMMUNICATION=true to seed pilot communication examples.");
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash("Password123!", 10);
+
+  const superAdmin = await prisma.user.upsert({
+    where: { email: "superadmin@foundation1.test" },
+    update: {
+      firstName: "Pilot",
+      lastName: "Super Admin",
+      passwordHash,
+      role: "SUPER_ADMIN",
+      status: "ACTIVE",
+    },
+    create: {
+      firstName: "Pilot",
+      lastName: "Super Admin",
+      email: "superadmin@foundation1.test",
+      passwordHash,
+      role: "SUPER_ADMIN",
+      status: "ACTIVE",
+    },
+  });
+
+  const administrator = await prisma.user.upsert({
+    where: { email: "admin@foundation1.test" },
+    update: {
+      firstName: "Pilot",
+      lastName: "Administrator",
+      passwordHash,
+      role: "ADMINISTRATOR",
+      status: "ACTIVE",
+    },
+    create: {
+      firstName: "Pilot",
+      lastName: "Administrator",
+      email: "admin@foundation1.test",
+      passwordHash,
+      role: "ADMINISTRATOR",
+      status: "ACTIVE",
+    },
+  });
+
+  const salesRepresentative = await prisma.user.upsert({
+    where: { email: "rep@foundation1.test" },
+    update: {
+      firstName: "Pilot",
+      lastName: "Sales",
+      passwordHash,
+      role: "SALES_REPRESENTATIVE",
+      status: "ACTIVE",
+    },
+    create: {
+      firstName: "Pilot",
+      lastName: "Sales",
+      email: "rep@foundation1.test",
+      passwordHash,
+      role: "SALES_REPRESENTATIVE",
+      status: "ACTIVE",
+    },
+  });
+
+  const businessUser = await prisma.user.upsert({
+    where: { email: "business@foundation1.test" },
+    update: {
+      firstName: "Pilot",
+      lastName: "Business",
+      passwordHash,
+      role: "BUSINESS_USER",
+      status: "ACTIVE",
+    },
+    create: {
+      firstName: "Pilot",
+      lastName: "Business",
+      email: "business@foundation1.test",
+      passwordHash,
+      role: "BUSINESS_USER",
+      status: "ACTIVE",
+    },
+  });
+
+  await prisma.salesRepresentativeProfile.upsert({
+    where: { userId: salesRepresentative.id },
+    update: {
+      uniqueReferralCode: "REP-PILOT-001",
+      onboardingStatus: "COMPLETED",
+      pilotCohort: "PILOT_1",
+      performanceScore: 88,
+    },
+    create: {
+      userId: salesRepresentative.id,
+      uniqueReferralCode: "REP-PILOT-001",
+      onboardingStatus: "COMPLETED",
+      pilotCohort: "PILOT_1",
+      performanceScore: 88,
+    },
+  });
+
+  const utilityBillStage = await prisma.pipelineStageDefinition.findUnique({
+    where: { code: "UTILITY_BILL_REQUESTED" },
+  });
+
+  if (!utilityBillStage) {
+    throw new Error("Required stage UTILITY_BILL_REQUESTED not found");
+  }
+
+  const business = await prisma.business.upsert({
+    where: { registrationNumber: "2026/900001/07" },
+    update: {
+      legalName: "Pilot Foods (Pty) Ltd",
+      tradingName: "Pilot Foods",
+      industry: "Food Processing",
+      monthlyElectricitySpendEstimate: 61000,
+      contactPersonName: "Pilot Contact",
+      contactPersonEmail: "contact@pilotfoods.test",
+      contactPersonPhone: "+27110000001",
+      physicalAddress: "1 Pilot Street",
+      city: "Johannesburg",
+      province: "Gauteng",
+      sourceSalesRepresentativeId: salesRepresentative.id,
+      assignedAdministratorId: administrator.id,
+      currentStageId: utilityBillStage.id,
+      qualificationStatus: "DOCUMENTS_PENDING",
+      disqualificationReason: null,
+      status: "ACTIVE",
+    },
+    create: {
+      legalName: "Pilot Foods (Pty) Ltd",
+      tradingName: "Pilot Foods",
+      registrationNumber: "2026/900001/07",
+      industry: "Food Processing",
+      monthlyElectricitySpendEstimate: 61000,
+      contactPersonName: "Pilot Contact",
+      contactPersonEmail: "contact@pilotfoods.test",
+      contactPersonPhone: "+27110000001",
+      physicalAddress: "1 Pilot Street",
+      city: "Johannesburg",
+      province: "Gauteng",
+      sourceSalesRepresentativeId: salesRepresentative.id,
+      assignedAdministratorId: administrator.id,
+      currentStageId: utilityBillStage.id,
+      qualificationStatus: "DOCUMENTS_PENDING",
+      disqualificationReason: null,
+      status: "ACTIVE",
+    },
+  });
+
+  const dealPipeline = await prisma.dealPipeline.upsert({
+    where: { businessId: business.id },
+    update: {
+      sourceSalesRepresentativeId: salesRepresentative.id,
+      assignedAdministratorId: administrator.id,
+      currentStageId: utilityBillStage.id,
+      healthStatus: "WAITING_ON_BUSINESS",
+      isStalled: true,
+      stallReasonCode: "UTILITY_BILL_MISSING",
+      priority: "HIGH",
+      stageEnteredAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+      stalledAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+    },
+    create: {
+      businessId: business.id,
+      sourceSalesRepresentativeId: salesRepresentative.id,
+      assignedAdministratorId: administrator.id,
+      currentStageId: utilityBillStage.id,
+      healthStatus: "WAITING_ON_BUSINESS",
+      isStalled: true,
+      stallReasonCode: "UTILITY_BILL_MISSING",
+      priority: "HIGH",
+      stageEnteredAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+      stalledAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+    },
+  });
+
+  const existingLead = await prisma.lead.findFirst({
+    where: {
+      salesRepresentativeId: salesRepresentative.id,
+      contactEmail: "pilot.lead@foundation1.test",
+    },
+  });
+
+  const lead = existingLead
+    ? await prisma.lead.update({
+        where: { id: existingLead.id },
+        data: {
+          businessName: "Pilot Lead Services (Pty) Ltd",
+          contactName: "Lead Contact",
+          contactPhone: "+27110000002",
+          status: "INVITE_SENT",
+          inviteSentAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+          deadReason: null,
+          registeredBusinessId: business.id,
+        },
+      })
+    : await prisma.lead.create({
+        data: {
+          salesRepresentativeId: salesRepresentative.id,
+          businessName: "Pilot Lead Services (Pty) Ltd",
+          contactName: "Lead Contact",
+          contactEmail: "pilot.lead@foundation1.test",
+          contactPhone: "+27110000002",
+          status: "INVITE_SENT",
+          inviteSentAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+          deadReason: null,
+          registeredBusinessId: business.id,
+        },
+      });
+
+  await prisma.businessUserProfile.upsert({
+    where: { userId: businessUser.id },
+    update: {
+      businessId: business.id,
+      title: "Director",
+      canSignDocuments: true,
+      isPrimaryContact: true,
+    },
+    create: {
+      userId: businessUser.id,
+      businessId: business.id,
+      title: "Director",
+      canSignDocuments: true,
+      isPrimaryContact: true,
+    },
+  });
+
+  await prisma.communicationThread.deleteMany({
+    where: {
+      subject: {
+        in: [
+          "[PILOT] Utility bill support question",
+          "[PILOT] Lead stuck at qualification",
+          "[PILOT] Internal risk note",
+        ],
+      },
+    },
+  });
+
+  await prisma.communicationThread.create({
+    data: {
+      threadType: "BUSINESS_SUPPORT",
+      visibilityScope: "BUSINESS_ADMIN",
+      businessId: business.id,
+      dealPipelineId: dealPipeline.id,
+      createdByUserId: businessUser.id,
+      recipientRole: "ADMINISTRATOR",
+      subject: "[PILOT] Utility bill support question",
+      status: "PENDING",
+      lastMessageAt: new Date(Date.now() - 30 * 60 * 1000),
+      lastRespondedByRole: "ADMINISTRATOR",
+      messages: {
+        create: [
+          {
+            authorUserId: businessUser.id,
+            body: "We are unsure which six-month utility bill format is accepted.",
+          },
+          {
+            authorUserId: administrator.id,
+            body: "Please upload the municipal PDF statements for the last six months.",
+          },
+        ],
+      },
+    },
+  });
+
+  await prisma.communicationThread.create({
+    data: {
+      threadType: "SALES_ESCALATION",
+      visibilityScope: "SALES_ADMIN",
+      businessId: business.id,
+      leadId: lead.id,
+      dealPipelineId: dealPipeline.id,
+      createdByUserId: salesRepresentative.id,
+      recipientRole: "ADMINISTRATOR",
+      subject: "[PILOT] Lead stuck at qualification",
+      status: "PENDING",
+      lastMessageAt: new Date(Date.now() - 45 * 60 * 1000),
+      lastRespondedByRole: "ADMINISTRATOR",
+      messages: {
+        create: [
+          {
+            authorUserId: salesRepresentative.id,
+            body: "Lead is stalled because the utility bill is still outstanding.",
+          },
+          {
+            authorUserId: administrator.id,
+            body: "Escalation received. I have requested the utility bill and set a follow-up task.",
+          },
+        ],
+      },
+    },
+  });
+
+  await prisma.communicationThread.create({
+    data: {
+      threadType: "INTERNAL_ADMIN_NOTE",
+      visibilityScope: "ADMIN_ONLY",
+      businessId: business.id,
+      dealPipelineId: dealPipeline.id,
+      createdByUserId: administrator.id,
+      recipientRole: "ADMINISTRATOR",
+      subject: "[PILOT] Internal risk note",
+      status: "OPEN",
+      lastMessageAt: new Date(Date.now() - 60 * 60 * 1000),
+      lastRespondedByRole: "ADMINISTRATOR",
+      messages: {
+        create: [
+          {
+            authorUserId: administrator.id,
+            body: "Flagging responsiveness risk. If utility bill is not received in 48 hours, escalate to supervisor.",
+          },
+        ],
+      },
+    },
+  });
+
+  console.log("  Pilot communication sample data seeded");
+  console.log(`  Super Administrator: ${superAdmin.email}`);
+  console.log(`  Administrator: ${administrator.email}`);
+  console.log(`  Sales Representative: ${salesRepresentative.email}`);
+  console.log(`  Business User: ${businessUser.email}`);
   console.log("\nSeed completed successfully!");
 }
 

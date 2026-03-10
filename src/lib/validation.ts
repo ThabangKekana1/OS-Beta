@@ -106,6 +106,25 @@ export const noteSchema = z.object({
   body: z.string().min(1, "Note body required"),
 });
 
+export const communicationThreadCreateSchema = z.object({
+  threadType: z.enum(["BUSINESS_SUPPORT", "SALES_ESCALATION", "INTERNAL_ADMIN_NOTE"]),
+  businessId: z.string().optional(),
+  leadId: z.string().optional(),
+  dealPipelineId: z.string().optional(),
+  subject: z.string().max(160, "Subject too long").optional(),
+  body: z.string().min(1, "Message required"),
+});
+
+export const communicationReplySchema = z.object({
+  threadId: z.string().min(1, "Thread is required"),
+  body: z.string().min(1, "Reply required"),
+});
+
+export const communicationStatusSchema = z.object({
+  threadId: z.string().min(1, "Thread is required"),
+  status: z.enum(["OPEN", "PENDING", "RESOLVED", "CLOSED"]),
+});
+
 export const disqualifySchema = z.object({
   businessId: z.string().min(1),
   reason: z.string().min(1, "Disqualification reason required"),
@@ -137,3 +156,6 @@ export type BusinessDocumentResponseInput = z.infer<typeof businessDocumentRespo
 export type TaskInput = z.infer<typeof taskSchema>;
 export type NoteInput = z.infer<typeof noteSchema>;
 export type UserCreateInput = z.infer<typeof userCreateSchema>;
+export type CommunicationThreadCreateInput = z.infer<typeof communicationThreadCreateSchema>;
+export type CommunicationReplyInput = z.infer<typeof communicationReplySchema>;
+export type CommunicationStatusInput = z.infer<typeof communicationStatusSchema>;

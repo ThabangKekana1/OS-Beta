@@ -1,12 +1,13 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { getBusinessDashboardData } from "@/lib/queries";
+import { getBusinessDashboardData, getBusinessSupportThreads } from "@/lib/queries";
 import {
   DOCUMENT_PHASE_LABELS,
   getBusinessExchangeGroups,
   getPhaseNextActionLabel,
   getReviewStatusLabel,
 } from "@/lib/document-exchange";
+import { COMMUNICATION_STATUS_LABELS } from "@/lib/communication";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,12 +15,17 @@ import { Progress } from "@/components/ui/progress";
 import Link from "next/link";
 import { FileText, Upload, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { createCommunicationThread, replyToCommunicationThread } from "@/actions/communication-actions";
+import { formatDistanceToNow } from "date-fns";
 
 export default async function BusinessDashboard() {
   const session = await auth();
   if (!session || session.user.role !== "BUSINESS_USER") redirect("/login");
 
-  const data = await getBusinessDashboardData(session.user.id);
+  const [data, supportData] = await Promise.all([
+    getBusinessDashboardData(session.user.id),
+    getBusinessSupportThreads(session.user.id),
+  ]);
 
   if (!data?.business) {
     return (
@@ -39,6 +45,7 @@ export default async function BusinessDashboard() {
 
   const outstandingTasks = biz.tasks;
   const exchange = getBusinessExchangeGroups(biz.documents);
+  const supportThreads = supportData?.threads ?? [];
 
   return (
     <div>
@@ -140,6 +147,68 @@ export default async function BusinessDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="mt-6 border-border">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-medium">Support Threads</CardTitle>
+            <Badge variant="outline" className="text-[10px]">{supportThreads.length}</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <form action={async (formData) => {
+            "use server";
+            await createCommunicationThread(formData);
+          }} className="space-y-2 rounded-md border border-border p-3">
+            <input type="hidden" name="threadType" value="BUSINESS_SUPPORT" />
+            <input type="hidden" name="businessId" value={biz.id} />
+            {deal && <input type="hidden" name="dealPipelineId" value={deal.id} />}
+            <input name="subject" required placeholder="Support subject" className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-xs" />
+            <textarea name="body" required placeholder="Ask your administrator a question..." className="h-20 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-xs" />
+            <Button type="submit" size="sm">Create support request</Button>
+          </form>
+
+          {supportThreads.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No support threads yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {supportThreads.map((thread) => {
+                const latestMessage = thread.messages[thread.messages.length - 1];
+                const latestAdministratorReply = [...thread.messages]
+                  .reverse()
+                  .find((message) => ["ADMINISTRATOR", "SUPER_ADMIN"].includes(message.author.role));
+
+                return (
+                  <div key={thread.id} className="rounded-md border border-border p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-medium">{thread.subject ?? "Untitled support thread"}</p>
+                      <Badge variant="outline" className="text-[10px]">{COMMUNICATION_STATUS_LABELS[thread.status]}</Badge>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      Latest update {latestMessage ? formatDistanceToNow(latestMessage.createdAt, { addSuffix: true }) : "not available"}
+                    </p>
+                    {latestAdministratorReply ? (
+                      <p className="text-[10px] text-muted-foreground">
+                        Latest administrator reply: {latestAdministratorReply.body}
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground">No administrator reply yet.</p>
+                    )}
+                    <form action={async (formData) => {
+                      "use server";
+                      await replyToCommunicationThread(formData);
+                    }} className="space-y-2">
+                      <input type="hidden" name="threadId" value={thread.id} />
+                      <textarea name="body" required placeholder="Reply..." className="h-16 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-xs" />
+                      <Button type="submit" size="sm" variant="outline">Reply</Button>
+                    </form>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <Card className="border-border">
