@@ -1,0 +1,14 @@
+.next/
+node_modules/
+.env.local
+.env.*.local
+.DS_Store
+.local/
+test-results/
+tsconfig.tsbuildinfo
+supabase/.temp/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.vercel
