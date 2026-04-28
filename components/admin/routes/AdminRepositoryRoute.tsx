@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, Upload, X } from "lucide-react";
 import { AdminBadge, AdminHeader } from "@/components/admin/AdminPrimitives";
 import { useAdminPortal } from "@/components/admin/AdminPortalProvider";
 import { downloadCsvFile, sanitizeFileSegment } from "@/lib/download-utils";
-import type { AdminLead, AdminLeadContactStatus } from "@/lib/admin-types";
+import type { AdminLead, AdminLeadContactStatus, AdminLeadOrigin, AdminLeadPartner } from "@/lib/admin-types";
+import { adminLeadOriginLabels, adminLeadOrigins, adminLeadPartners } from "@/lib/admin-types";
 
 const ALL = "all" as const;
 
@@ -17,6 +18,7 @@ export function AdminRepositoryRoute() {
     actorAgentId,
     updateLeadOwner,
     updateLeadContactStatus,
+    updateLeadPartner,
     createLead,
   } = useAdminPortal();
 
@@ -38,8 +40,12 @@ export function AdminRepositoryRoute() {
   const [industryFilter, setIndustryFilter] = useState<string>(ALL);
   const [statusFilter, setStatusFilter] = useState<string>(ALL);
   const [ownerFilter, setOwnerFilter] = useState<string>(ALL);
+  const [originFilter, setOriginFilter] = useState<string>(ALL);
+  const [partnerFilter, setPartnerFilter] = useState<string>(ALL);
   const [search, setSearch] = useState("");
   const [importOpen, setImportOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 30;
 
   const visibleContacts = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -53,12 +59,20 @@ export function AdminRepositoryRoute() {
       if (ownerFilter !== ALL && lead.ownerId !== ownerFilter) {
         return false;
       }
+      if (originFilter !== ALL && (lead.origin ?? "created") !== originFilter) {
+        return false;
+      }
+      if (partnerFilter !== ALL && (lead.partner ?? "") !== partnerFilter) {
+        return false;
+      }
       if (query.length > 0) {
         const haystack = [
           lead.company,
           lead.contactName,
           lead.userProfile.email,
+          lead.userProfile.phone,
           lead.industry,
+          lead.city,
           lead.province,
         ]
           .filter(Boolean)
@@ -70,7 +84,23 @@ export function AdminRepositoryRoute() {
       }
       return true;
     });
-  }, [leads, industryFilter, statusFilter, ownerFilter, search]);
+  }, [leads, industryFilter, statusFilter, ownerFilter, originFilter, partnerFilter, search]);
+
+  const totalPages = Math.max(1, Math.ceil(visibleContacts.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pagedContacts = useMemo(
+    () =>
+      visibleContacts.slice(
+        (currentPage - 1) * PAGE_SIZE,
+        currentPage * PAGE_SIZE,
+      ),
+    [visibleContacts, currentPage],
+  );
+
+  // Reset to first page whenever filters change.
+  useEffect(() => {
+    setPage(1);
+  }, [industryFilter, statusFilter, ownerFilter, originFilter, partnerFilter, search]);
 
   const totals = useMemo(() => {
     const counts: Record<string, number> = { total: leads.length };
@@ -100,6 +130,7 @@ export function AdminRepositoryRoute() {
         "Contact Status",
         "Stage",
         "Last Touched",
+        "Source",
       ],
       ...visibleContacts.map((lead) => [
         lead.id,
@@ -114,6 +145,7 @@ export function AdminRepositoryRoute() {
         lead.contactStatus,
         lead.stage,
         lead.lastTouched,
+        adminLeadOriginLabels[(lead.origin ?? "created") as AdminLeadOrigin],
       ]),
     ];
     downloadCsvFile(filename, rows);
@@ -154,7 +186,7 @@ export function AdminRepositoryRoute() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Company, contact, email…"
-                className="h-10 rounded-xl border border-white/12 bg-black/45 px-3 text-sm text-white outline-none transition focus:border-white/32"
+                className="admin-input h-10 rounded-xl px-3 text-sm text-white"
               />
             </label>
 
@@ -165,7 +197,7 @@ export function AdminRepositoryRoute() {
               <select
                 value={industryFilter}
                 onChange={(event) => setIndustryFilter(event.target.value)}
-                className="h-10 rounded-xl border border-white/12 bg-black/45 px-3 text-sm font-medium text-white outline-none transition focus:border-white/32"
+                className="admin-input admin-select h-10 rounded-xl px-3 text-sm font-medium text-white"
               >
                 <option value={ALL} className="bg-zinc-950 text-white">
                   All industries
@@ -185,7 +217,7 @@ export function AdminRepositoryRoute() {
               <select
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value)}
-                className="h-10 rounded-xl border border-white/12 bg-black/45 px-3 text-sm font-medium text-white outline-none transition focus:border-white/32"
+                className="admin-input admin-select h-10 rounded-xl px-3 text-sm font-medium text-white"
               >
                 <option value={ALL} className="bg-zinc-950 text-white">
                   All statuses
@@ -205,7 +237,7 @@ export function AdminRepositoryRoute() {
               <select
                 value={ownerFilter}
                 onChange={(event) => setOwnerFilter(event.target.value)}
-                className="h-10 rounded-xl border border-white/12 bg-black/45 px-3 text-sm font-medium text-white outline-none transition focus:border-white/32"
+                className="admin-input admin-select h-10 rounded-xl px-3 text-sm font-medium text-white"
               >
                 <option value={ALL} className="bg-zinc-950 text-white">
                   All agents
@@ -213,6 +245,46 @@ export function AdminRepositoryRoute() {
                 {agents.map((agent) => (
                   <option key={agent.id} value={agent.id} className="bg-zinc-950 text-white">
                     {agent.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex min-w-[11rem] flex-col gap-2">
+              <span className="text-[0.64rem] font-medium uppercase tracking-[0.2em] text-white/46">
+                Source
+              </span>
+              <select
+                value={originFilter}
+                onChange={(event) => setOriginFilter(event.target.value)}
+                className="admin-input admin-select h-10 rounded-xl px-3 text-sm font-medium text-white"
+              >
+                <option value={ALL} className="bg-zinc-950 text-white">
+                  All sources
+                </option>
+                {adminLeadOrigins.map((origin) => (
+                  <option key={origin} value={origin} className="bg-zinc-950 text-white">
+                    {adminLeadOriginLabels[origin]}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex min-w-[11rem] flex-col gap-2">
+              <span className="text-[0.64rem] font-medium uppercase tracking-[0.2em] text-white/46">
+                Partner
+              </span>
+              <select
+                value={partnerFilter}
+                onChange={(event) => setPartnerFilter(event.target.value)}
+                className="admin-input admin-select h-10 rounded-xl px-3 text-sm font-medium text-white"
+              >
+                <option value={ALL} className="bg-zinc-950 text-white">
+                  All partners
+                </option>
+                {adminLeadPartners.map((partner) => (
+                  <option key={partner} value={partner} className="bg-zinc-950 text-white">
+                    {partner}
                   </option>
                 ))}
               </select>
@@ -237,15 +309,19 @@ export function AdminRepositoryRoute() {
           </div>
         </div>
 
-        <div className="mt-5 overflow-x-auto rounded-2xl border border-white/12 bg-white/[0.03]">
+        <div className="mt-5 overflow-x-auto rounded-2xl border border-white/60 bg-white/[0.03]">
           <table className="w-full border-collapse text-sm text-white/75">
             <thead>
               <tr className="bg-white/[0.03] text-xs uppercase tracking-[0.2em] text-white/52">
                 <th className="px-3 py-3 text-left font-medium">Company</th>
                 <th className="px-3 py-3 text-left font-medium">Industry</th>
                 <th className="px-3 py-3 text-left font-medium">Contact</th>
+                <th className="px-3 py-3 text-left font-medium">Email</th>
+                <th className="px-3 py-3 text-left font-medium">Phone</th>
+                <th className="px-3 py-3 text-left font-medium">Suburb</th>
                 <th className="px-3 py-3 text-left font-medium">Province</th>
                 <th className="px-3 py-3 text-left font-medium">Assigned to</th>
+                <th className="px-3 py-3 text-left font-medium">Partner</th>
                 <th className="px-3 py-3 text-left font-medium">Contact status</th>
                 <th className="px-3 py-3 text-left font-medium">Stage</th>
                 <th className="px-3 py-3 text-left font-medium">Last touched</th>
@@ -254,25 +330,49 @@ export function AdminRepositoryRoute() {
             <tbody>
               {visibleContacts.length === 0 ? (
                 <tr className="border-t border-white/8">
-                  <td colSpan={8} className="px-3 py-8 text-center text-sm text-white/46">
+                  <td colSpan={12} className="px-3 py-8 text-center text-sm text-white/46">
                     No contacts match the current filters.
                   </td>
                 </tr>
               ) : (
-                visibleContacts.map((lead) => (
+                pagedContacts.map((lead) => (
                   <tr key={lead.id} className="border-t border-white/8 align-top hover:bg-white/[0.04]">
                     <td className="px-3 py-3 font-medium text-white">{lead.company}</td>
                     <td className="px-3 py-3 text-white/62">{lead.industry}</td>
                     <td className="px-3 py-3 text-white/72">
                       <div>{lead.contactName}</div>
-                      <p className="mt-1 text-xs text-white/44">{lead.userProfile.email}</p>
                     </td>
+                    <td className="px-3 py-3 text-white/72">
+                      {lead.userProfile.email ? (
+                        <a
+                          href={`mailto:${lead.userProfile.email}`}
+                          className="text-white hover:text-white/85"
+                        >
+                          {lead.userProfile.email}
+                        </a>
+                      ) : (
+                        <span className="text-white/35">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-3 text-white/72">
+                      {lead.userProfile.phone ? (
+                        <a
+                          href={`tel:${lead.userProfile.phone.replace(/\s+/g, "")}`}
+                          className="text-white hover:text-white/85"
+                        >
+                          {lead.userProfile.phone}
+                        </a>
+                      ) : (
+                        <span className="text-white/35">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-3 text-white/62">{lead.city || "—"}</td>
                     <td className="px-3 py-3 text-white/62">{lead.province}</td>
                     <td className="px-3 py-3">
                       <select
                         value={lead.ownerId}
                         onChange={(event) => updateLeadOwner(lead.id, event.target.value)}
-                        className="h-9 w-full rounded-lg border border-white/12 bg-black/45 px-2 text-xs font-medium text-white outline-none transition focus:border-white/32"
+                        className="admin-input admin-select h-9 w-full rounded-lg px-2 text-xs font-medium text-white"
                         aria-label={`Assign ${lead.company} to`}
                       >
                         {agents.map((agent) => (
@@ -288,6 +388,30 @@ export function AdminRepositoryRoute() {
                     </td>
                     <td className="px-3 py-3">
                       <select
+                        value={lead.partner ?? ""}
+                        onChange={(event) =>
+                          updateLeadPartner(
+                            lead.id,
+                            event.target.value === ""
+                              ? null
+                              : (event.target.value as AdminLeadPartner),
+                          )
+                        }
+                        className="admin-input admin-select h-9 w-full rounded-lg px-2 text-xs font-medium text-white"
+                        aria-label={`Set partner for ${lead.company}`}
+                      >
+                        <option value="" className="bg-zinc-950 text-white">
+                          Unassigned
+                        </option>
+                        {adminLeadPartners.map((partner) => (
+                          <option key={partner} value={partner} className="bg-zinc-950 text-white">
+                            {partner}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-3 py-3">
+                      <select
                         value={lead.contactStatus}
                         onChange={(event) =>
                           updateLeadContactStatus(
@@ -295,7 +419,7 @@ export function AdminRepositoryRoute() {
                             event.target.value as AdminLeadContactStatus,
                           )
                         }
-                        className="h-9 w-full rounded-lg border border-white/12 bg-black/45 px-2 text-xs font-medium text-white outline-none transition focus:border-white/32"
+                        className="admin-input admin-select h-9 w-full rounded-lg px-2 text-xs font-medium text-white"
                         aria-label={`Update contact status for ${lead.company}`}
                       >
                         {contactStatuses.map((status) => (
@@ -313,6 +437,41 @@ export function AdminRepositoryRoute() {
             </tbody>
           </table>
         </div>
+
+        {visibleContacts.length > PAGE_SIZE ? (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-white/55">
+            <span>
+              Showing{" "}
+              <span className="text-white">
+                {(currentPage - 1) * PAGE_SIZE + 1}
+                –{Math.min(currentPage * PAGE_SIZE, visibleContacts.length)}
+              </span>{" "}
+              of <span className="text-white">{visibleContacts.length}</span>
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="rounded-lg border border-white/14 px-3 py-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-white/80 transition hover:border-white/28 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Prev
+              </button>
+              <span className="text-white/70">
+                Page <span className="text-white">{currentPage}</span> /{" "}
+                {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="rounded-lg border border-white/14 px-3 py-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-white/80 transition hover:border-white/28 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       {importOpen ? (
@@ -320,11 +479,11 @@ export function AdminRepositoryRoute() {
           agents={agents}
           defaultOwnerId={actorAgentId ?? agents[0]?.id ?? ""}
           onClose={() => setImportOpen(false)}
-          onImport={(rows) => {
+          onImport={(rows, partner) => {
             let imported = 0;
             const failures: { row: number; reason: string }[] = [];
             rows.forEach((row, index) => {
-              const result = createLead(row);
+              const result = createLead({ ...row, origin: "imported", partner });
               if (result) {
                 imported += 1;
               } else {
@@ -460,12 +619,16 @@ function ImportCsvModal({
   agents: { id: string; name: string }[];
   defaultOwnerId: string;
   onClose: () => void;
-  onImport: (rows: CsvImportRow[]) => {
+  onImport: (
+    rows: CsvImportRow[],
+    partner: AdminLeadPartner,
+  ) => {
     imported: number;
     failures: { row: number; reason: string }[];
   };
 }) {
   const [csvText, setCsvText] = useState("");
+  const [partner, setPartner] = useState<AdminLeadPartner>(adminLeadPartners[0]);
   const [result, setResult] = useState<{
     imported: number;
     failures: { row: number; reason: string }[];
@@ -546,7 +709,7 @@ function ImportCsvModal({
 
   const handleImport = () => {
     if (!parsed || parsed.length === 0) return;
-    setResult(onImport(parsed));
+    setResult(onImport(parsed, partner));
   };
 
   const handleDownloadTemplate = () => {
@@ -580,7 +743,7 @@ function ImportCsvModal({
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-4 top-4 inline-flex size-8 items-center justify-center rounded-full border border-white/12 bg-white/[0.06] text-white/68 transition hover:border-white/28 hover:bg-white/[0.12]"
+          className="absolute right-4 top-4 inline-flex size-8 items-center justify-center rounded-full border border-white/60 bg-white/[0.06] text-white/68 transition hover:border-white/28 hover:bg-white/[0.12]"
           aria-label="Close import dialog"
         >
           <X className="size-4" />
@@ -590,6 +753,23 @@ function ImportCsvModal({
         <p className="mt-2 text-sm text-white/56">
           Upload a CSV file or paste rows below. Required columns: Company, Reg Number, Industry, Email. Owner can be an agent name (e.g. “Karman”) or agent ID; defaults to you.
         </p>
+
+        <label className="mt-4 flex max-w-xs flex-col gap-2">
+          <span className="text-[0.64rem] font-medium uppercase tracking-[0.2em] text-white/46">
+            Partner
+          </span>
+          <select
+            value={partner}
+            onChange={(event) => setPartner(event.target.value as AdminLeadPartner)}
+            className="admin-input admin-select h-10 rounded-xl px-3 text-sm font-medium text-white"
+          >
+            {adminLeadPartners.map((p) => (
+              <option key={p} value={p} className="bg-zinc-950 text-white">
+                {p}
+              </option>
+            ))}
+          </select>
+        </label>
 
         <div className="mt-4 flex flex-wrap gap-2">
           <button
@@ -635,7 +815,7 @@ function ImportCsvModal({
             }}
             rows={8}
             placeholder={CSV_TEMPLATE_HEADERS.join(",")}
-            className="w-full rounded-xl border border-white/12 bg-black/45 px-3 py-2 font-mono text-xs text-white outline-none transition focus:border-white/32"
+            className="admin-input w-full rounded-xl px-3 py-2 font-mono text-xs text-white"
           />
         </label>
 
@@ -646,7 +826,7 @@ function ImportCsvModal({
         ) : null}
 
         {parsed && parsed.length > 0 && !parseError ? (
-          <div className="mt-4 rounded-2xl border border-white/12 bg-white/[0.03] p-3">
+          <div className="mt-4 rounded-2xl border border-white/60 bg-white/[0.03] p-3">
             <p className="text-xs uppercase tracking-[0.2em] text-white/52">
               Preview — {parsed.length} row{parsed.length === 1 ? "" : "s"}
             </p>
@@ -689,7 +869,7 @@ function ImportCsvModal({
         ) : null}
 
         {result ? (
-          <div className="mt-4 rounded-2xl border border-white/12 bg-white/[0.03] p-3 text-xs">
+          <div className="mt-4 rounded-2xl border border-white/60 bg-white/[0.03] p-3 text-xs">
             <p className="text-emerald-300">
               Imported {result.imported} lead{result.imported === 1 ? "" : "s"}.
             </p>
@@ -712,7 +892,7 @@ function ImportCsvModal({
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/12 bg-white/[0.04] px-4 text-xs font-semibold uppercase tracking-[0.18em] text-white/76 transition hover:border-white/28 hover:bg-white/[0.10]"
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/60 bg-white/[0.04] px-4 text-xs font-semibold uppercase tracking-[0.18em] text-white/76 transition hover:border-white/28 hover:bg-white/[0.10]"
           >
             {result ? "Close" : "Cancel"}
           </button>

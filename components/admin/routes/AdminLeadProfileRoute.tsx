@@ -30,6 +30,12 @@ const documentCategoryOptions = [
   "EOI",
   "Utility Bills",
   "Proposal",
+  "Company Registration",
+  "FICA",
+  "Audited Financials",
+  "Management Accounts",
+  "Bank Statements",
+  "Tax Clearance",
   "Term Sheet",
 ] as const;
 type DocumentCategoryOption = (typeof documentCategoryOptions)[number];
@@ -38,6 +44,12 @@ const documentCategoryStatusMap: Record<DocumentCategoryOption, AdminDocumentSta
   EOI: "signed",
   "Utility Bills": "received",
   Proposal: "issued",
+  "Company Registration": "received",
+  FICA: "received",
+  "Audited Financials": "received",
+  "Management Accounts": "received",
+  "Bank Statements": "received",
+  "Tax Clearance": "received",
   "Term Sheet": "issued",
 };
 type WorkflowFileKey =
@@ -608,7 +620,7 @@ export function AdminLeadProfileRoute({
       <section className="app-surface rounded-[1.4rem] p-4">
         <p className="line-label">Onboarding Workflow</p>
         <p className="mt-2 text-sm text-white/60">
-          Sequence: Submit EOI → Submit utility bills → Admin issues proposal → Sales submits signed proposal → Admin issues term sheet → Sales submits signed term sheet.
+          Sequence: Client signs EOI via signing link → Admin uploads proposal → Admin uploads term sheet → Mark onboarding complete.
         </p>
         {workflowNotice ? (
           <p className="mt-2 text-sm text-white/72">{workflowNotice}</p>
@@ -647,126 +659,50 @@ export function AdminLeadProfileRoute({
         </div>
         <div className="mt-3 grid gap-2 md:grid-cols-2">
           {isSalesActor ? (
-            <>
-              <button
-                type="button"
-                onClick={handleSubmitSalesEoi}
-                disabled={isWorkflowUploading || lead.stage === "Disqualified" || lead.stage === "Onboarding Complete"}
-                className="rounded-[0.8rem] border border-white/12 bg-white/[0.04] px-3 py-2 text-xs uppercase tracking-[0.2em] text-white/72 transition hover:border-white/24 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                {isWorkflowUploading ? "Working" : "Submit EOI"}
-              </button>
-              <div className="rounded-[0.8rem] border border-white/10 bg-black/20 p-2">
-                <input
-                  aria-label="Utility bill file"
-                  type="file"
-                  onChange={(event) => setWorkflowFile("utilityBills", event.target.files?.[0] ?? null)}
-                  className="mb-2 max-w-full text-xs text-white/56 file:mr-2 file:rounded-[0.65rem] file:border-0 file:bg-white file:px-2 file:py-1.5 file:text-xs file:text-black"
-                />
-                <button
-                  type="button"
-                  onClick={() =>
-                    uploadWorkflowDocument({
-                      key: "utilityBills",
-                      title: "6-Month Utility Bill Pack",
-                      category: "Qualification",
-                      status: "received",
-                      missingMessage: "Choose the utility bill file before submitting.",
-                      successMessage: "Utility bills submitted.",
-                      afterUpload: () => uploadLeadUtilityBills(lead.id),
-                    })
-                  }
-                  disabled={!workflowFiles.utilityBills || isWorkflowUploading || !hasEoiSigned(lead) || lead.stage === "Disqualified" || lead.stage === "Onboarding Complete"}
-                  className="w-full rounded-[0.8rem] border border-white/12 bg-white/[0.04] px-3 py-2 text-xs uppercase tracking-[0.2em] text-white/72 transition hover:border-white/24 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
-                >
-                  Submit Utility Bills
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  const proposalDoc = lead.documents.find((doc) =>
-                    /proposal \(admin issued\)/i.test(doc.title),
+            <div className="md:col-span-2 rounded-[0.9rem] border border-white/10 bg-black/30 p-3">
+              <p className="text-xs uppercase tracking-[0.2em] text-white/45">
+                Document Vault
+              </p>
+              <p className="mt-1 text-xs text-white/52">
+                Files uploaded by admin for this client. Download anytime.
+              </p>
+              {(() => {
+                const adminDocs = lead.documents.filter(
+                  (doc) => doc.uploadedByType === "Admin Team",
+                );
+                if (adminDocs.length === 0) {
+                  return (
+                    <p className="mt-3 text-sm text-white/56">
+                      No documents uploaded yet by admin.
+                    </p>
                   );
-                  if (proposalDoc) {
-                    handleDownloadSingleDocument(proposalDoc.id);
-                    setWorkflowNotice("Admin proposal downloaded.");
-                  }
-                }}
-                disabled={!hasProposalIssued(lead)}
-                className="rounded-[0.8rem] border border-white/12 bg-white/[0.04] px-3 py-2 text-xs uppercase tracking-[0.2em] text-white/72 transition hover:border-white/24 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                Download Proposal
-              </button>
-              <div className="rounded-[0.8rem] border border-white/10 bg-black/20 p-2">
-                <input
-                  aria-label="Signed proposal file"
-                  type="file"
-                  onChange={(event) => setWorkflowFile("signedProposal", event.target.files?.[0] ?? null)}
-                  className="mb-2 max-w-full text-xs text-white/56 file:mr-2 file:rounded-[0.65rem] file:border-0 file:bg-white file:px-2 file:py-1.5 file:text-xs file:text-black"
-                />
-                <button
-                  type="button"
-                  onClick={() =>
-                    uploadWorkflowDocument({
-                      key: "signedProposal",
-                      title: "Signed Proposal",
-                      category: "Commercial",
-                      status: "signed",
-                      missingMessage: "Choose the signed proposal file before submitting.",
-                      successMessage: "Signed proposal submitted.",
-                      afterUpload: () => submitLeadProposal(lead.id),
-                    })
-                  }
-                  disabled={!workflowFiles.signedProposal || isWorkflowUploading || !hasProposalIssued(lead) || lead.stage === "Disqualified" || lead.stage === "Onboarding Complete"}
-                  className="w-full rounded-[0.8rem] border border-white/12 bg-white/[0.04] px-3 py-2 text-xs uppercase tracking-[0.2em] text-white/72 transition hover:border-white/24 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
-                >
-                  Upload Signed Proposal
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  const termSheetDoc = lead.documents.find((doc) =>
-                    /term sheet \(admin issued\)/i.test(doc.title),
-                  );
-                  if (termSheetDoc) {
-                    handleDownloadSingleDocument(termSheetDoc.id);
-                    setWorkflowNotice("Admin term sheet downloaded.");
-                  }
-                }}
-                disabled={!hasTermSheetIssued(lead)}
-                className="rounded-[0.8rem] border border-white/12 bg-white/[0.04] px-3 py-2 text-xs uppercase tracking-[0.2em] text-white/72 transition hover:border-white/24 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                Download Term Sheet
-              </button>
-              <div className="rounded-[0.8rem] border border-white/10 bg-black/20 p-2">
-                <input
-                  aria-label="Signed term sheet file"
-                  type="file"
-                  onChange={(event) => setWorkflowFile("signedTermSheet", event.target.files?.[0] ?? null)}
-                  className="mb-2 max-w-full text-xs text-white/56 file:mr-2 file:rounded-[0.65rem] file:border-0 file:bg-white file:px-2 file:py-1.5 file:text-xs file:text-black"
-                />
-                <button
-                  type="button"
-                  onClick={() =>
-                    uploadWorkflowDocument({
-                      key: "signedTermSheet",
-                      title: "Signed Term Sheet",
-                      category: "Legal",
-                      status: "signed",
-                      missingMessage: "Choose the signed term sheet file before submitting.",
-                      successMessage: "Signed term sheet submitted.",
-                      afterUpload: () => submitLeadTermSheet(lead.id),
-                    })
-                  }
-                  disabled={!workflowFiles.signedTermSheet || isWorkflowUploading || !hasTermSheetIssued(lead) || !hasProposalSubmitted(lead) || lead.stage === "Disqualified" || lead.stage === "Onboarding Complete"}
-                  className="w-full rounded-[0.8rem] border border-white/12 bg-white/[0.04] px-3 py-2 text-xs uppercase tracking-[0.2em] text-white/72 transition hover:border-white/24 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
-                >
-                  Upload Signed Term Sheet
-                </button>
-              </div>
-            </>
+                }
+                return (
+                  <ul className="mt-3 flex flex-col gap-2">
+                    {adminDocs.map((doc) => (
+                      <li
+                        key={doc.id}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-[0.7rem] border border-white/8 bg-white/[0.03] px-3 py-2"
+                      >
+                        <div className="flex min-w-0 flex-col">
+                          <span className="truncate text-sm text-white/82">{doc.title}</span>
+                          <span className="text-[0.62rem] uppercase tracking-[0.18em] text-white/42">
+                            {doc.category} • {doc.fileType} • {doc.uploadedAt}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadSingleDocument(doc.id)}
+                          className="rounded-[0.65rem] border border-white/14 px-2.5 py-1.5 text-[0.64rem] uppercase tracking-[0.18em] text-white/76 transition hover:border-white/26 hover:text-white"
+                        >
+                          Download
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                );
+              })()}
+            </div>
           ) : null}
 
           {isAdminActor ? (
@@ -799,7 +735,7 @@ export function AdminLeadProfileRoute({
                       afterUpload: () => issueLeadProposal(lead.id),
                     })
                   }
-                  disabled={!workflowFiles.proposalIssue || isWorkflowUploading || !hasUtilityBillPack(lead) || lead.stage === "Disqualified" || lead.stage === "Onboarding Complete"}
+                  disabled={!workflowFiles.proposalIssue || isWorkflowUploading || lead.stage === "Disqualified" || lead.stage === "Onboarding Complete"}
                   className="w-full rounded-[0.8rem] border border-white/12 bg-white/[0.04] px-3 py-2 text-xs uppercase tracking-[0.2em] text-white/72 transition hover:border-white/24 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   Upload Proposal
@@ -825,7 +761,7 @@ export function AdminLeadProfileRoute({
                       afterUpload: () => issueLeadTermSheet(lead.id),
                     })
                   }
-                  disabled={!workflowFiles.termSheetIssue || isWorkflowUploading || !hasProposalSubmitted(lead) || lead.stage === "Disqualified" || lead.stage === "Onboarding Complete"}
+                  disabled={!workflowFiles.termSheetIssue || isWorkflowUploading || !hasProposalIssued(lead) || lead.stage === "Disqualified" || lead.stage === "Onboarding Complete"}
                   className="w-full rounded-[0.8rem] border border-white/12 bg-white/[0.04] px-3 py-2 text-xs uppercase tracking-[0.2em] text-white/72 transition hover:border-white/24 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   Upload Term Sheet
@@ -843,7 +779,7 @@ export function AdminLeadProfileRoute({
           <button
             type="button"
             onClick={() => completeLeadOnboarding(lead.id)}
-            disabled={!hasEoiSigned(lead) || !hasUtilityBillPack(lead) || !hasProposalSubmitted(lead) || !hasTermSheetSubmitted(lead) || lead.stage === "Disqualified" || lead.stage === "Onboarding Complete"}
+            disabled={!hasEoiSigned(lead) || !hasProposalIssued(lead) || !hasTermSheetIssued(lead) || lead.stage === "Disqualified" || lead.stage === "Onboarding Complete"}
             className="mt-3 rounded-[0.8rem] border border-white/16 bg-white/[0.08] px-3 py-2 text-xs uppercase tracking-[0.2em] text-white/84 transition hover:border-white/28 hover:bg-white/[0.14] disabled:cursor-not-allowed disabled:opacity-45"
           >
             Mark Onboarding Complete

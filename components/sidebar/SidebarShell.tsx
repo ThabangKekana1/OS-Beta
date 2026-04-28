@@ -11,7 +11,9 @@ import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
 function SidebarContent() {
   const navItems = [
-    { id: "home", label: "Home", href: "/", icon: "home" as const },
+    { id: "home", label: "Home", href: "/workspace", icon: "home" as const },
+    { id: "documents", label: "Documents", href: "/documents", icon: "documents" as const },
+    { id: "profile", label: "Profile", href: "/settings", icon: "profile" as const },
   ];
 
   return (
@@ -57,6 +59,7 @@ export function SidebarShell() {
       />
 
       <aside
+        data-testid="workspace-sidebar"
         className={cn(
           "fixed bottom-4 left-4 top-[4.5rem] z-50 w-[19rem] transition-transform duration-200 lg:top-4",
           mobileOpen ? "translate-x-0" : "-translate-x-[120%] lg:translate-x-0",

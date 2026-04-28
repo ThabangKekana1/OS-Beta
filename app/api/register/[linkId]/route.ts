@@ -5,27 +5,12 @@ import {
   buildAdminLeadFromClientRegistration,
   defaultOwnerIdForRegistration,
 } from "@/lib/client-registration";
-import { getAuthProfiles } from "@/lib/auth";
 import { registrationLinkIdForProfile } from "@/lib/registration-links";
 import type { AdminLeadRegistrationSource } from "@/lib/admin-types";
 
 export const runtime = "nodejs";
 
 function resolveRegistrationSource(linkId: string): AdminLeadRegistrationSource | null {
-  const authProfile = getAuthProfiles().find(
-    (profile) => registrationLinkIdForProfile(profile) === linkId,
-  );
-
-  if (authProfile) {
-    return {
-      linkId,
-      profileName: authProfile.name,
-      profileRole: authProfile.role,
-      profileAgentId: authProfile.agentId,
-      channel: "public_link",
-    };
-  }
-
   const agent = ADMIN_AGENTS.find(
     (entry) => registrationLinkIdForProfile({
       email: `${entry.id}@agent.local`,
@@ -144,6 +129,7 @@ export async function POST(
     city: typeof payload.city === "string" ? payload.city : "",
     province: typeof payload.province === "string" ? payload.province : "",
     source: "Migrate Portal",
+    origin: "website",
     ownerId: defaultOwnerIdForRegistration(source),
     registrationSource: source,
   });

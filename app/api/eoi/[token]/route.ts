@@ -6,6 +6,7 @@ import {
 } from "@/lib/eoi-template";
 import { makeId, timelineLabel } from "@/lib/formatting";
 import { uploadPrivateObject } from "@/lib/server-json-store";
+import { createNotification } from "@/lib/notifications";
 import type { AdminLead, AdminLeadDocument } from "@/lib/admin-types";
 
 export const runtime = "nodejs";
@@ -203,6 +204,19 @@ export async function POST(
     activeLeadId: signedLead.id,
   };
   const backend = await writeAdminStateSnapshot(nextSnapshot, "public-eoi-signing");
+
+  void createNotification({
+    audience: "admin",
+    kind: "eoi_signed",
+    title: `EOI signed by ${signedLead.contactName}`,
+    body: `${signedLead.company} accepted the Expression of Interest. Stage is now "${signedLead.stage}". Signed by ${signedLead.eoiSignedBy ?? signedLead.contactName} at ${signedLead.eoiSignedAt ?? "just now"}.`,
+    link: `/admin/leads/${signedLead.id}`,
+    metadata: {
+      leadId: signedLead.id,
+      company: signedLead.company,
+      contactEmail: signedLead.userProfile.email,
+    },
+  });
 
   return NextResponse.json({
     ok: true,

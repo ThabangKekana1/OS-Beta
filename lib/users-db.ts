@@ -1,4 +1,5 @@
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
+import type { UserRole } from "@/lib/auth";
 
 export type DbAgent = {
   id: string;
@@ -8,22 +9,24 @@ export type DbAgent = {
   isActive: boolean;
 };
 
-export type DbUser = {
+export type DbUserProfile = {
   id: string;
   email: string;
   name: string;
-  role: "admin" | "sales";
-  passwordHash: string;
+  role: UserRole;
   agentId: string | null;
+  partnerOrgId: string | null;
   isActive: boolean;
-  failedLoginAttempts: number;
-  lockedUntil: Date | null;
 };
 
 function isMissingRelationError(error: { code?: string; message?: string } | null) {
   const message = error?.message?.toLowerCase() ?? "";
   return error?.code === "42P01" || message.includes("does not exist");
 }
+
+// ---------------------------------------------------------------------------
+// Agents
+// ---------------------------------------------------------------------------
 
 export async function listAgents(): Promise<DbAgent[] | null> {
   const supabase = getSupabaseAdminClient();
@@ -62,92 +65,47 @@ export async function upsertAgents(agents: DbAgent[]): Promise<void> {
   if (error && !isMissingRelationError(error)) throw error;
 }
 
-function rowToUser(row: Record<string, unknown>): DbUser {
+// ---------------------------------------------------------------------------
+// User profiles (role + agent + partner-org mapping for Supabase Auth users)
+// ---------------------------------------------------------------------------
+
+function rowToProfile(row: Record<string, unknown>): DbUserProfile {
   return {
     id: row.id as string,
     email: row.email as string,
     name: row.name as string,
-    role: row.role as DbUser["role"],
-    passwordHash: row.password_hash as string,
+    role: row.role as UserRole,
     agentId: (row.agent_id as string | null) ?? null,
+    partnerOrgId: (row.partner_org_id as string | null) ?? null,
     isActive: Boolean(row.is_active),
-    failedLoginAttempts: Number(row.failed_login_attempts ?? 0),
-    lockedUntil: row.locked_until ? new Date(row.locked_until as string) : null,
   };
 }
 
-export async function findUserByEmail(email: string): Promise<DbUser | null> {
+export async function findProfileByEmail(email: string): Promise<DbUserProfile | null> {
   const supabase = getSupabaseAdminClient();
   if (!supabase) return null;
 
   const { data, error } = await supabase
     .from("oneos_users")
-    .select(
-      "id, email, name, role, password_hash, agent_id, is_active, failed_login_attempts, locked_until",
-    )
+    .select("id, email, name, role, agent_id, partner_org_id, is_active")
     .eq("email", email.trim().toLowerCase())
     .maybeSingle();
 
   if (isMissingRelationError(error)) return null;
   if (error) throw error;
-  return data ? rowToUser(data) : null;
+  return data ? rowToProfile(data) : null;
 }
 
-export async function findUserById(id: string): Promise<DbUser | null> {
-  const supabase = getSupabaseAdminClient();
-  if (!supabase) return null;
-
-  const { data, error } = await supabase
-    .from("oneos_users")
-    .select(
-      "id, email, name, role, password_hash, agent_id, is_active, failed_login_attempts, locked_until",
-    )
-    .eq("id", id)
-    .maybeSingle();
-
-  if (isMissingRelationError(error)) return null;
-  if (error) throw error;
-  return data ? rowToUser(data) : null;
-}
-
-export async function recordSuccessfulLogin(userId: string): Promise<void> {
-  const supabase = getSupabaseAdminClient();
-  if (!supabase) return;
-
-  await supabase
-    .from("oneos_users")
-    .update({
-      failed_login_attempts: 0,
-      locked_until: null,
-      last_login_at: new Date().toISOString(),
-    })
-    .eq("id", userId);
-}
-
-export async function recordFailedLogin(userId: string, attempts: number): Promise<void> {
-  const supabase = getSupabaseAdminClient();
-  if (!supabase) return;
-
-  // Lock account for 15 minutes after 10 failed attempts.
-  const shouldLock = attempts >= 10;
-  await supabase
-    .from("oneos_users")
-    .update({
-      failed_login_attempts: attempts,
-      locked_until: shouldLock ? new Date(Date.now() + 15 * 60 * 1000).toISOString() : null,
-    })
-    .eq("id", userId);
-}
-
-export type UpsertUserInput = {
+export type UpsertProfileInput = {
   email: string;
   name: string;
-  role: "admin" | "sales";
-  passwordHash: string;
-  agentId: string | null;
+  role: UserRole;
+  agentId?: string | null;
+  partnerOrgId?: string | null;
+  isActive?: boolean;
 };
 
-export async function upsertUser(input: UpsertUserInput): Promise<void> {
+export async function upsertProfile(input: UpsertProfileInput): Promise<void> {
   const supabase = getSupabaseAdminClient();
   if (!supabase) return;
 
@@ -158,8 +116,9 @@ export async function upsertUser(input: UpsertUserInput): Promise<void> {
         email: input.email.trim().toLowerCase(),
         name: input.name,
         role: input.role,
-        password_hash: input.passwordHash,
-        agent_id: input.agentId,
+        agent_id: input.agentId ?? null,
+        partner_org_id: input.partnerOrgId ?? null,
+        is_active: input.isActive ?? true,
       },
       { onConflict: "email" },
     );

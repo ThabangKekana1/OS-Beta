@@ -4,6 +4,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -11,6 +12,7 @@ import { createDefaultAdminStateSnapshot, normalizeAdminStateSnapshot } from "@/
 import { ADMIN_AGENTS } from "@/lib/admin-mock-data";
 import {
   buildAdminLeadFromClientRegistration,
+  buildAdminLeadStubFromSalesLead,
   splitContactName,
 } from "@/lib/client-registration";
 import { makeId, timelineLabel } from "@/lib/formatting";
@@ -21,12 +23,18 @@ import {
   writeAdminStorageSnapshot,
 } from "@/lib/admin-storage";
 import { adminLeadStages, adminLeadContactStatuses, salesLeadQualificationStages } from "@/lib/admin-types";
+import {
+  adminContactToQualification,
+  qualificationToAdminContact,
+} from "@/lib/lead-status-mapping";
 import type {
   AdminAgent,
   AdminDocumentStatus,
   AdminLead,
   AdminLeadContactStatus,
   AdminLeadDocument,
+  AdminLeadOrigin,
+  AdminLeadPartner,
   AdminLeadPriority,
   AdminLeadStage,
   AdminTaskOwner,
@@ -57,6 +65,8 @@ type CreateLeadInput = {
   city: string;
   province: string;
   source: AdminLead["source"];
+  origin?: AdminLeadOrigin;
+  partner?: AdminLeadPartner | null;
   ownerId: string;
 };
 
@@ -106,6 +116,7 @@ type AdminPortalContextValue = {
   activeLead: AdminLead | null;
   setActiveLeadId: (leadId: string | null) => void;
   updateLeadOwner: (leadId: string, ownerId: string) => void;
+  updateLeadPartner: (leadId: string, partner: AdminLeadPartner | null) => void;
   updateLeadPriority: (leadId: string, priority: AdminLeadPriority) => void;
   updateLeadContactStatus: (leadId: string, status: AdminLeadContactStatus) => void;
   updateLeadStage: (leadId: string, stage: AdminLeadStage) => void;
@@ -121,6 +132,7 @@ type AdminPortalContextValue = {
     reason?: string | null,
   ) => boolean;
   updateSalesLeadOwner: (salesLeadId: string, ownerId: string) => boolean;
+  deleteSalesLead: (salesLeadId: string) => { ok: true } | { ok: false; error: string };
   convertSalesLeadToClient: (
     input: ConvertSalesLeadToClientInput,
   ) => CreateLeadResult | null;
@@ -140,6 +152,9 @@ type AdminPortalContextValue = {
   uploadLeadDocument: (leadId: string, input: UploadLeadDocumentInput) => Promise<boolean>;
   uploadLeadTermSheet: (leadId: string) => void;
   completeLeadOnboarding: (leadId: string) => void;
+  saveStatus: SaveStatus;
+  syncBackend: "loading" | "supabase" | "local";
+  retrySave: () => void;
 };
 
 const AdminPortalContext = createContext<AdminPortalContextValue | null>(null);
@@ -161,13 +176,27 @@ function updateLeadById(
   return leads.map((lead) => (lead.id === leadId ? updater(lead) : lead));
 }
 
-function mergeById<T extends { id: string }>(remoteItems: T[], currentItems: T[]) {
-  const currentIds = new Set(currentItems.map((item) => item.id));
-  return [
-    ...currentItems,
-    ...remoteItems.filter((item) => !currentIds.has(item.id)),
-  ];
+function diffById<T extends { id: string }>(
+  next: T[],
+  baseline: Map<string, T>,
+): { upserts: T[]; deletes: string[] } {
+  const upserts: T[] = [];
+  const seenIds = new Set<string>();
+  for (const item of next) {
+    seenIds.add(item.id);
+    const prior = baseline.get(item.id);
+    if (!prior || prior !== item) {
+      upserts.push(item);
+    }
+  }
+  const deletes: string[] = [];
+  for (const id of baseline.keys()) {
+    if (!seenIds.has(id)) deletes.push(id);
+  }
+  return { upserts, deletes };
 }
+
+type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 const TERMINAL_STAGES = new Set<AdminLeadStage>([
   "Onboarding Complete",
@@ -178,9 +207,10 @@ const STAGE_RANK: Record<AdminLeadStage, number> = {
   "EOI Generated": 1,
   "EOI Signed": 2,
   "Utility Bills Uploaded": 3,
-  "Term Sheet Uploaded": 4,
-  "Onboarding Complete": 5,
-  Disqualified: 6,
+  "Compliance Pack Uploaded": 4,
+  "Term Sheet Uploaded": 5,
+  "Onboarding Complete": 6,
+  Disqualified: 7,
 };
 
 function promoteStage(
@@ -199,6 +229,15 @@ const DOC_TITLE_PROPOSAL_ISSUED = "Proposal (Admin Issued)";
 const DOC_TITLE_PROPOSAL_SIGNED = "Signed Proposal";
 const DOC_TITLE_TERM_SHEET_ISSUED = "Term Sheet (Admin Issued)";
 const DOC_TITLE_TERM_SHEET_SIGNED = "Signed Term Sheet";
+
+const COMPLIANCE_PACK_NEXT_ACTION =
+  "Request the Generocity compliance pack from the client: " +
+  "(1) Company registration documents (the contracting entity for UFMS), " +
+  "(2) FICA pack — director ID + proof of residence, " +
+  "(3) Latest audited financial statements, " +
+  "(4) Latest management accounts, " +
+  "(5) Last 6 months bank statements, " +
+  "(6) Valid tax clearance certificate.";
 
 function upsertDocument(
   lead: AdminLead,
@@ -263,6 +302,19 @@ export function AdminPortalProvider({
   const [syncBackend, setSyncBackend] = useState<"loading" | "supabase" | "local">(
     "loading",
   );
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+
+  // Server-authoritative baseline used for delta-diffing on every persist.
+  const leadsBaselineRef = useRef<Map<string, AdminLead>>(new Map());
+  const salesLeadsBaselineRef = useRef<Map<string, SalesLead>>(new Map());
+  // Coalesce rapid mutations.
+  const pendingPersistRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inflightRef = useRef(false);
+  const dirtyRef = useRef(false);
+  const latestSnapshotRef = useRef<{
+    leads: AdminLead[];
+    salesLeads: SalesLead[];
+  }>({ leads: initialSnapshot.leads, salesLeads: initialSnapshot.salesLeads });
 
   const activeLead = leads.find((lead) => lead.id === activeLeadId) ?? null;
 
@@ -274,6 +326,10 @@ export function AdminPortalProvider({
       setLeads(localSnapshot.leads);
       setSalesLeads(localSnapshot.salesLeads);
       setActiveLeadId(localSnapshot.activeLeadId);
+      latestSnapshotRef.current = {
+        leads: localSnapshot.leads,
+        salesLeads: localSnapshot.salesLeads,
+      };
     }
 
     const loadRemoteState = async () => {
@@ -299,9 +355,44 @@ export function AdminPortalProvider({
 
         const snapshot = normalizeAdminStateSnapshot(payload.snapshot);
         if (!cancelled && snapshot) {
-          setLeads((current) => mergeById(snapshot.leads, current));
-          setSalesLeads((current) => mergeById(snapshot.salesLeads, current));
+          // Server is the source of truth: take its records, then keep any
+          // strictly local-only items (created on this client before sync).
+          const serverLeadIds = new Set(snapshot.leads.map((lead) => lead.id));
+          const serverSalesIds = new Set(
+            snapshot.salesLeads.map((lead) => lead.id),
+          );
+
+          setLeads((current) => {
+            const localOnly = current.filter(
+              (lead) => !serverLeadIds.has(lead.id),
+            );
+            const next = [...localOnly, ...snapshot.leads];
+            latestSnapshotRef.current = {
+              ...latestSnapshotRef.current,
+              leads: next,
+            };
+            return next;
+          });
+          setSalesLeads((current) => {
+            const localOnly = current.filter(
+              (lead) => !serverSalesIds.has(lead.id),
+            );
+            const next = [...localOnly, ...snapshot.salesLeads];
+            latestSnapshotRef.current = {
+              ...latestSnapshotRef.current,
+              salesLeads: next,
+            };
+            return next;
+          });
           setActiveLeadId((current) => current ?? snapshot.activeLeadId);
+
+          // Baseline tracks ONLY what the server has confirmed.
+          leadsBaselineRef.current = new Map(
+            snapshot.leads.map((lead) => [lead.id, lead]),
+          );
+          salesLeadsBaselineRef.current = new Map(
+            snapshot.salesLeads.map((lead) => [lead.id, lead]),
+          );
         }
 
         if (!cancelled) {
@@ -334,33 +425,98 @@ export function AdminPortalProvider({
     writeAdminStorageSnapshot(snapshot);
   }, [activeLeadId, isHydrated, leads, salesLeads, syncBackend]);
 
-  const persistSnapshotNow = async (snapshot: {
-    leads: AdminLead[];
-    salesLeads: SalesLead[];
-    activeLeadId: string | null;
-  }) => {
-    writeAdminStorageSnapshot(snapshot);
+  const persistDeltaNow = async () => {
+    if (inflightRef.current) {
+      // Will be re-triggered by the dirtyRef flag once the inflight call returns.
+      dirtyRef.current = true;
+      return;
+    }
 
     if (syncBackend !== "supabase") {
       return;
     }
 
+    const { leads: nextLeads, salesLeads: nextSalesLeads } =
+      latestSnapshotRef.current;
+
+    const leadDelta = diffById(nextLeads, leadsBaselineRef.current);
+    const salesDelta = diffById(nextSalesLeads, salesLeadsBaselineRef.current);
+
+    if (
+      leadDelta.upserts.length === 0 &&
+      leadDelta.deletes.length === 0 &&
+      salesDelta.upserts.length === 0 &&
+      salesDelta.deletes.length === 0
+    ) {
+      return;
+    }
+
+    inflightRef.current = true;
+    dirtyRef.current = false;
+    setSaveStatus("saving");
+
     try {
-      const response = await fetch("/api/admin/state", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
+      const response = await fetch("/api/admin/state/mutate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         cache: "no-store",
-        body: JSON.stringify({ snapshot }),
+        body: JSON.stringify({
+          leadUpserts: leadDelta.upserts,
+          leadDeletes: leadDelta.deletes,
+          salesLeadUpserts: salesDelta.upserts,
+          salesLeadDeletes: salesDelta.deletes,
+        }),
       });
 
       if (!response.ok) {
+        console.error(
+          "[AdminPortal] mutate endpoint failed",
+          response.status,
+        );
+        setSaveStatus("error");
         setSyncBackend("local");
+        return;
       }
-    } catch {
+
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        snapshot?: unknown;
+      };
+
+      const snapshot = normalizeAdminStateSnapshot(payload.snapshot);
+      if (snapshot) {
+        // Re-baseline against the server's authoritative response.
+        leadsBaselineRef.current = new Map(
+          snapshot.leads.map((lead) => [lead.id, lead]),
+        );
+        salesLeadsBaselineRef.current = new Map(
+          snapshot.salesLeads.map((lead) => [lead.id, lead]),
+        );
+      }
+
+      setSaveStatus("saved");
+    } catch (error) {
+      console.error("[AdminPortal] mutate endpoint threw", error);
+      setSaveStatus("error");
       setSyncBackend("local");
+    } finally {
+      inflightRef.current = false;
+      // If more edits arrived during the inflight call, persist them now.
+      if (dirtyRef.current) {
+        void persistDeltaNow();
+      }
     }
+  };
+
+  const schedulePersist = () => {
+    if (pendingPersistRef.current) {
+      clearTimeout(pendingPersistRef.current);
+    }
+    // Coalesce sub-200ms bursts of mutations into a single network call.
+    pendingPersistRef.current = setTimeout(() => {
+      pendingPersistRef.current = null;
+      void persistDeltaNow();
+    }, 150);
   };
 
   const persistSnapshotImmediately = (snapshot: {
@@ -368,7 +524,14 @@ export function AdminPortalProvider({
     salesLeads: SalesLead[];
     activeLeadId: string | null;
   }) => {
-    void persistSnapshotNow(snapshot);
+    // Local cache (so cross-tab `storage` events still work) + remote delta.
+    writeAdminStorageSnapshot(snapshot);
+    latestSnapshotRef.current = {
+      leads: snapshot.leads,
+      salesLeads: snapshot.salesLeads,
+    };
+    dirtyRef.current = true;
+    schedulePersist();
   };
 
   useEffect(() => {
@@ -418,16 +581,61 @@ export function AdminPortalProvider({
   };
 
   const updateLeadOwner = (leadId: string, ownerId: string) => {
+    let linkedSalesLeadId: string | null = null;
+    setLeads((current) => {
+      const nextLeads = updateLeadById(current, leadId, (lead) => {
+        linkedSalesLeadId = lead.linkedSalesLeadId;
+        return {
+          ...lead,
+          ownerId,
+          lastTouched: "Just now",
+          events: [
+            {
+              id: makeId("event"),
+              title: "Owner updated",
+              detail: `Lead reassigned in admin portal.`,
+              createdAt: timelineLabel(),
+              tone: "system" as const,
+            },
+            ...lead.events,
+          ],
+        };
+      });
+
+      const timestamp = new Date().toISOString();
+      const nextSalesLeads = linkedSalesLeadId
+        ? salesLeads.map((sLead) =>
+            sLead.id === linkedSalesLeadId && sLead.ownerId !== ownerId
+              ? { ...sLead, ownerId, lastUpdatedAt: timestamp }
+              : sLead,
+          )
+        : salesLeads;
+
+      if (nextSalesLeads !== salesLeads) {
+        setSalesLeads(nextSalesLeads);
+      }
+
+      persistSnapshotImmediately({
+        leads: nextLeads,
+        salesLeads: nextSalesLeads,
+        activeLeadId,
+      });
+
+      return nextLeads;
+    });
+  };
+
+  const updateLeadPartner = (leadId: string, partner: AdminLeadPartner | null) => {
     commitLeads((current) =>
       updateLeadById(current, leadId, (lead) => ({
         ...lead,
-        ownerId,
+        partner,
         lastTouched: "Just now",
         events: [
           {
             id: makeId("event"),
-            title: "Owner updated",
-            detail: `Lead reassigned in admin portal.`,
+            title: "Partner updated",
+            detail: partner ? `Partner set to ${partner}.` : "Partner cleared.",
             createdAt: timelineLabel(),
             tone: "system",
           },
@@ -438,23 +646,76 @@ export function AdminPortalProvider({
   };
 
   const updateLeadContactStatus = (leadId: string, status: AdminLeadContactStatus) => {
-    commitLeads((current) =>
-      updateLeadById(current, leadId, (lead) => ({
-        ...lead,
-        contactStatus: status,
-        lastTouched: "Just now",
-        events: [
-          {
-            id: makeId("event"),
-            title: "Contact status updated",
-            detail: `Marked as ${status}.`,
-            createdAt: timelineLabel(),
-            tone: "system",
-          },
-          ...lead.events,
-        ],
-      })),
-    );
+    let targetEmail = "";
+    let targetOwnerId = "";
+    let linkedSalesLeadId: string | null = null;
+
+    setLeads((current) => {
+      const nextLeads = updateLeadById(current, leadId, (lead) => {
+        targetEmail = lead.userProfile.email.trim().toLowerCase();
+        targetOwnerId = lead.ownerId;
+        linkedSalesLeadId = lead.linkedSalesLeadId;
+        return {
+          ...lead,
+          contactStatus: status,
+          lastTouched: "Just now",
+          events: [
+            {
+              id: makeId("event"),
+              title: "Contact status updated",
+              detail: `Marked as ${status}.`,
+              createdAt: timelineLabel(),
+              tone: "system",
+            },
+            ...lead.events,
+          ],
+        };
+      });
+
+      const mappedQualification = adminContactToQualification(status);
+      const timestamp = new Date().toISOString();
+      const matches = (sLead: SalesLead) => {
+        if (linkedSalesLeadId) return sLead.id === linkedSalesLeadId;
+        if (sLead.email.trim().toLowerCase() !== targetEmail) return false;
+        if (targetOwnerId && sLead.ownerId !== targetOwnerId) return false;
+        return true;
+      };
+      const nextSalesLeads = mappedQualification
+        ? salesLeads.map((sLead) => {
+            if (sLead.status !== "Open") return sLead;
+            if (!matches(sLead)) return sLead;
+            if (sLead.qualificationStage === mappedQualification) return sLead;
+            if (
+              mappedQualification === "Not Interested" &&
+              !sLead.qualificationReason
+            ) {
+              return {
+                ...sLead,
+                qualificationStage: mappedQualification,
+                qualificationReason: `Mirrored from admin contact status: ${status}.`,
+                lastUpdatedAt: timestamp,
+              };
+            }
+            return {
+              ...sLead,
+              qualificationStage: mappedQualification,
+              lastUpdatedAt: timestamp,
+            };
+          })
+        : salesLeads;
+
+      if (nextSalesLeads !== salesLeads) {
+        setSalesLeads(nextSalesLeads);
+      }
+
+      persistSnapshotImmediately({
+        leads: nextLeads,
+        salesLeads: nextSalesLeads,
+        activeLeadId,
+      });
+
+      return nextLeads;
+    });
   };
 
   const updateLeadPriority = (leadId: string, priority: AdminLeadPriority) => {
@@ -478,8 +739,11 @@ export function AdminPortalProvider({
   };
 
   const updateLeadStage = (leadId: string, stage: AdminLeadStage) => {
-    commitLeads((current) =>
-      updateLeadById(current, leadId, (lead) => {
+    let linkedSalesLeadId: string | null = null;
+
+    setLeads((current) => {
+      const nextLeads = updateLeadById(current, leadId, (lead) => {
+        linkedSalesLeadId = lead.linkedSalesLeadId;
         const onboardingCompletedAt =
           stage === "Onboarding Complete"
             ? lead.onboardingCompletedAt ?? new Date().toISOString()
@@ -501,8 +765,47 @@ export function AdminPortalProvider({
             ...lead.events,
           ],
         };
-      }),
-    );
+      });
+
+      const timestamp = new Date().toISOString();
+      const nextSalesLeads = linkedSalesLeadId
+        ? salesLeads.map((sLead) => {
+            if (sLead.id !== linkedSalesLeadId) return sLead;
+            if (stage === "Onboarding Complete") {
+              return {
+                ...sLead,
+                qualificationStage: "Qualifies" as const,
+                status: "Converted" as const,
+                lastUpdatedAt: timestamp,
+              };
+            }
+            if (stage === "Disqualified") {
+              return {
+                ...sLead,
+                qualificationStage: "Does Not Qualify" as const,
+                qualificationReason:
+                  sLead.qualificationReason ??
+                  "Disqualified from admin pipeline.",
+                status: "Converted" as const,
+                lastUpdatedAt: timestamp,
+              };
+            }
+            return sLead;
+          })
+        : salesLeads;
+
+      if (nextSalesLeads !== salesLeads) {
+        setSalesLeads(nextSalesLeads);
+      }
+
+      persistSnapshotImmediately({
+        leads: nextLeads,
+        salesLeads: nextSalesLeads,
+        activeLeadId,
+      });
+
+      return nextLeads;
+    });
   };
 
   const updateLeadNextAction = (leadId: string, nextAction: string) => {
@@ -623,6 +926,7 @@ export function AdminPortalProvider({
         : null;
     const created = buildAdminLeadFromClientRegistration({
       ...input,
+      origin: input.origin ?? "created",
       registrationSource,
     });
 
@@ -658,6 +962,19 @@ export function AdminPortalProvider({
 
     const timestamp = new Date().toISOString();
     const salesLeadId = makeId("slead");
+
+    const stub = buildAdminLeadStubFromSalesLead({
+      contactName,
+      company,
+      email,
+      ownerId: input.ownerId,
+      origin: "created",
+    });
+
+    const stubLead = stub
+      ? { ...stub.lead, linkedSalesLeadId: salesLeadId }
+      : null;
+
     const nextSalesLead: SalesLead = {
       id: salesLeadId,
       ownerId: input.ownerId,
@@ -675,16 +992,19 @@ export function AdminPortalProvider({
       createdAt: timestamp,
       lastUpdatedAt: timestamp,
       convertedClientProfileId: null,
+      linkedAdminLeadId: stubLead ? stubLead.id : null,
     };
 
-    setSalesLeads((current) => {
-      const nextSalesLeads = [nextSalesLead, ...current];
-      persistSnapshotImmediately({
-        leads,
-        salesLeads: nextSalesLeads,
-        activeLeadId,
-      });
-      return nextSalesLeads;
+    const nextSalesLeads = [nextSalesLead, ...salesLeads];
+    const nextLeads = stubLead ? [stubLead, ...leads] : leads;
+    setSalesLeads(nextSalesLeads);
+    if (stubLead) {
+      setLeads(nextLeads);
+    }
+    persistSnapshotImmediately({
+      leads: nextLeads,
+      salesLeads: nextSalesLeads,
+      activeLeadId,
     });
     return salesLeadId;
   };
@@ -704,12 +1024,18 @@ export function AdminPortalProvider({
 
     const timestamp = new Date().toISOString();
     let updated = false;
+    let mirrorEmail = "";
+    let mirrorOwnerId = "";
+    let linkedAdminLeadId: string | null = null;
 
     setSalesLeads((current) => {
       const nextSalesLeads = current.map((lead) =>
         lead.id === salesLeadId && lead.status === "Open"
           ? (() => {
               updated = true;
+              mirrorEmail = lead.email.trim().toLowerCase();
+              mirrorOwnerId = lead.ownerId;
+              linkedAdminLeadId = lead.linkedAdminLeadId;
               return {
                 ...lead,
                 qualificationStage: stage,
@@ -721,8 +1047,42 @@ export function AdminPortalProvider({
       );
 
       if (updated) {
+        const mappedContact = qualificationToAdminContact(stage);
+        const matches = (aLead: AdminLead) => {
+          if (linkedAdminLeadId) return aLead.id === linkedAdminLeadId;
+          if (aLead.userProfile.email.trim().toLowerCase() !== mirrorEmail)
+            return false;
+          if (mirrorOwnerId && aLead.ownerId !== mirrorOwnerId) return false;
+          return true;
+        };
+        const nextLeads = mappedContact
+          ? leads.map((aLead) => {
+              if (!matches(aLead)) return aLead;
+              if (aLead.contactStatus === mappedContact) return aLead;
+              return {
+                ...aLead,
+                contactStatus: mappedContact,
+                lastTouched: "Just now",
+                events: [
+                  {
+                    id: makeId("event"),
+                    title: "Contact status updated",
+                    detail: `Mirrored from sales qualification: ${stage}.`,
+                    createdAt: timelineLabel(),
+                    tone: "system" as const,
+                  },
+                  ...aLead.events,
+                ],
+              };
+            })
+          : leads;
+
+        if (nextLeads !== leads) {
+          setLeads(nextLeads);
+        }
+
         persistSnapshotImmediately({
-          leads,
+          leads: nextLeads,
           salesLeads: nextSalesLeads,
           activeLeadId,
         });
@@ -739,12 +1099,14 @@ export function AdminPortalProvider({
     if (!targetOwnerId) return false;
     const timestamp = new Date().toISOString();
     let updated = false;
+    let linkedAdminLeadId: string | null = null;
 
     setSalesLeads((current) => {
       const nextSalesLeads = current.map((lead) =>
         lead.id === salesLeadId && lead.ownerId !== targetOwnerId
           ? (() => {
               updated = true;
+              linkedAdminLeadId = lead.linkedAdminLeadId;
               return {
                 ...lead,
                 ownerId: targetOwnerId,
@@ -755,8 +1117,34 @@ export function AdminPortalProvider({
       );
 
       if (updated) {
+        const nextLeads = linkedAdminLeadId
+          ? leads.map((aLead) =>
+              aLead.id === linkedAdminLeadId && aLead.ownerId !== targetOwnerId
+                ? {
+                    ...aLead,
+                    ownerId: targetOwnerId,
+                    lastTouched: "Just now",
+                    events: [
+                      {
+                        id: makeId("event"),
+                        title: "Owner updated",
+                        detail: "Mirrored from sales lead reassignment.",
+                        createdAt: timelineLabel(),
+                        tone: "system" as const,
+                      },
+                      ...aLead.events,
+                    ],
+                  }
+                : aLead,
+            )
+          : leads;
+
+        if (nextLeads !== leads) {
+          setLeads(nextLeads);
+        }
+
         persistSnapshotImmediately({
-          leads,
+          leads: nextLeads,
           salesLeads: nextSalesLeads,
           activeLeadId,
         });
@@ -766,6 +1154,62 @@ export function AdminPortalProvider({
     });
 
     return updated;
+  };
+
+  const deleteSalesLead = (
+    salesLeadId: string,
+  ): { ok: true } | { ok: false; error: string } => {
+    const currentSalesLeads = latestSnapshotRef.current.salesLeads;
+    const currentLeads = latestSnapshotRef.current.leads;
+    const salesLead = currentSalesLeads.find((lead) => lead.id === salesLeadId);
+
+    if (!salesLead) {
+      return { ok: false, error: "Lead not found." };
+    }
+
+    if (salesLead.status === "Converted" || salesLead.convertedClientProfileId) {
+      return {
+        ok: false,
+        error: "Converted leads must be managed from Clients, not deleted from My Leads.",
+      };
+    }
+
+    const linkedAdminLead = salesLead.linkedAdminLeadId
+      ? currentLeads.find((lead) => lead.id === salesLead.linkedAdminLeadId) ?? null
+      : null;
+
+    if (linkedAdminLead?.isClientRegistered) {
+      return {
+        ok: false,
+        error: "Registered client profiles cannot be deleted from My Leads.",
+      };
+    }
+
+    const nextSalesLeads = currentSalesLeads.filter((lead) => lead.id !== salesLeadId);
+    const nextLeads =
+      linkedAdminLead && !linkedAdminLead.isClientRegistered
+        ? currentLeads.filter((lead) => lead.id !== linkedAdminLead.id)
+        : currentLeads;
+    const nextActiveLeadId =
+      activeLeadId && nextLeads.some((lead) => lead.id === activeLeadId)
+        ? activeLeadId
+        : nextLeads[0]?.id ?? null;
+
+    setSalesLeads(nextSalesLeads);
+    if (nextLeads !== currentLeads) {
+      setLeads(nextLeads);
+    }
+    if (nextActiveLeadId !== activeLeadId) {
+      setActiveLeadId(nextActiveLeadId);
+    }
+
+    persistSnapshotImmediately({
+      leads: nextLeads,
+      salesLeads: nextSalesLeads,
+      activeLeadId: nextActiveLeadId,
+    });
+
+    return { ok: true };
   };
 
   const convertSalesLeadToClient = (
@@ -800,7 +1244,21 @@ export function AdminPortalProvider({
       return null;
     }
 
+    const oldStubId = salesLead.linkedAdminLeadId;
     const timestamp = new Date().toISOString();
+
+    setLeads((current) => {
+      const filtered = oldStubId
+        ? current.filter((lead) => lead.id !== oldStubId)
+        : current;
+      const linked = filtered.map((lead) =>
+        lead.id === created.leadId
+          ? { ...lead, linkedSalesLeadId: input.salesLeadId }
+          : lead,
+      );
+      return linked;
+    });
+
     setSalesLeads((current) =>
       current.map((lead) =>
         lead.id === input.salesLeadId
@@ -808,6 +1266,7 @@ export function AdminPortalProvider({
               ...lead,
               status: "Converted",
               convertedClientProfileId: created.clientProfileId,
+              linkedAdminLeadId: created.leadId,
               lastUpdatedAt: timestamp,
             }
           : lead,
@@ -1057,7 +1516,7 @@ export function AdminPortalProvider({
         const nextLead = {
           ...lead,
           readinessScore: Math.max(lead.readinessScore, 84),
-          nextAction: "Await admin term sheet upload, then submit signed term sheet.",
+          nextAction: COMPLIANCE_PACK_NEXT_ACTION,
           lastTouched: "Just now",
         };
 
@@ -1220,11 +1679,12 @@ export function AdminPortalProvider({
     }
 
     try {
-      await persistSnapshotNow({
-        leads,
-        salesLeads,
-        activeLeadId: leadId,
-      });
+      // Flush any pending coalesced edits before the document upload.
+      if (pendingPersistRef.current) {
+        clearTimeout(pendingPersistRef.current);
+        pendingPersistRef.current = null;
+      }
+      await persistDeltaNow();
 
       const formData = new FormData();
       formData.set("file", input.file);
@@ -1324,6 +1784,7 @@ export function AdminPortalProvider({
     activeLead,
     setActiveLeadId,
     updateLeadOwner,
+    updateLeadPartner,
     updateLeadPriority,
     updateLeadContactStatus,
     updateLeadStage,
@@ -1335,6 +1796,7 @@ export function AdminPortalProvider({
     createSalesLead,
     updateSalesLeadQualificationStage,
     updateSalesLeadOwner,
+    deleteSalesLead,
     convertSalesLeadToClient,
     disqualifyLead,
     generateLeadEoi,
@@ -1348,6 +1810,13 @@ export function AdminPortalProvider({
     uploadLeadDocument,
     uploadLeadTermSheet,
     completeLeadOnboarding,
+    saveStatus,
+    syncBackend,
+    retrySave: () => {
+      setSyncBackend((current) => (current === "local" ? "supabase" : current));
+      dirtyRef.current = true;
+      void persistDeltaNow();
+    },
   };
 
   if (!isHydrated) {

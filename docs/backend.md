@@ -40,15 +40,15 @@ When Supabase is not configured, the routes return seeded local state and keep t
 - `GET /api/eoi/:token`
 - `POST /api/eoi/:token`
 
-Admin and sales routes require the `oneos_session` cookie. EOI routes are public by token.
+Admin, sales, and partner routes require a Supabase Auth session whose email matches an active row in `oneos_users`. EOI routes are public by token.
 
-## Auth Profiles
+## Roles & profiles
 
-`ONEOS_AUTH_PROFILES_JSON` accepts profiles with either plaintext `password` for local development or `passwordHash` for real environments.
+Authentication is handled by Supabase Auth (email/password + Google OAuth).
+Role, `agent_id`, and `partner_org_id` are resolved server-side by looking
+up the signed-in user's email in `oneos_users`. Provision new staff by
+inviting them via the Supabase dashboard (or the partner-orgs invite API
+for partner users), then inserting a matching row in `oneos_users`.
 
-Supported hash formats:
-
-- `sha256:<hex>`
-- `pbkdf2:<iterations>:<saltHex>:<hashHex>`
-
-Use PBKDF2 with at least 100000 iterations for deployed environments.
+Users without an `oneos_users` row are treated as standard `client`
+workspace tenants.

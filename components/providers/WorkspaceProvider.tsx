@@ -14,7 +14,6 @@ import {
   CONVERSATION_MODES,
   RESOURCE_LIBRARY,
   WORKSPACE_OPTIONS,
-  createSeedCases,
 } from "@/lib/mock-data";
 import { makeId, nowLabel, timelineLabel, todayLabel } from "@/lib/formatting";
 import { caseStageLabels } from "@/lib/types";
@@ -32,7 +31,12 @@ import type {
   TaskItem,
   WorkspaceOption,
 } from "@/lib/types";
-import type { WorkspaceStateSnapshot } from "@/lib/workspace-state";
+import {
+  createDefaultWorkspaceStateSnapshot,
+  createWorkspaceCase,
+  normalizeWorkspaceStateSnapshot,
+  type WorkspaceStateSnapshot,
+} from "@/lib/workspace-state";
 
 type NavCounts = {
   activeMigrations: number;
@@ -53,12 +57,14 @@ type WorkspaceContextValue = {
   resources: ResourceItem[];
   userName: string;
   workspaceOptions: WorkspaceOption[];
+  createBusinessCase: () => string;
   setActiveCaseId: (caseId: string | null) => void;
   setActiveWorkspaceId: (workspaceId: string) => void;
   sendMessage: (caseId: string, content: string, mode: ConversationMode) => void;
   toggleTaskStatus: (caseId: string, taskId: string) => void;
   uploadDocument: (caseId: string, title: string) => void;
   uploadFiles: (caseId: string, category: WorkspaceUploadCategory, files: File[]) => void;
+  updateBusinessProfile: (caseId: string, updates: Partial<MigrationCase["business"]>) => void;
 };
 
 export const workspaceUploadCategories = [
@@ -98,6 +104,7 @@ type ChatApiResponse = {
 
 type WorkspaceApiResponse = {
   ok?: boolean;
+  workspaceId?: string;
   snapshot?: WorkspaceStateSnapshot;
 };
 
@@ -252,6 +259,11 @@ function getDefaultActiveCaseId(cases: MigrationCase[]) {
 }
 
 function buildCaseOperationalContext(migrationCase: MigrationCase, mode: ConversationMode) {
+  const locationSummary = migrationCase.business.locations
+    .map((location) =>
+      [location.label, location.city, location.province].filter(Boolean).join(", "),
+    )
+    .join(" | ");
   const openClientTasks = migrationCase.tasks
     .filter((task) => task.status !== "done" && task.owner === "Client")
     .map((task) => task.title);
@@ -259,10 +271,11 @@ function buildCaseOperationalContext(migrationCase: MigrationCase, mode: Convers
     .filter((task) => task.status !== "done" && task.owner !== "Client")
     .map((task) => task.title);
 
-  return [
+  const lines = [
     `Conversation mode: ${mode}`,
     `Business: ${migrationCase.business.name}`,
     `Stage: ${caseStageLabels[migrationCase.stage]}`,
+    `Registered locations (${migrationCase.business.locations.length}): ${locationSummary || "Not provided yet"}`,
     `Next action: ${migrationCase.nextAction}`,
     `Product recommendation: ${migrationCase.productRecommendation ?? "Pending assessment"}`,
     `Missing client items: ${migrationCase.missingItems.length > 0 ? migrationCase.missingItems.join(", ") : "None"}`,
@@ -270,22 +283,73 @@ function buildCaseOperationalContext(migrationCase: MigrationCase, mode: Convers
     `Open 1OS tasks: ${openInternalTasks.length > 0 ? openInternalTasks.join(", ") : "None"}`,
     `Proposal status: ${migrationCase.proposal?.status ?? "not issued"}`,
     `Term sheet status: ${migrationCase.termSheet?.status ?? "not issued"}`,
-  ].join("\n");
+  ];
+
+  // When the customer asks to review docs or wants proposal/term sheet support,
+  // include the actual document body so the assistant can explain it directly.
+  const wantsDocDetail =
+    mode === "Review Documents" ||
+    mode === "Proposal Support" ||
+    mode === "Term Sheet Support" ||
+    mode === "Close Deal";
+
+  if (wantsDocDetail && migrationCase.proposal) {
+    const p = migrationCase.proposal;
+    lines.push(
+      "",
+      `PROPOSAL DOCUMENT (${p.title}, status: ${p.status}):`,
+      `Summary: ${p.summary}`,
+      `Forecast savings: ${p.savingsRange}`,
+      `Term: ${p.termYears} years`,
+    );
+  }
+
+  if (wantsDocDetail && migrationCase.termSheet) {
+    const t = migrationCase.termSheet;
+    lines.push(
+      "",
+      `TERM SHEET DOCUMENT (${t.title}, status: ${t.status}):`,
+      `Summary: ${t.summary}`,
+    );
+  }
+
+  return lines.join("\n");
 }
 
-function createInitialWorkspaceState() {
-  const seedCases = createSeedCases();
+function createInitialWorkspaceState(): Pick<WorkspaceStateSnapshot, "cases" | "activeCaseId"> {
+  const { cases: seedCases, activeCaseId } = createDefaultWorkspaceStateSnapshot();
   return {
     cases: seedCases,
-    activeCaseId: getDefaultActiveCaseId(seedCases),
+    activeCaseId,
+  };
+}
+
+function mergeBusinessProfile(
+  currentBusiness: MigrationCase["business"],
+  updates: Partial<MigrationCase["business"]>,
+) {
+  const nextBusiness = { ...currentBusiness, ...updates };
+  const nextLocations =
+    Array.isArray(nextBusiness.locations) && nextBusiness.locations.length > 0
+      ? nextBusiness.locations
+      : currentBusiness.locations;
+  const primaryLocation = nextLocations[0];
+
+  return {
+    ...nextBusiness,
+    locations: nextLocations,
+    location: primaryLocation?.city ?? "",
+    province: primaryLocation?.province ?? "",
+    siteCount: Math.max(1, nextLocations.length),
   };
 }
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [{ cases: initialCases, activeCaseId: initialActiveCaseId }] = useState(createInitialWorkspaceState);
-  const [cases, setCases] = useState(initialCases);
+  const [cases, setCases] = useState<MigrationCase[]>(initialCases);
   const [activeCaseId, setActiveCaseId] = useState<string | null>(initialActiveCaseId);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(WORKSPACE_OPTIONS[0].id);
+  const [serverWorkspaceId, setServerWorkspaceId] = useState<string | null>(null);
   const [isStorageLoaded, setIsStorageLoaded] = useState(false);
   const [pendingCaseIds, setPendingCaseIds] = useState<ReadonlySet<string>>(new Set());
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
@@ -324,25 +388,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     try {
       const raw = localStorage.getItem(WORKSPACE_STORAGE_KEY);
       if (raw) {
-        const parsed = JSON.parse(raw) as {
-          cases?: MigrationCase[];
-          activeCaseId?: string | null;
-          activeWorkspaceId?: string;
-        };
+        const parsed = normalizeWorkspaceStateSnapshot(JSON.parse(raw));
 
-        if (Array.isArray(parsed.cases) && parsed.cases.length > 0) {
-          applySnapshot({
-            cases: parsed.cases,
-            activeCaseId:
-              typeof parsed.activeCaseId === "string" || parsed.activeCaseId === null
-                ? parsed.activeCaseId
-                : getDefaultActiveCaseId(parsed.cases),
-            activeWorkspaceId:
-              typeof parsed.activeWorkspaceId === "string" &&
-              WORKSPACE_OPTIONS.some((option) => option.id === parsed.activeWorkspaceId)
-                ? parsed.activeWorkspaceId
-                : WORKSPACE_OPTIONS[0].id,
-          }, "local");
+        if (parsed) {
+          applySnapshot(parsed, "local");
         }
       }
     } catch {
@@ -362,6 +411,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
         const payload = (await response.json()) as WorkspaceApiResponse;
         if (payload.ok && payload.snapshot) {
+          setServerWorkspaceId(
+            typeof payload.workspaceId === "string" ? payload.workspaceId : null,
+          );
           applySnapshot(payload.snapshot, "remote");
         }
       } catch {
@@ -395,14 +447,27 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     );
 
     const timeoutId = window.setTimeout(() => {
-      void fetch("/api/workspace/state", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        cache: "no-store",
-        body: JSON.stringify({ snapshot }),
-      }).catch(() => {
-        // Local persistence is already written; retry on the next state change.
-      });
+      void (async () => {
+        try {
+          const response = await fetch("/api/workspace/state", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            cache: "no-store",
+            body: JSON.stringify({ snapshot }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`Workspace state persist failed (${response.status})`);
+          }
+
+          const payload = (await response.json()) as WorkspaceApiResponse;
+          if (payload.ok && typeof payload.workspaceId === "string") {
+            setServerWorkspaceId(payload.workspaceId);
+          }
+        } catch {
+          // Local persistence is already written; retry on the next state change.
+        }
+      })();
     }, 450);
 
     return () => window.clearTimeout(timeoutId);
@@ -463,6 +528,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const sendMessage = (caseId: string, content: string, mode: ConversationMode) => {
     const timestamp = nowLabel();
     const targetCase = cases.find((migrationCase: MigrationCase) => migrationCase.id === caseId) ?? null;
+    const chatWorkspaceId = serverWorkspaceId ?? activeWorkspaceId;
 
     if (!targetCase) {
       return;
@@ -489,6 +555,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
     const context = buildCaseOperationalContext(targetCase, mode);
 
+    // Last 12 turns (user + assistant) for rolling memory in this case.
+    const recentHistory = targetCase.messages
+      .filter((m) => m.type === "user" || m.type === "assistant")
+      .slice(-12)
+      .map((m) => ({
+        role: m.type === "user" ? ("user" as const) : ("assistant" as const),
+        content: m.content,
+      }));
+
     setPendingCaseIds((prev) => new Set([...prev, caseId]));
 
     // Cancel any in-flight request for this case.
@@ -508,6 +583,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
             message: content,
             caseName: targetCase.business.name,
             context,
+            workspaceId: chatWorkspaceId,
+            caseId,
+            mode,
+            history: recentHistory,
           }),
         });
 
@@ -574,10 +653,26 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     category: WorkspaceUploadCategory,
     files: File[],
   ) => {
+    const uploadWorkspaceId = serverWorkspaceId ?? activeWorkspaceId;
+
     if (files.length === 0) {
       return;
     }
     userInteractedRef.current = true;
+
+    // Fire-and-forget: notify admin a customer uploaded.
+    const targetCase = cases.find((c) => c.id === caseId);
+    void fetch("/api/workspace/notify-upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        workspaceId: uploadWorkspaceId,
+        caseId,
+        caseName: targetCase?.business.name ?? caseId,
+        category,
+        fileNames: files.map((f) => f.name),
+      }),
+    }).catch(() => {});
     const categoryToBucket: Record<WorkspaceUploadCategory, string> = {
       EOI: "Registration",
       "Utility Bills": "Qualification",
@@ -841,6 +936,34 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     );
   };
 
+  const createBusinessCase = () => {
+    userInteractedRef.current = true;
+    const nextCase = createWorkspaceCase();
+
+    setCases((currentCases: MigrationCase[]) => [...currentCases, nextCase]);
+    setActiveCaseId(nextCase.id);
+
+    return nextCase.id;
+  };
+
+  const updateBusinessProfile = (
+    caseId: string,
+    updates: Partial<MigrationCase["business"]>,
+  ) => {
+    userInteractedRef.current = true;
+    setCases((currentCases: MigrationCase[]) =>
+      currentCases.map((migrationCase: MigrationCase) =>
+        migrationCase.id === caseId
+          ? {
+              ...migrationCase,
+              lastUpdated: "Just now",
+              business: mergeBusinessProfile(migrationCase.business, updates),
+            }
+          : migrationCase,
+      ),
+    );
+  };
+
   const toggleTaskStatus = (caseId: string, taskId: string) => {
     userInteractedRef.current = true;
     setCases((currentCases: MigrationCase[]) =>
@@ -875,6 +998,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     activeCaseId,
     cases: sortedCases,
     conversationModes: CONVERSATION_MODES,
+    createBusinessCase,
     documentCentre,
     navCounts,
     pendingCaseIds,
@@ -887,6 +1011,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     toggleTaskStatus,
     uploadDocument,
     uploadFiles,
+    updateBusinessProfile,
   };
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

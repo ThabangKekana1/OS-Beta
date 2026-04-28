@@ -4,13 +4,19 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Bell,
+  Building2,
   ChartColumnIncreasing,
   CircleUserRound,
   ClipboardList,
   Database,
+  FileUp,
   FolderDown,
+  Handshake,
+  Inbox,
   Kanban,
+  MessagesSquare,
   Settings2,
+  ShieldCheck,
   UserPlus2,
   Users,
 } from "lucide-react";
@@ -28,7 +34,7 @@ const navItems = [
   },
   {
     id: "leads",
-    label: "Leads",
+    label: "My Leads",
     href: "/admin/leads",
     icon: ClipboardList,
   },
@@ -37,6 +43,12 @@ const navItems = [
     label: "Repository",
     href: "/admin/repository",
     icon: Database,
+  },
+  {
+    id: "businesses",
+    label: "Businesses",
+    href: "/admin/businesses",
+    icon: Building2,
   },
   {
     id: "registration",
@@ -69,6 +81,18 @@ const navItems = [
     icon: CircleUserRound,
   },
   {
+    id: "partners",
+    label: "Partners",
+    href: "/admin/partners",
+    icon: Handshake,
+  },
+  {
+    id: "partner-leads",
+    label: "Partner Leads",
+    href: "/admin/partner-leads",
+    icon: Inbox,
+  },
+  {
     id: "notifications",
     label: "Notifications",
     href: "/admin/notifications",
@@ -79,6 +103,24 @@ const navItems = [
     label: "Resources",
     href: "/admin/resources",
     icon: FolderDown,
+  },
+  {
+    id: "transcripts",
+    label: "AI Transcripts",
+    href: "/admin/transcripts",
+    icon: MessagesSquare,
+  },
+  {
+    id: "agent-guardrails",
+    label: "Agent Guardrails",
+    href: "/admin/agent-guardrails",
+    icon: ShieldCheck,
+  },
+  {
+    id: "case-documents",
+    label: "Case Documents",
+    href: "/admin/case-documents",
+    icon: FileUp,
   },
   {
     id: "settings",

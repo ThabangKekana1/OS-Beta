@@ -30,6 +30,9 @@ export async function POST(request: NextRequest) {
   if (!session) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
+  if (session.role !== "admin" && session.role !== "sales") {
+    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  }
 
   let payload: {
     contactName?: unknown;
@@ -65,7 +68,7 @@ export async function POST(request: NextRequest) {
   const salesLead: SalesLead = {
     id: makeId("slead"),
     ownerId,
-    createdByRole: session.role,
+    createdByRole: session.role === "admin" ? "admin" : "sales",
     createdByEmail: session.email,
     contactName,
     company,
@@ -76,6 +79,7 @@ export async function POST(request: NextRequest) {
     createdAt: timestamp,
     lastUpdatedAt: timestamp,
     convertedClientProfileId: null,
+    linkedAdminLeadId: null,
   };
   const { snapshot } = await readAdminStateSnapshot();
   const nextSnapshot = {

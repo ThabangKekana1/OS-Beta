@@ -52,6 +52,7 @@ test("server stores prefer Supabase Postgres before storage fallback", () => {
   const workspaceStore = read("lib/workspace-state-store.ts");
   const adminState = read("lib/admin-state.ts");
   const dbStore = read("lib/supabase-db-store.ts");
+  const agentConfig = read("lib/assistant/agent-config.ts");
 
   assert.match(adminStore, /readAdminStateFromDatabase/);
   assert.match(adminStore, /writeAdminStateToDatabase/);
@@ -62,6 +63,21 @@ test("server stores prefer Supabase Postgres before storage fallback", () => {
   assert.match(adminState, /value === undefined[\s\S]*return \[\]/);
   assert.match(dbStore, /oneos_admin_leads/);
   assert.match(dbStore, /oneos_workspace_states/);
+  assert.match(agentConfig, /oneos_agent_config/);
+  assert.match(agentConfig, /readJsonObject/);
+  assert.match(agentConfig, /writeJsonObject/);
+});
+
+test("agent guardrails are backed by a durable table and visible save actions", () => {
+  const sql = read("supabase/migrations/20260427183000_add_agent_config.sql");
+  const route = read("components/admin/routes/AgentGuardrailsRoute.tsx");
+
+  assert.match(sql, /create table if not exists public\.oneos_agent_config/);
+  assert.match(sql, /alter table public\.oneos_agent_config enable row level security/);
+  assert.match(sql, /service role manages oneos agent config/);
+  assert.match(route, /Unsaved changes/);
+  assert.match(route, /Save changes/);
+  assert.match(route, /Save to apply these rules to the very next customer message\./);
 });
 
 test("documentation lists the backend contract", () => {
@@ -72,15 +88,29 @@ test("documentation lists the backend contract", () => {
   assert.match(docs, /\/api\/eoi\/:token/);
 });
 
-test("auth requires explicit runtime configuration without demo fallbacks", () => {
+test("auth uses Supabase Auth exclusively (no legacy custom-cookie code)", () => {
   const auth = read("lib/auth.ts");
-  const loginRoute = read("app/api/auth/login/route.ts");
+  const authServer = read("lib/auth-server.ts");
+  const proxyTs = read("proxy.ts");
+  const signupRoute = read("app/api/auth/signup/route.ts");
+  const callbackRoute = read("app/auth/callback/route.ts");
+  const confirmPage = read("app/auth/confirm/page.tsx");
 
+  // Legacy symbols must be gone.
   assert.doesNotMatch(auth, /admin@demo\.localhost/);
   assert.doesNotMatch(auth, /replace-this-secret-before-going-live/);
-  assert.match(auth, /getAuthConfigurationError/);
-  assert.match(loginRoute, /getAuthConfigurationError/);
-  assert.match(loginRoute, /status:\s*503/);
+  assert.doesNotMatch(auth, /SESSION_COOKIE_NAME|validateCredentials|readSessionToken|getAuthConfigurationError/);
+  assert.doesNotMatch(authServer, /SESSION_COOKIE_NAME|readActiveSessionToken/);
+  assert.doesNotMatch(proxyTs, /SESSION_COOKIE_NAME|readSessionToken/);
+
+  // Supabase Auth wired in.
+  assert.match(authServer, /createSupabaseServerClient/);
+  assert.match(authServer, /supabase\.auth\.getUser\(\)/);
+  assert.match(proxyTs, /supabase\.auth\.getClaims\(\)/);
+  assert.match(signupRoute, /"\/auth\/confirm"/);
+  assert.match(callbackRoute, /verifyOtp/);
+  assert.match(confirmPage, /setSession/);
+  assert.match(confirmPage, /window\.location\.replace\(nextPath\)/);
 });
 
 test("document downloads use stored file bytes instead of generated placeholder text", () => {
@@ -119,4 +149,58 @@ test("client registration supports profile links and separate contact name field
   assert.match(registrationApi, /registrationLinkIdForProfile/);
   assert.match(registrationApi, /public-registration/);
   assert.match(adminProfile, /Registered via/);
+});
+
+test("workspace chat and uploads use the durable server workspace id", () => {
+  const workspaceProvider = read("components/providers/WorkspaceProvider.tsx");
+  const workspaceRoute = read("app/api/workspace/state/route.ts");
+  const workspaceState = read("lib/workspace-state.ts");
+
+  assert.match(workspaceRoute, /workspaceId:/);
+  assert.match(workspaceProvider, /workspaceId\?: string/);
+  assert.match(workspaceProvider, /serverWorkspaceId/);
+  assert.match(workspaceProvider, /workspaceId: chatWorkspaceId/);
+  assert.match(workspaceProvider, /workspaceId: uploadWorkspaceId/);
+  assert.match(workspaceState, /function createStarterCase/);
+  assert.match(workspaceState, /ensureWorkspaceCases/);
+  assert.match(workspaceState, /You can complete the profile later\. The migration conversation starts immediately\./);
+});
+
+test("workspace supports multiple businesses and multiple locations", () => {
+  const workspaceProvider = read("components/providers/WorkspaceProvider.tsx");
+  const profileView = read("components/workspace/ProfileView.tsx");
+  const workspaceSwitcher = read("components/sidebar/WorkspaceSwitcher.tsx");
+  const recentCases = read("components/sidebar/SidebarRecentCases.tsx");
+  const types = read("lib/types.ts");
+
+  assert.match(types, /export interface BusinessLocation/);
+  assert.match(types, /locations: BusinessLocation\[]/);
+  assert.match(workspaceProvider, /createBusinessCase: \(\) => string/);
+  assert.match(workspaceProvider, /const createBusinessCase = \(\) => {/);
+  assert.match(profileView, /Add location/);
+  assert.match(profileView, /Remove location/);
+  assert.match(workspaceSwitcher, /Add business/);
+  assert.match(recentCases, /Businesses/);
+});
+
+test("register mode is handled by the server-backed registration state machine", () => {
+  const chatRoute = read("app/api/chat/route.ts");
+  const registrationAgent = read("lib/registration-agent.ts");
+
+  assert.match(chatRoute, /source:\s*"registration"/);
+  assert.match(chatRoute, /buildRegistrationReply/);
+  assert.match(chatRoute, /recentHistory:\s*history/);
+  assert.match(registrationAgent, /Conversation transcript:/);
+  assert.match(registrationAgent, /FIELD_QUESTIONS/);
+});
+
+test("login page copy changes for admin redirects", () => {
+  const loginPage = read("app/login/page.tsx");
+  const loginForm = read("components/auth/LoginForm.tsx");
+
+  assert.match(loginPage, /loginVariantForPath/);
+  assert.match(loginPage, /variant=\{loginVariantForPath\(nextPath\)\}/);
+  assert.match(loginForm, /LoginVariant/);
+  assert.match(loginForm, /Log in to the 1OS admin portal\./);
+  assert.match(loginForm, /Need admin access\?/);
 });

@@ -1,6 +1,7 @@
 import {
   conversationModes,
   migrationStages,
+  type BusinessLocation,
   type MigrationCase,
   type ResourceItem,
   type WorkspaceOption,
@@ -20,6 +21,21 @@ const TODAY = formatDateLabel(0);
 const YESTERDAY = formatDateLabel(1);
 const TWO_DAYS_AGO = formatDateLabel(2);
 const THREE_DAYS_AGO = formatDateLabel(3);
+
+function seedLocation(
+  id: string,
+  label: string,
+  province: string,
+  address: string = "",
+): BusinessLocation {
+  return {
+    id,
+    label,
+    address,
+    city: label,
+    province,
+  };
+}
 
 export const ACTIVE_USER_NAME = "Karman";
 export const MIGRATION_STAGES = migrationStages;
@@ -145,6 +161,7 @@ export const INITIAL_CASES: MigrationCase[] = [
       sector: "Cold-chain logistics",
       location: "Johannesburg North Depot",
       province: "Gauteng",
+      locations: [seedLocation("vf-location-1", "Johannesburg North Depot", "Gauteng")],
       monthlySpendZar: 186000,
       averageMonthlyUsageKwh: 318000,
       siteCount: 1,
@@ -283,6 +300,7 @@ export const INITIAL_CASES: MigrationCase[] = [
       sector: "Software operations",
       location: "Century City Campus",
       province: "Western Cape",
+      locations: [seedLocation("fcrm-location-1", "Century City Campus", "Western Cape")],
       monthlySpendZar: 146000,
       averageMonthlyUsageKwh: 212000,
       siteCount: 1,
@@ -423,6 +441,11 @@ export const INITIAL_CASES: MigrationCase[] = [
       sector: "Industrial campus",
       location: "Ekurhuleni Industrial Park",
       province: "Gauteng",
+      locations: [
+        seedLocation("fsh-location-1", "Ekurhuleni Industrial Park", "Gauteng"),
+        seedLocation("fsh-location-2", "Germiston Load Centre", "Gauteng"),
+        seedLocation("fsh-location-3", "Midrand Dispatch Yard", "Gauteng"),
+      ],
       monthlySpendZar: 512000,
       averageMonthlyUsageKwh: 910000,
       siteCount: 3,
@@ -578,6 +601,10 @@ export const INITIAL_CASES: MigrationCase[] = [
       sector: "Food manufacturing",
       location: "Durban Processing Facility",
       province: "KwaZulu-Natal",
+      locations: [
+        seedLocation("clover-location-1", "Durban Processing Facility", "KwaZulu-Natal"),
+        seedLocation("clover-location-2", "Pinetown Cold Store", "KwaZulu-Natal"),
+      ],
       monthlySpendZar: 402000,
       averageMonthlyUsageKwh: 672000,
       siteCount: 2,
@@ -692,6 +719,7 @@ export const INITIAL_CASES: MigrationCase[] = [
       sector: "Food processing",
       location: "Pretoria East Plant",
       province: "Gauteng",
+      locations: [seedLocation("apex-location-1", "Pretoria East Plant", "Gauteng")],
       monthlySpendZar: 240000,
       averageMonthlyUsageKwh: 351000,
       siteCount: 1,

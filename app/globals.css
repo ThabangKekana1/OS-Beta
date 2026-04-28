@@ -221,9 +221,14 @@
   }
 
   .admin-input {
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    background: #000;
     color: rgba(255, 255, 255, 0.96);
+  }
+
+  .admin-input:focus {
+    border-color: #fff;
+    outline: none;
   }
 
   .admin-input::placeholder {
@@ -235,17 +240,10 @@
     -moz-appearance: none;
     appearance: none;
     padding-right: 2.1rem;
+    background-color: #000;
     background-image:
-      linear-gradient(
-        45deg,
-        transparent 50%,
-        rgba(255, 255, 255, 0.68) 50%
-      ),
-      linear-gradient(
-        135deg,
-        rgba(255, 255, 255, 0.68) 50%,
-        transparent 50%
-      );
+      linear-gradient(45deg, transparent 50%, #fff 50%),
+      linear-gradient(135deg, #fff 50%, transparent 50%);
     background-position:
       calc(100% - 16px) calc(50% - 2px),
       calc(100% - 11px) calc(50% - 2px);
@@ -256,6 +254,37 @@
   }
 
   .admin-select option {
+    background: #000;
+    color: #fff;
+  }
+
+  /* Strip native macOS/Webkit/Firefox chrome from every select & input so the
+     UI stays flat black with white borders/arrows. */
+  select,
+  textarea,
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]) {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: none;
+  }
+
+  select {
+    padding-right: 2.1rem;
+    background-color: #000;
+    background-image:
+      linear-gradient(45deg, transparent 50%, #fff 50%),
+      linear-gradient(135deg, #fff 50%, transparent 50%);
+    background-position:
+      calc(100% - 16px) calc(50% - 2px),
+      calc(100% - 11px) calc(50% - 2px);
+    background-size:
+      5px 5px,
+      5px 5px;
+    background-repeat: no-repeat;
+  }
+
+  select option {
     background: #000;
     color: #fff;
   }

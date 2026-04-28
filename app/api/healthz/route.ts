@@ -24,11 +24,15 @@ async function checkSupabase(): Promise<HealthCheck> {
 }
 
 function checkAuthConfig(): HealthCheck {
-  const secret = (process.env.ONEOS_AUTH_SECRET ?? "").trim();
-  if (!secret) return { ok: false, error: "ONEOS_AUTH_SECRET missing" };
-  if (process.env.NODE_ENV === "production" && secret.length < 32) {
-    return { ok: false, error: "ONEOS_AUTH_SECRET must be >= 32 chars in production" };
-  }
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "").trim();
+  const key = (
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+    ""
+  ).trim();
+  if (!url) return { ok: false, error: "NEXT_PUBLIC_SUPABASE_URL missing" };
+  if (!key)
+    return { ok: false, error: "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY missing" };
   return { ok: true };
 }
 

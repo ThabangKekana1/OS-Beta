@@ -10,7 +10,6 @@ import {
   SendMessageButton,
   SystemMessage,
   UserMessage,
-  VoicePlaceholder,
 } from "./WorkspacePrimitives";
 import {
   workspaceUploadCategories,
@@ -223,7 +222,6 @@ export function ConversationComposer({
                 }}
               />
             </div>
-            <VoicePlaceholder />
             <SendMessageButton disabled={!draft.trim() || !activeCase} onClick={submit} />
           </div>
         </form>

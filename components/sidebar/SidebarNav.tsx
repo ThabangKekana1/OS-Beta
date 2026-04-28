@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { House } from "lucide-react";
+import { House, FileText, UserCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const iconMap = {
   home: House,
+  documents: FileText,
+  profile: UserCircle,
 } as const;
 
 type SidebarNavProps = {
@@ -25,9 +27,10 @@ export function SidebarNav({ items }: SidebarNavProps) {
     <nav className="flex flex-col gap-1.5">
       {items.map((item) => {
         const Icon = iconMap[item.icon];
-        const active = item.id === "home"
-          ? pathname === "/"
-          : pathname === item.href || pathname.startsWith(`${item.href}/`);
+        const active =
+          item.href === "/workspace"
+            ? pathname === "/" || pathname === "/workspace"
+            : pathname === item.href || pathname.startsWith(`${item.href}/`);
 
         return (
           <Link

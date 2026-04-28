@@ -29,6 +29,7 @@ export function SalesClientsRoute({ agentId }: { agentId: string | null }) {
   const filteredClients = useMemo(() => {
     const query = search.trim().toLowerCase();
     return visibleLeads.filter((lead) => {
+      if (!lead.isClientRegistered) return false;
       if (stageFilter !== "All" && lead.stage !== stageFilter) return false;
       if (!query) return true;
 

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { readSessionToken, resolveDefaultRouteForRole, SESSION_COOKIE_NAME } from "@/lib/auth";
+import { createServerClient } from "@supabase/ssr";
+import { resolveDefaultRouteForRole, type UserRole } from "@/lib/auth";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 // Public mutating endpoints intentionally allowed cross-origin (none today).
@@ -45,6 +46,14 @@ function applySecurityHeaders(response: NextResponse) {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Build a single response we can mutate (cookies for token refresh + redirects).
+  let response = NextResponse.next({ request });
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
   // CSRF protection: enforce same-origin on mutating /api/* requests.
   if (pathname.startsWith("/api/") && !SAFE_METHODS.has(request.method)) {
     if (!PUBLIC_MUTATING_PATHS.has(pathname)) {
@@ -68,46 +77,64 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
-  const session = await readSessionToken(token);
-
-  if (pathname === "/login") {
-    if (session) {
-      return applySecurityHeaders(
-        NextResponse.redirect(new URL(resolveDefaultRouteForRole(session.role), request.url)),
-      );
-    }
-    return applySecurityHeaders(NextResponse.next());
+  if (!url || !key) {
+    return applySecurityHeaders(response);
   }
 
-  if (pathname.startsWith("/admin")) {
-    if (!session) {
-      return applySecurityHeaders(NextResponse.redirect(withNextParam(request)));
+  // Refresh Supabase Auth tokens; rotated cookies land on `response`.
+  const supabase = createServerClient(url, key, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) => {
+          request.cookies.set(name, value);
+        });
+        response = NextResponse.next({ request });
+        cookiesToSet.forEach(({ name, value, options }) => {
+          response.cookies.set(name, value, options);
+        });
+      },
+    },
+  });
+
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const claims = claimsData?.claims ?? null;
+  const isSignedIn = Boolean(claims?.email && (claims?.email_verified ?? true));
+
+  // Already signed in → bounce away from the login/signup screens.
+  if (pathname === "/login" || pathname === "/signup") {
+    if (isSignedIn) {
+      const target = NextResponse.redirect(new URL("/", request.url));
+      response.cookies.getAll().forEach((c) => target.cookies.set(c));
+      return applySecurityHeaders(target);
     }
-    if (session.role !== "admin") {
-      return applySecurityHeaders(
-        NextResponse.redirect(new URL(resolveDefaultRouteForRole(session.role), request.url)),
-      );
-    }
-    return applySecurityHeaders(NextResponse.next());
+    return applySecurityHeaders(response);
   }
 
-  if (pathname.startsWith("/sales")) {
-    if (!session) {
-      return applySecurityHeaders(NextResponse.redirect(withNextParam(request)));
-    }
-    if (session.role !== "sales") {
-      return applySecurityHeaders(
-        NextResponse.redirect(new URL(resolveDefaultRouteForRole(session.role), request.url)),
-      );
-    }
-    return applySecurityHeaders(NextResponse.next());
+  // Authenticated-only sections: redirect anonymous visitors to /login. Role
+  // mismatches are handled by the route layouts via `requireServerAuthSession`.
+  const requiresAuth =
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/sales") ||
+    pathname.startsWith("/partner");
+
+  if (requiresAuth && !isSignedIn) {
+    const target = NextResponse.redirect(withNextParam(request));
+    response.cookies.getAll().forEach((c) => target.cookies.set(c));
+    return applySecurityHeaders(target);
   }
 
-  return applySecurityHeaders(NextResponse.next());
+  return applySecurityHeaders(response);
 }
 
+// Type-only re-export to keep imports stable for any future role-aware logic.
+export type { UserRole };
+export { resolveDefaultRouteForRole };
+
 export const config = {
-  // Run on auth-protected pages and ALL /api/* routes (for CSRF + headers).
-  matcher: ["/login", "/admin/:path*", "/sales/:path*", "/api/:path*"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+  ],
 };

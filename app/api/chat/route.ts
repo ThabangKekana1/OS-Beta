@@ -1,38 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FOUNDATION_ASSISTANT_SYSTEM_PROMPT } from "@/lib/assistant/system-prompt";
+import { loadAgentConfig, composeSystemPrompt, type AgentConfig } from "@/lib/assistant/agent-config";
+import { getLatestExtractedText } from "@/lib/case-documents";
+import {
+  advanceRegistration,
+  buildRegistrationReply,
+} from "@/lib/registration-agent";
 
 export const runtime = "nodejs";
 
 function normalizeEnv(value?: string) {
-  if (!value) {
-    return "";
-  }
-
+  if (!value) return "";
   return value.trim().replace(/^["']|["']$/g, "");
 }
 
 function isTruthyEnv(value?: string) {
-  if (!value) {
-    return false;
-  }
-
+  if (!value) return false;
   return ["1", "true", "yes", "on"].includes(value.toLowerCase());
 }
 
 const DEFAULT_GOOGLE_MODEL = "gemini-2.5-flash";
-const DEFAULT_OLLAMA_MODEL = "qwen2.5:7b";
-const DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434";
-const OPENAI_MODEL = normalizeEnv(process.env.OPENAI_MODEL) || "gpt-4o-mini";
 const GOOGLE_MODEL = normalizeEnv(process.env.GOOGLE_MODEL) || DEFAULT_GOOGLE_MODEL;
-const OLLAMA_MODEL =
-  normalizeEnv(process.env.LOCAL_LLM_MODEL) ||
-  normalizeEnv(process.env.OLLAMA_MODEL) ||
-  DEFAULT_OLLAMA_MODEL;
-const OLLAMA_BASE_URL =
-  normalizeEnv(process.env.LOCAL_LLM_URL) ||
-  normalizeEnv(process.env.OLLAMA_BASE_URL) ||
-  DEFAULT_OLLAMA_URL;
-const AI_PROVIDER = normalizeEnv(process.env.AI_PROVIDER) || "ollama";
 const DEBUG_AGENT_MODE =
   isTruthyEnv(normalizeEnv(process.env.DEBUG_AGENT_MODE)) ||
   isTruthyEnv(normalizeEnv(process.env.ADMIN_AGENT_MODE));
@@ -41,216 +29,146 @@ type ChatPayload = {
   message?: string;
   context?: string;
   caseName?: string;
+  workspaceId?: string;
+  caseId?: string;
+  mode?: string;
+  history?: Array<{ role?: string; content?: string }>;
 };
 
-type ProviderResult = {
-  ok: boolean;
-  reply?: string;
-  error?: string;
-  detail?: string;
-  status?: number;
-};
+type ChatTurn = { role: "user" | "assistant"; content: string };
 
-function buildPrompt(payload: ChatPayload) {
-  const message = (payload.message ?? "").trim();
-  const context = (payload.context ?? "").trim();
+function buildSystemPrompt(
+  payload: ChatPayload,
+  memorySummary: string | null,
+  memoryFacts: string[],
+  agentConfig: AgentConfig,
+  docExcerpts: { proposal: string | null; termSheet: string | null },
+) {
+  const sections = [composeSystemPrompt(agentConfig, payload.mode ?? null)];
+  void FOUNDATION_ASSISTANT_SYSTEM_PROMPT;
   const caseName = (payload.caseName ?? "").trim();
+  const context = (payload.context ?? "").trim();
 
-  return [
-    FOUNDATION_ASSISTANT_SYSTEM_PROMPT,
-    caseName ? `Active case: ${caseName}` : "",
-    context ? `Case context:\n${context}` : "",
-    `User message:\n${message}`,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  if (caseName) sections.push(`Active case: ${caseName}`);
+  if (context) sections.push(`Current case context:\n${context}`);
+
+  if (docExcerpts.proposal) {
+    sections.push(
+      `UPLOADED PROPOSAL DOCUMENT (verbatim extract — quote from this when explaining the proposal):\n${docExcerpts.proposal}`,
+    );
+  }
+  if (docExcerpts.termSheet) {
+    sections.push(
+      `UPLOADED TERM SHEET DOCUMENT (verbatim extract — quote from this when explaining the term sheet):\n${docExcerpts.termSheet}`,
+    );
+  }
+
+  if (memoryFacts.length > 0) {
+    sections.push(
+      `Long-term customer memory (durable facts about this client across all conversations — treat as known background, do not re-ask):\n- ${memoryFacts
+        .slice(-40)
+        .join("\n- ")}`,
+    );
+  }
+  if (memorySummary) {
+    sections.push(`Prior conversation summary: ${memorySummary}`);
+  }
+  sections.push(
+    "Use the conversation history to maintain continuity. If the user refers to something said earlier, find it in history. Never claim to have no memory of the case — you have full access to it.",
+  );
+  return sections.filter(Boolean).join("\n\n");
+}
+
+function normalizeTurns(
+  raw: Array<{ role?: string; content?: string }> | undefined,
+): ChatTurn[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((entry) => {
+      const role =
+        entry.role === "assistant" || entry.role === "user" ? entry.role : null;
+      const content = typeof entry.content === "string" ? entry.content.trim() : "";
+      if (!role || !content) return null;
+      return { role, content } as ChatTurn;
+    })
+    .filter((t): t is ChatTurn => t !== null);
+}
+
+function mergeTurns(persisted: ChatTurn[], clientHistory: ChatTurn[]): ChatTurn[] {
+  const seen = new Set(persisted.map((t) => `${t.role}::${t.content}`));
+  const extra = clientHistory.filter((t) => !seen.has(`${t.role}::${t.content}`));
+  return [...persisted, ...extra].slice(-30);
 }
 
 function extractGoogleText(responseJson: unknown) {
   const typed = responseJson as {
-    candidates?: Array<{
-      content?: {
-        parts?: Array<{ text?: string }>;
-      };
-    }>;
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
   };
-
   const parts = typed?.candidates?.[0]?.content?.parts;
-  if (!Array.isArray(parts)) {
-    return null;
-  }
-
+  if (!Array.isArray(parts)) return null;
   const text = parts
     .map((part) => (typeof part?.text === "string" ? part.text : ""))
     .join("")
     .trim();
-
   return text || null;
 }
 
-function extractOpenAiText(responseJson: unknown) {
-  const typed = responseJson as {
-    choices?: Array<{
-      message?: {
-        content?: string;
-      };
-    }>;
-  };
-
-  const content = typed?.choices?.[0]?.message?.content;
-  return typeof content === "string" && content.trim() ? content.trim() : null;
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  timeoutMs: number,
+) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
-function extractOllamaText(responseJson: unknown) {
-  const typed = responseJson as {
-    response?: string;
-    message?: {
-      content?: string;
-    };
-  };
-
-  const fromMessage = typed?.message?.content;
-  if (typeof fromMessage === "string" && fromMessage.trim()) {
-    return fromMessage.trim();
-  }
-
-  const fromGenerate = typed?.response;
-  if (typeof fromGenerate === "string" && fromGenerate.trim()) {
-    return fromGenerate.trim();
-  }
-
-  return null;
-}
-
-async function callGoogleProvider(prompt: string, apiKey: string): Promise<ProviderResult> {
+async function callGoogle(
+  system: string,
+  turns: ChatTurn[],
+  apiKey: string,
+): Promise<{ ok: true; reply: string } | { ok: false; error: string; status?: number }> {
   try {
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GOOGLE_MODEL}:generateContent?key=${apiKey}`;
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 420,
-        },
-      }),
-    });
+    const contents = turns.map((turn) => ({
+      role: turn.role === "assistant" ? "model" : "user",
+      parts: [{ text: turn.content }],
+    }));
+    const response = await fetchWithTimeout(
+      endpoint,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: system }] },
+          contents,
+          generationConfig: { temperature: 0.2, maxOutputTokens: 600 },
+        }),
+      },
+      40_000,
+    );
 
     if (!response.ok) {
       return {
         ok: false,
-        error: "Google API request failed",
-        detail: await response.text(),
+        error: `Google API ${response.status}: ${(await response.text()).slice(0, 200)}`,
         status: response.status,
       };
     }
 
     const reply = extractGoogleText(await response.json());
-    if (!reply) {
-      return { ok: false, error: "No text returned by Google API" };
-    }
-
+    if (!reply) return { ok: false, error: "Empty response from Google API" };
     return { ok: true, reply };
-  } catch {
-    return { ok: false, error: "Unable to reach Google API" };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Unable to reach Google API",
+    };
   }
-}
-
-async function callOpenAiProvider(prompt: string, apiKey: string): Promise<ProviderResult> {
-  try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: OPENAI_MODEL,
-        temperature: 0.2,
-        max_tokens: 420,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        error: "OpenAI API request failed",
-        detail: await response.text(),
-        status: response.status,
-      };
-    }
-
-    const reply = extractOpenAiText(await response.json());
-    if (!reply) {
-      return { ok: false, error: "No text returned by OpenAI API" };
-    }
-
-    return { ok: true, reply };
-  } catch {
-    return { ok: false, error: "Unable to reach OpenAI API" };
-  }
-}
-
-async function callOllamaProvider(prompt: string): Promise<ProviderResult> {
-  const endpoint = `${OLLAMA_BASE_URL.replace(/\/+$/, "")}/api/generate`;
-
-  try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: OLLAMA_MODEL,
-        prompt,
-        stream: false,
-        options: {
-          temperature: 0.2,
-          num_predict: 420,
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      return {
-        ok: false,
-        error: "Ollama API request failed",
-        detail: await response.text(),
-        status: response.status,
-      };
-    }
-
-    const reply = extractOllamaText(await response.json());
-    if (!reply) {
-      return { ok: false, error: "No text returned by Ollama API" };
-    }
-
-    return { ok: true, reply };
-  } catch {
-    return { ok: false, error: "Unable to reach Ollama API" };
-  }
-}
-
-function providerOrder() {
-  if (AI_PROVIDER === "openai") {
-    return ["openai", "ollama", "google"] as const;
-  }
-
-  if (AI_PROVIDER === "google") {
-    return ["google", "ollama", "openai"] as const;
-  }
-
-  return ["ollama", "google", "openai"] as const;
-}
-
-function summarizeProviderFailures(errors: ProviderResult[]) {
-  return errors
-    .map((entry) =>
-      [entry.error, entry.status ? `status ${entry.status}` : null]
-        .filter(Boolean)
-        .join(" | "),
-    )
-    .join(" ; ");
 }
 
 function normalizeReplyText(reply: string) {
@@ -263,17 +181,10 @@ function normalizeReplyText(reply: string) {
 }
 
 function deScaffold(reply: string) {
-  if (DEBUG_AGENT_MODE) {
-    return reply;
-  }
-
+  if (DEBUG_AGENT_MODE) return reply;
   const hasScaffold =
     /\bSTATUS:\b|\bPRIMARY_ACTION:\b|\bOWNER:\b|\bREQUIRED_INPUTS:\b|\bRATIONALE:\b/i.test(reply);
-
-  if (!hasScaffold) {
-    return reply;
-  }
-
+  if (!hasScaffold) return reply;
   return reply
     .split(/\r?\n/)
     .map((line) =>
@@ -294,18 +205,24 @@ function sanitizeReply(reply: string) {
 }
 
 export async function POST(request: NextRequest) {
-  // Require an authenticated session for chat (prevents anonymous LLM abuse).
   const { getServerAuthSession } = await import("@/lib/auth-server");
   const session = await getServerAuthSession();
+
   if (!session) {
-    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Sign in or create an account to chat with Dawn." },
+      { status: 401 },
+    );
   }
 
-  // 30 chats / minute per user.
+  const forwardedFor = request.headers.get("x-forwarded-for") ?? "";
+  const clientIp = forwardedFor.split(",")[0]?.trim() || "anonymous";
+  const rateLimitKey = session.email;
+
   const { consumeRateLimit } = await import("@/lib/rate-limit");
   const limit = await consumeRateLimit({
     scope: "chat",
-    key: session.email,
+    key: rateLimitKey,
     limit: 30,
     windowSeconds: 60,
   });
@@ -317,23 +234,9 @@ export async function POST(request: NextRequest) {
   }
 
   const googleApiKey = normalizeEnv(process.env.GOOGLE_API_KEY);
-  const openAiApiKey = normalizeEnv(process.env.OPENAI_API_KEY);
-  // In production we never use the local Ollama loopback (unreachable from
-  // serverless); a hosted provider is required.
-  const hasOllamaConfig =
-    process.env.NODE_ENV !== "production" &&
-    Boolean(
-      normalizeEnv(process.env.LOCAL_LLM_URL) ||
-        normalizeEnv(process.env.OLLAMA_BASE_URL) ||
-        normalizeEnv(process.env.LOCAL_LLM_MODEL) ||
-        normalizeEnv(process.env.OLLAMA_MODEL) ||
-        AI_PROVIDER === "ollama" ||
-        AI_PROVIDER === "local",
-    );
-
-  if (process.env.NODE_ENV === "production" && !googleApiKey && !openAiApiKey) {
+  if (!googleApiKey) {
     return NextResponse.json(
-      { error: "Chat unavailable: no hosted LLM provider configured." },
+      { error: "Chat unavailable: GOOGLE_API_KEY is not configured." },
       { status: 503 },
     );
   }
@@ -350,49 +253,155 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Message is required" }, { status: 400 });
   }
 
-  const prompt = buildPrompt(payload);
-  const failures: ProviderResult[] = [];
+  const workspaceId = (payload.workspaceId ?? "").trim();
+  const caseId = (payload.caseId ?? "").trim() || null;
+  const caseName = (payload.caseName ?? "").trim() || null;
+  const mode = (payload.mode ?? "").trim() || null;
 
-  for (const provider of providerOrder()) {
-    if (provider === "google" && googleApiKey) {
-      const result = await callGoogleProvider(prompt, googleApiKey);
-      if (result.ok && result.reply) {
-        return NextResponse.json({
-          reply: sanitizeReply(result.reply),
-          source: "google",
-        });
-      }
-      failures.push(result);
-    }
+  const { loadChatMemory, loadRecentTranscript, logChatTurn, scheduleMemoryMaintenance } =
+    await import("@/lib/assistant/chat-memory");
 
-    if (provider === "openai" && openAiApiKey) {
-      const result = await callOpenAiProvider(prompt, openAiApiKey);
-      if (result.ok && result.reply) {
-        return NextResponse.json({
-          reply: sanitizeReply(result.reply),
-          source: "openai",
-        });
-      }
-      failures.push(result);
-    }
+  const [memory, persistedTurns, agentConfig, proposalText, termSheetText] =
+    await Promise.all([
+      workspaceId ? loadChatMemory(workspaceId) : Promise.resolve(null),
+      workspaceId
+        ? loadRecentTranscript(workspaceId, caseId, 24)
+        : Promise.resolve([] as ChatTurn[]),
+      loadAgentConfig(),
+      workspaceId && caseId ? getLatestExtractedText(workspaceId, caseId, "proposal") : Promise.resolve(null),
+      workspaceId && caseId ? getLatestExtractedText(workspaceId, caseId, "term_sheet") : Promise.resolve(null),
+    ]);
 
-    if (provider === "ollama" && hasOllamaConfig) {
-      const result = await callOllamaProvider(prompt);
-      if (result.ok && result.reply) {
-        return NextResponse.json({
-          reply: sanitizeReply(result.reply),
-          source: "ollama",
-        });
-      }
-      failures.push(result);
-    }
+  const clientHistory = normalizeTurns(payload.history);
+  const history = mergeTurns(persistedTurns ?? [], clientHistory);
+
+  if (workspaceId) {
+    void logChatTurn({
+      workspaceId,
+      caseId,
+      caseName,
+      mode,
+      role: "user",
+      content: message,
+      context: payload.context ?? null,
+      sessionEmail: session?.email ?? null,
+      clientIp,
+    });
   }
 
-  return NextResponse.json({
-    reply:
-      "I could not get a model response right now. Please retry in a moment and I will continue from the same context.",
-    source: "fallback",
-    degraded: true,
-    providerFailureSummary: failures.length > 0 ? summarizeProviderFailures(failures) : null,
-  });
+  if (mode === "Register") {
+    if (!workspaceId) {
+      return NextResponse.json(
+        { error: "Registration requires a workspace context. Refresh and try again." },
+        { status: 400 },
+      );
+    }
+
+    const startedAt = Date.now();
+    const advanced = await advanceRegistration({
+      workspaceId,
+      apiKey: googleApiKey,
+      model: GOOGLE_MODEL,
+      recentHistory: history,
+      latestUser: message,
+      prequal: agentConfig.prequalification,
+    });
+    const reply = buildRegistrationReply({
+      draft: advanced.draft,
+      extracted: advanced.extracted,
+      prequal: agentConfig.prequalification,
+      submittedLeadId: advanced.submittedLeadId,
+      fallbackNote: advanced.noteForUser,
+    });
+    const latencyMs = Date.now() - startedAt;
+    const registrationStatus = advanced.draft
+      ? {
+          status: advanced.draft.status,
+          leadId: advanced.draft.completedLeadId,
+        }
+      : null;
+
+    void logChatTurn({
+      workspaceId,
+      caseId,
+      caseName,
+      mode,
+      role: "assistant",
+      content: reply,
+      provider: "registration",
+      latencyMs,
+      sessionEmail: session?.email ?? null,
+      clientIp,
+    });
+
+    void scheduleMemoryMaintenance({
+      workspaceId,
+      caseId,
+      caseName,
+      googleApiKey,
+      googleModel: GOOGLE_MODEL,
+      latestUser: message,
+      latestAssistant: reply,
+    });
+
+    return NextResponse.json({
+      reply,
+      source: "registration",
+      latencyMs,
+      registration: registrationStatus,
+    });
+  }
+
+  const system = buildSystemPrompt(
+    payload,
+    memory?.summary ?? null,
+    memory?.facts ?? [],
+    agentConfig,
+    { proposal: proposalText, termSheet: termSheetText },
+  );
+  const turns: ChatTurn[] = [...history, { role: "user", content: message }];
+
+  const startedAt = Date.now();
+  const result = await callGoogle(system, turns, googleApiKey);
+
+  if (!result.ok) {
+    return NextResponse.json({
+      reply:
+        "I could not get a model response right now. Please retry in a moment and I will continue from the same context.",
+      source: "fallback",
+      degraded: true,
+      providerFailureSummary: result.error,
+    });
+  }
+
+  let reply = sanitizeReply(result.reply);
+  const latencyMs = Date.now() - startedAt;
+
+  if (workspaceId) {
+    void logChatTurn({
+      workspaceId,
+      caseId,
+      caseName,
+      mode,
+      role: "assistant",
+      content: reply,
+      provider: "google",
+      latencyMs,
+      sessionEmail: session?.email ?? null,
+      clientIp,
+    });
+
+    // Fire-and-forget: extract durable facts and roll up summary in background.
+    void scheduleMemoryMaintenance({
+      workspaceId,
+      caseId,
+      caseName,
+      googleApiKey,
+      googleModel: GOOGLE_MODEL,
+      latestUser: message,
+      latestAssistant: reply,
+    });
+  }
+
+  return NextResponse.json({ reply, source: "google", latencyMs, registration: null });
 }

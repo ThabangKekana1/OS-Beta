@@ -6,6 +6,8 @@ export default function AdminLeadsPage() {
       agentId={null}
       registrationHref="/admin/registration"
       clientHrefBase="/admin/clients"
+      showAssignedTo={false}
+      allowDelete
     />
   );
 }

@@ -25,7 +25,7 @@ const navItems = [
   },
   {
     id: "leads",
-    label: "Leads",
+    label: "My Leads",
     href: "/sales/leads",
     icon: ClipboardList,
   },

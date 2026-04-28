@@ -40,20 +40,27 @@ export function SalesLeadsRoute({
   agentId,
   registrationHref = "/sales/registration",
   clientHrefBase = "/sales/clients",
+  showAssignedTo = true,
+  allowDelete = false,
 }: {
   agentId: string | null;
   registrationHref?: string;
   clientHrefBase?: string;
+  showAssignedTo?: boolean;
+  allowDelete?: boolean;
 }) {
   const {
     agents,
+    leads,
     salesLeads,
     salesLeadQualificationStages,
     createSalesLead,
     updateSalesLeadQualificationStage,
     updateSalesLeadOwner,
+    deleteSalesLead,
   } = useAdminPortal();
   const [formError, setFormError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [pendingQualificationPanels, setPendingQualificationPanels] = useState<
     Record<
       string,
@@ -114,6 +121,49 @@ export function SalesLeadsRoute({
       company: "",
       email: "",
     });
+  };
+
+  const getDeleteError = (lead: SalesLead) => {
+    if (lead.status === "Converted" || lead.convertedClientProfileId) {
+      return "Converted leads must be managed from Clients.";
+    }
+
+    const linkedAdminLead = lead.linkedAdminLeadId
+      ? leads.find((entry) => entry.id === lead.linkedAdminLeadId) ?? null
+      : null;
+    if (linkedAdminLead?.isClientRegistered) {
+      return "Registered client profiles cannot be deleted from My Leads.";
+    }
+
+    return null;
+  };
+
+  const handleDeleteLead = (lead: SalesLead) => {
+    const deleteError = getDeleteError(lead);
+    if (deleteError) {
+      setActionError(deleteError);
+      return;
+    }
+
+    const linkedAdminLead = lead.linkedAdminLeadId
+      ? leads.find((entry) => entry.id === lead.linkedAdminLeadId) ?? null
+      : null;
+    const confirmMessage =
+      linkedAdminLead && !linkedAdminLead.isClientRegistered
+        ? `Delete lead "${lead.company}"? This also removes the mirrored admin prospect record.`
+        : `Delete lead "${lead.company}"?`;
+
+    if (typeof window !== "undefined" && !window.confirm(confirmMessage)) {
+      return;
+    }
+
+    const result = deleteSalesLead(lead.id);
+    if (!result.ok) {
+      setActionError(result.error);
+      return;
+    }
+
+    setActionError(null);
   };
 
   const handleQualificationChange = (
@@ -234,13 +284,18 @@ export function SalesLeadsRoute({
       </section>
 
       <div className="overflow-x-auto rounded-2xl border border-white/12 bg-white/[0.03]">
+        {actionError ? (
+          <p className="border-b border-white/8 px-4 py-3 text-sm text-white/56">{actionError}</p>
+        ) : null}
         <table className="w-full border-collapse text-sm text-white/75">
           <thead>
             <tr className="bg-white/[0.03] text-xs uppercase tracking-[0.2em] text-white/52">
               <th className="px-3 py-3 text-left font-medium">Name</th>
               <th className="px-3 py-3 text-left font-medium">Company</th>
               <th className="px-3 py-3 text-left font-medium">Email</th>
-              <th className="px-3 py-3 text-left font-medium">Assigned to</th>
+              {showAssignedTo ? (
+                <th className="px-3 py-3 text-left font-medium">Assigned to</th>
+              ) : null}
               <th className="px-3 py-3 text-left font-medium">Qualification</th>
               <th className="px-3 py-3 text-left font-medium">Status</th>
               <th className="px-3 py-3 text-left font-medium">Updated</th>
@@ -253,21 +308,23 @@ export function SalesLeadsRoute({
                 <td className="px-3 py-3">{lead.contactName}</td>
                 <td className="px-3 py-3">{lead.company}</td>
                 <td className="px-3 py-3 text-white/62">{lead.email}</td>
-                <td className="px-3 py-3">
-                  <select
-                    value={lead.ownerId}
-                    onChange={(event) => updateSalesLeadOwner(lead.id, event.target.value)}
-                    disabled={lead.status === "Converted"}
-                    aria-label={`Assign ${lead.company} to`}
-                    className="admin-input admin-select w-full min-w-[10rem] rounded-[0.7rem] px-2.5 py-1.5 text-xs"
-                  >
-                    {agents.map((agent) => (
-                      <option key={agent.id} value={agent.id}>
-                        {agent.name}
-                      </option>
-                    ))}
-                  </select>
-                </td>
+                {showAssignedTo ? (
+                  <td className="px-3 py-3">
+                    <select
+                      value={lead.ownerId}
+                      onChange={(event) => updateSalesLeadOwner(lead.id, event.target.value)}
+                      disabled={lead.status === "Converted"}
+                      aria-label={`Assign ${lead.company} to`}
+                      className="admin-input admin-select w-full min-w-[10rem] rounded-[0.7rem] px-2.5 py-1.5 text-xs"
+                    >
+                      {agents.map((agent) => (
+                        <option key={agent.id} value={agent.id}>
+                          {agent.name}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                ) : null}
                 <td className="px-3 py-3">
                   {(() => {
                     const pending = pendingQualificationPanels[lead.id] ?? null;
@@ -345,24 +402,35 @@ export function SalesLeadsRoute({
                 <td className="px-3 py-3 text-white/62">{lead.status}</td>
                 <td className="px-3 py-3 text-white/52">{formatDateTime(lead.lastUpdatedAt)}</td>
                 <td className="px-3 py-3">
-                  {lead.status === "Converted" && lead.convertedClientProfileId ? (
-                    <Link
-                      href={`${clientHrefBase}/${lead.convertedClientProfileId}`}
-                      className="inline-flex items-center justify-center rounded-[0.72rem] border border-white/12 bg-white/[0.06] px-3 py-1.5 text-[0.66rem] font-semibold uppercase tracking-[0.16em] text-white/88 transition hover:border-white/26 hover:bg-white/[0.12]"
-                    >
-                      Open Client
-                    </Link>
-                  ) : lead.qualificationStage === "Qualifies" ? (
-                    <Link
-                      href={registrationHref}
-                      style={{ whiteSpace: "nowrap" }}
-                      className="inline-flex items-center justify-center rounded-full border border-white/18 bg-white/[0.16] px-3 py-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.08em] leading-none text-white transition hover:border-white/34 hover:bg-white/[0.24]"
-                    >
-                      Register Client
-                    </Link>
-                  ) : (
-                    <span className="text-xs text-white/48">Qualify lead first</span>
-                  )}
+                  <div className="flex min-w-[10rem] flex-col items-start gap-2">
+                    {lead.status === "Converted" && lead.convertedClientProfileId ? (
+                      <Link
+                        href={`${clientHrefBase}/${lead.convertedClientProfileId}`}
+                        className="inline-flex items-center justify-center rounded-[0.72rem] border border-white/12 bg-white/[0.06] px-3 py-1.5 text-[0.66rem] font-semibold uppercase tracking-[0.16em] text-white/88 transition hover:border-white/26 hover:bg-white/[0.12]"
+                      >
+                        Open Client
+                      </Link>
+                    ) : lead.qualificationStage === "Qualifies" ? (
+                      <Link
+                        href={registrationHref}
+                        style={{ whiteSpace: "nowrap" }}
+                        className="inline-flex items-center justify-center rounded-full border border-white/18 bg-white/[0.16] px-3 py-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.08em] leading-none text-white transition hover:border-white/34 hover:bg-white/[0.24]"
+                      >
+                        Register Client
+                      </Link>
+                    ) : (
+                      <span className="text-xs text-white/48">Qualify lead first</span>
+                    )}
+                    {allowDelete && !getDeleteError(lead) ? (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteLead(lead)}
+                        className="rounded-[0.65rem] border border-white/10 px-2.5 py-1 text-[0.64rem] uppercase tracking-[0.16em] text-white/58 transition hover:border-white/20 hover:text-white"
+                      >
+                        Delete
+                      </button>
+                    ) : null}
+                  </div>
                 </td>
               </tr>
             ))}

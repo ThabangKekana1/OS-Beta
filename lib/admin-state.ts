@@ -1,9 +1,10 @@
 import {
   normalizeAdminLeads,
+  normalizePartnerOrgs,
   normalizeSalesLeads,
   type AdminStorageSnapshot,
 } from "@/lib/admin-storage";
-import type { AdminLead, SalesLead } from "@/lib/admin-types";
+import type { AdminLead, PartnerOrg, SalesLead } from "@/lib/admin-types";
 
 export type AdminStateSnapshot = AdminStorageSnapshot;
 
@@ -39,11 +40,19 @@ function toSalesLeads(value: unknown): SalesLead[] | null {
   return normalizeSalesLeads(value as SalesLead[]);
 }
 
+function toPartnerOrgs(value: unknown): PartnerOrg[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return normalizePartnerOrgs(value as PartnerOrg[]);
+}
+
 export function createDefaultAdminStateSnapshot(): AdminStateSnapshot {
   return {
     leads: [],
     activeLeadId: null,
     salesLeads: [],
+    partnerOrgs: [],
   };
 }
 
@@ -56,6 +65,7 @@ export function normalizeAdminStateSnapshot(input: unknown): AdminStateSnapshot 
     leads?: unknown;
     activeLeadId?: unknown;
     salesLeads?: unknown;
+    partnerOrgs?: unknown;
   };
 
   const leads = toLeads(typed.leads);
@@ -73,5 +83,6 @@ export function normalizeAdminStateSnapshot(input: unknown): AdminStateSnapshot 
     leads,
     activeLeadId,
     salesLeads,
+    partnerOrgs: toPartnerOrgs(typed.partnerOrgs),
   };
 }

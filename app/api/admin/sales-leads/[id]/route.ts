@@ -3,6 +3,7 @@ import { readAdminStateSnapshot, writeAdminStateSnapshot } from "@/lib/admin-sta
 import { getServerAuthSession } from "@/lib/auth-server";
 import { salesLeadQualificationStages } from "@/lib/admin-types";
 import type { SalesLeadQualificationStage } from "@/lib/admin-types";
+import { buildAdminLeadStubFromSalesLead } from "@/lib/client-registration";
 
 export const runtime = "nodejs";
 
@@ -99,8 +100,49 @@ export async function PATCH(
   }
 
   const timestamp = new Date().toISOString();
+
+  // Auto-handover: when a partner-originated lead reaches "Qualifies",
+  // create a stub AdminLead so the Ops team picks it up in the Repository.
+  const shouldHandover =
+    nextStage === "Qualifies" &&
+    currentLead.createdByRole === "partner" &&
+    !currentLead.linkedAdminLeadId &&
+    Boolean(currentLead.ownerId);
+
+  let createdAdminLeadId: string | null = null;
+  let nextLeads = snapshot.leads;
+
+  if (shouldHandover) {
+    const stub = buildAdminLeadStubFromSalesLead({
+      contactName: currentLead.contactName,
+      company: currentLead.company,
+      email: currentLead.email,
+      ownerId: currentLead.ownerId,
+    });
+    if (stub) {
+      const stampedLead = {
+        ...stub.lead,
+        partnerOrgId: currentLead.partnerOrgId ?? null,
+        linkedSalesLeadId: currentLead.id,
+        events: [
+          ...stub.lead.events,
+          {
+            id: `${stub.lead.id}-handover`,
+            title: "Lead qualified by sales",
+            detail: "Auto-created from partner referral on qualification.",
+            createdAt: new Date().toLocaleString(),
+            tone: "system" as const,
+          },
+        ],
+      };
+      createdAdminLeadId = stampedLead.id;
+      nextLeads = [stampedLead, ...snapshot.leads];
+    }
+  }
+
   const nextSnapshot = {
     ...snapshot,
+    leads: nextLeads,
     salesLeads: snapshot.salesLeads.map((lead) =>
       lead.id === id
         ? {
@@ -108,11 +150,12 @@ export async function PATCH(
             qualificationStage: nextStage,
             qualificationReason: requiresQualificationReason(nextStage) ? reason : null,
             lastUpdatedAt: timestamp,
+            linkedAdminLeadId: createdAdminLeadId ?? lead.linkedAdminLeadId,
           }
         : lead,
     ),
   };
   const backend = await writeAdminStateSnapshot(nextSnapshot, session.email);
 
-  return NextResponse.json({ ok: true, backend, snapshot: nextSnapshot });
+  return NextResponse.json({ ok: true, backend, snapshot: nextSnapshot, handover: createdAdminLeadId });
 }

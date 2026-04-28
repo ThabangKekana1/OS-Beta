@@ -32,7 +32,7 @@ export function CaseRoute({ caseId }: { caseId: string }) {
           Case not found
         </h1>
         <Link
-          href="/"
+          href="/workspace"
           className="mt-6 inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-white/72"
         >
           <ArrowLeft className="size-4" />

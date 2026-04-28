@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { BrandMarkOneOS } from "@/components/sidebar/BrandMarkOneOS";
 import { AdminPortalProvider } from "@/components/admin/AdminPortalProvider";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
+import { SaveStatusBanner } from "@/components/admin/SaveStatusBanner";
 import { MobileSidebarToggle } from "@/components/MobileSidebarToggle";
 import { requireServerAuthSession } from "@/lib/auth-server";
 
@@ -29,7 +30,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
 
   return (
     <AdminPortalProvider
-      actorRole={session.role}
+      actorRole={session.role as "admin" | "sales"}
       actorEmail={session.email}
       actorName={session.name}
       actorAgentId={session.agentId}
@@ -55,6 +56,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           {children}
         </main>
       </div>
+      <SaveStatusBanner />
     </AdminPortalProvider>
   );
 }

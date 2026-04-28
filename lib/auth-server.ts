@@ -1,17 +1,61 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
-  readActiveSessionToken,
   resolveDefaultRouteForRole,
-  SESSION_COOKIE_NAME,
   type AuthSession,
   type UserRole,
 } from "@/lib/auth";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { findProfileByEmail } from "@/lib/users-db";
 
-export async function getServerAuthSession() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
-  return readActiveSessionToken(token);
+function hasSupabaseAuthEnv() {
+  return Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+  );
+}
+
+export async function getServerAuthSession(): Promise<AuthSession | null> {
+  if (!hasSupabaseAuthEnv()) return null;
+
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user) return null;
+
+    const user = data.user;
+    if (!user.email) return null;
+    if (!user.email_confirmed_at && !user.confirmed_at) return null;
+
+    const email = user.email.toLowerCase();
+    const profile = await findProfileByEmail(email).catch(() => null);
+
+    const metaName =
+      (user.user_metadata?.full_name as string | undefined) ??
+      (user.user_metadata?.name as string | undefined) ??
+      null;
+
+    if (profile && profile.isActive) {
+      return {
+        email: profile.email,
+        name: profile.name || metaName || email.split("@")[0],
+        role: profile.role,
+        agentId: profile.agentId,
+        partnerOrgId: profile.partnerOrgId,
+      };
+    }
+
+    // No profile row — treat as a client/workspace tenant.
+    return {
+      email,
+      name: metaName ?? email.split("@")[0],
+      role: "client",
+      agentId: null,
+      partnerOrgId: null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function requireServerAuthSession(role?: UserRole): Promise<AuthSession> {

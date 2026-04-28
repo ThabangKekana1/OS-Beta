@@ -15,12 +15,11 @@ function salesDocCount(documents: AdminLead["documents"]) {
   return documents.filter((doc) => doc.uploadedByType === "Sales Team").length;
 }
 
-export function AdminClientsRoute() {
+export function AdminClientsRoute({ viewerAgentId }: { viewerAgentId?: string | null } = {}) {
   const { leads, agents, leadStages } = useAdminPortal();
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<AdminLeadStage | "All">("All");
-  const [ownerFilter, setOwnerFilter] = useState<string>("All");
 
   const ownerMap = useMemo(
     () => new Map(agents.map((agent) => [agent.id, agent.name])),
@@ -30,8 +29,9 @@ export function AdminClientsRoute() {
   const filteredClients = useMemo(() => {
     const query = search.trim().toLowerCase();
     return leads.filter((lead) => {
+      if (!lead.isClientRegistered) return false;
+      if (viewerAgentId && lead.ownerId !== viewerAgentId) return false;
       if (stageFilter !== "All" && lead.stage !== stageFilter) return false;
-      if (ownerFilter !== "All" && lead.ownerId !== ownerFilter) return false;
       if (!query) return true;
 
       return (
@@ -42,15 +42,15 @@ export function AdminClientsRoute() {
         lead.businessRegistrationNumber.toLowerCase().includes(query)
       );
     });
-  }, [leads, ownerFilter, search, stageFilter]);
+  }, [leads, search, stageFilter, viewerAgentId]);
 
   return (
     <div className="flex w-full flex-col gap-4 lg:gap-5">
       <section className="app-surface rounded-[1.6rem] px-5 py-5 lg:px-6 lg:py-6">
         <AdminHeader
           eyebrow="Clients"
-          title="Client directory with dedicated onboarding profiles."
-          description="Select any client and open a full profile page with their stage, owner, files, and onboarding workflow."
+          title="My personally-managed clients."
+          description="Clients you own as an admin acting in a sales capacity. For all registered businesses across the platform, see Businesses."
           actions={
             <div className="flex gap-2">
               <AdminBadge label={`${filteredClients.length} Client Profiles`} />
@@ -66,7 +66,7 @@ export function AdminClientsRoute() {
       </section>
 
       <section className="app-surface rounded-[1.4rem] p-4 lg:p-5">
-        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-[1.4fr_1fr_1fr]">
+        <div className="grid gap-3 md:grid-cols-2">
           <label className="flex flex-col gap-1.5">
             <span className="text-xs uppercase tracking-[0.2em] text-white/45">Search Client</span>
             <input
@@ -87,21 +87,6 @@ export function AdminClientsRoute() {
               {leadStages.map((stage) => (
                 <option key={stage} value={stage}>
                   {stage}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="text-xs uppercase tracking-[0.2em] text-white/45">Owner</span>
-            <select
-              value={ownerFilter}
-              onChange={(event) => setOwnerFilter(event.target.value)}
-              className="admin-input admin-select rounded-[0.8rem] px-3 py-2 text-sm"
-            >
-              <option value="All">All owners</option>
-              {agents.map((agent) => (
-                <option key={agent.id} value={agent.id}>
-                  {agent.name}
                 </option>
               ))}
             </select>

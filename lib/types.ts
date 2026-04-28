@@ -17,6 +17,7 @@ export const migrationStages = [
 export const conversationModes = [
   "Migrate",
   "Qualify",
+  "Register",
   "Review Documents",
   "Proposal Support",
   "Term Sheet Support",
@@ -49,6 +50,14 @@ export interface NavItem {
   count?: number;
 }
 
+export interface BusinessLocation {
+  id: string;
+  label: string;
+  address: string;
+  city: string;
+  province: string;
+}
+
 export interface Business {
   id: string;
   name: string;
@@ -56,6 +65,7 @@ export interface Business {
   sector: string;
   location: string;
   province: string;
+  locations: BusinessLocation[];
   monthlySpendZar: number;
   averageMonthlyUsageKwh: number;
   siteCount: number;

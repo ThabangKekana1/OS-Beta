@@ -4,7 +4,7 @@ import {
   type AdminStateSnapshot,
 } from "@/lib/admin-state";
 import { normalizeWorkspaceStateSnapshot, type WorkspaceStateSnapshot } from "@/lib/workspace-state";
-import type { AdminLead, SalesLead } from "@/lib/admin-types";
+import type { AdminLead, PartnerOrg, SalesLead } from "@/lib/admin-types";
 
 type StoreReadResult<T> = {
   found: boolean;
@@ -37,7 +37,9 @@ function adminLeadRow(lead: AdminLead) {
     stage: lead.stage,
     priority: lead.priority,
     readiness_score: lead.readinessScore,
-    estimated_value_zar: lead.estimatedValueZar,
+    estimated_value_zar: Number.isFinite(lead.estimatedValueZar)
+      ? Math.max(0, Math.round(lead.estimatedValueZar))
+      : 0,
     eoi_signing_token: lead.eoiSigningToken,
     eoi_signed_at: toIsoOrNull(lead.eoiSignedAt),
     onboarding_completed_at: toIsoOrNull(lead.onboardingCompletedAt),
@@ -94,7 +96,7 @@ export async function readAdminStateFromDatabase(): Promise<StoreReadResult<Admi
   const [stateResult, leadsResult, salesLeadsResult] = await Promise.all([
     supabase
       .from("oneos_admin_state")
-      .select("active_lead_id")
+      .select("active_lead_id, partner_orgs")
       .eq("id", "singleton")
       .maybeSingle(),
     supabase
@@ -129,7 +131,12 @@ export async function readAdminStateFromDatabase(): Promise<StoreReadResult<Admi
 
   const leads = payloadFromRows<AdminLead>(leadsResult.data ?? []);
   const salesLeads = payloadFromRows<SalesLead>(salesLeadsResult.data ?? []);
-  if (leads.length === 0 && salesLeads.length === 0) {
+  const partnerOrgsRaw = stateResult.data?.partner_orgs;
+  const partnerOrgs: PartnerOrg[] = Array.isArray(partnerOrgsRaw)
+    ? (partnerOrgsRaw as PartnerOrg[])
+    : [];
+
+  if (leads.length === 0 && salesLeads.length === 0 && partnerOrgs.length === 0) {
     return { found: false, snapshot: null };
   }
 
@@ -137,6 +144,7 @@ export async function readAdminStateFromDatabase(): Promise<StoreReadResult<Admi
     leads,
     activeLeadId: stateResult.data?.active_lead_id ?? leads[0]?.id ?? null,
     salesLeads,
+    partnerOrgs,
   });
 
   return {
@@ -165,6 +173,7 @@ export async function writeAdminStateToDatabase(
         id: "singleton",
         active_lead_id: snapshot.activeLeadId,
         updated_by: updatedBy,
+        partner_orgs: snapshot.partnerOrgs ?? [],
       },
       { onConflict: "id" },
     );

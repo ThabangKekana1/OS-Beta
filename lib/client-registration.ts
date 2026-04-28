@@ -6,6 +6,8 @@ import {
 import { makeId, timelineLabel } from "@/lib/formatting";
 import type {
   AdminLead,
+  AdminLeadOrigin,
+  AdminLeadPartner,
   AdminLeadRegistrationSource,
 } from "@/lib/admin-types";
 
@@ -26,6 +28,8 @@ export type ClientRegistrationInput = {
   city: string;
   province: string;
   source: AdminLead["source"];
+  origin?: AdminLeadOrigin;
+  partner?: AdminLeadPartner | null;
   ownerId: string;
   registrationSource: AdminLeadRegistrationSource | null;
 };
@@ -148,16 +152,20 @@ export function buildAdminLeadFromClientRegistration(
     contactName,
     monthlyElectricitySpendEstimateZar,
     isBusinessRegistered: input.isBusinessRegistered,
+    isClientRegistered: true,
     isBusinessOperational: input.isBusinessOperational,
     hasSixMonthUtilityBill: input.hasSixMonthUtilityBill,
     physicalAddress,
     city,
     province,
     source: input.source,
+    origin: input.origin ?? "created",
+    partner: input.partner ?? null,
     stage: "EOI Generated",
     contactStatus: "Not Contacted",
     priority: "Standard",
     ownerId,
+    linkedSalesLeadId: null,
     registrationSource: input.registrationSource,
     readinessScore: input.hasSixMonthUtilityBill ? 45 : 40,
     estimatedValueZar: DEAL_VALUE_ZAR,
@@ -225,6 +233,100 @@ export function buildAdminLeadFromClientRegistration(
   if (input.hasSixMonthUtilityBill) {
     nextLead.tasks = setTaskStatus(nextLead, "Upload 6-month utility bill pack", true);
   }
+
+  return {
+    lead: nextLead,
+    leadId: newLeadId,
+    clientProfileId,
+  };
+}
+
+export type SalesLeadStubInput = {
+  contactName: string;
+  company: string;
+  email: string;
+  ownerId: string;
+  origin?: AdminLeadOrigin;
+  registrationSource?: AdminLeadRegistrationSource | null;
+};
+
+export function buildAdminLeadStubFromSalesLead(
+  input: SalesLeadStubInput,
+): ClientRegistrationResult | null {
+  const company = input.company.trim();
+  const contactName = input.contactName.trim();
+  const email = input.email.trim().toLowerCase();
+  const ownerId = input.ownerId.trim();
+
+  if (!company || !contactName || !email || !ownerId) {
+    return null;
+  }
+
+  const { contactFirstName, contactSurname } = splitContactName(contactName);
+  const newLeadId = makeId("lead");
+  const clientProfileId = makeId("profile");
+  const migrateAccountId = buildAccountIdFromBusinessName(company);
+
+  const nextLead: AdminLead = {
+    id: newLeadId,
+    clientProfileId,
+    company,
+    businessRegistrationNumber: "",
+    industry: "",
+    contactFirstName,
+    contactSurname,
+    contactPosition: "",
+    contactName,
+    monthlyElectricitySpendEstimateZar: 0,
+    isBusinessRegistered: false,
+    isClientRegistered: false,
+    isBusinessOperational: false,
+    hasSixMonthUtilityBill: false,
+    physicalAddress: "",
+    city: "",
+    province: "",
+    source: "Outbound",
+    origin: input.origin ?? "created",
+    partner: null,
+    stage: "Client Registered",
+    contactStatus: "Not Contacted",
+    priority: "Standard",
+    ownerId,
+    linkedSalesLeadId: null,
+    registrationSource: input.registrationSource ?? null,
+    readinessScore: 10,
+    estimatedValueZar: DEAL_VALUE_ZAR,
+    lastTouched: "Just now",
+    nextAction: "Qualify lead and capture full registration details.",
+    migrateAccountName: company,
+    migrateAccountId,
+    userProfile: {
+      id: makeId("usr"),
+      fullName: contactName,
+      email,
+      phone: "",
+      role: "",
+      joinedAt: new Date().toISOString().slice(0, 10),
+    },
+    eoiSigningToken: null,
+    eoiSignedBy: null,
+    eoiSignedAt: null,
+    eoiAcceptedTermsAt: null,
+    onboardingCompletedAt: null,
+    disqualification: null,
+    tasks: [],
+    documents: [],
+    notes: [],
+    events: [
+      {
+        id: makeId("event"),
+        title: "Lead created",
+        detail: "Lead added from sales/admin Leads board.",
+        createdAt: timelineLabel(),
+        tone: "system",
+      },
+    ],
+  };
 
   return {
     lead: nextLead,
