@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
+import { useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import { Plus, Save, Trash2, UserCircle } from "lucide-react";
+import { SignOutButton } from "@/components/auth/SignOutButton";
 import { useWorkspace } from "@/components/providers/WorkspaceProvider";
 import { makeId } from "@/lib/formatting";
+import type { MigrationCase } from "@/lib/types";
 
 type LocationFormState = {
   id: string;
@@ -33,58 +35,39 @@ function emptyLocation(index: number = 0): LocationFormState {
   };
 }
 
-function emptyForm(): FormState {
-  return {
-    name: "",
-    legalName: "",
-    sector: "",
-    decisionMaker: "",
-    monthlySpendZar: "",
-    averageMonthlyUsageKwh: "",
-    locations: [emptyLocation()],
-  };
-}
-
 function normalizeNumberDraft(value: number) {
   return value > 0 ? String(value) : "";
 }
 
+function formStateFromCase(activeCase: MigrationCase): FormState {
+  const business = activeCase.business;
+  const locations =
+    business.locations.length > 0
+      ? business.locations.map((location) => ({
+          id: location.id,
+          label: location.label,
+          address: location.address,
+          city: location.city,
+          province: location.province,
+        }))
+      : [emptyLocation()];
+
+  return {
+    name: business.name,
+    legalName: business.legalName,
+    sector: business.sector,
+    decisionMaker: business.decisionMaker,
+    monthlySpendZar: normalizeNumberDraft(business.monthlySpendZar),
+    averageMonthlyUsageKwh: normalizeNumberDraft(business.averageMonthlyUsageKwh),
+    locations: locations.map((location, index) => ({
+      ...location,
+      label: location.label || (index === 0 ? "Primary location" : `Location ${index + 1}`),
+    })),
+  };
+}
+
 export function ProfileView() {
   const { activeCase, updateBusinessProfile } = useWorkspace();
-  const [form, setForm] = useState<FormState>(emptyForm);
-  const [savedAt, setSavedAt] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!activeCase) {
-      return;
-    }
-
-    const business = activeCase.business;
-    const locations =
-      business.locations.length > 0
-        ? business.locations.map((location, index) => ({
-            id: location.id,
-            label: location.label,
-            address: location.address,
-            city: location.city,
-            province: location.province,
-          }))
-        : [emptyLocation()];
-
-    setForm({
-      name: business.name,
-      legalName: business.legalName,
-      sector: business.sector,
-      decisionMaker: business.decisionMaker,
-      monthlySpendZar: normalizeNumberDraft(business.monthlySpendZar),
-      averageMonthlyUsageKwh: normalizeNumberDraft(business.averageMonthlyUsageKwh),
-      locations: locations.map((location, index) => ({
-        ...location,
-        label: location.label || (index === 0 ? "Primary location" : `Location ${index + 1}`),
-      })),
-    });
-    setSavedAt(null);
-  }, [activeCase]);
 
   if (!activeCase) {
     return (
@@ -93,6 +76,28 @@ export function ProfileView() {
       </div>
     );
   }
+
+  return (
+    <ProfileEditor
+      key={activeCase.id}
+      activeCase={activeCase}
+      updateBusinessProfile={updateBusinessProfile}
+    />
+  );
+}
+
+function ProfileEditor({
+  activeCase,
+  updateBusinessProfile,
+}: {
+  activeCase: MigrationCase;
+  updateBusinessProfile: (
+    caseId: string,
+    updates: Partial<MigrationCase["business"]>,
+  ) => void;
+}) {
+  const [form, setForm] = useState<FormState>(() => formStateFromCase(activeCase));
+  const [savedAt, setSavedAt] = useState<string | null>(null);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -173,6 +178,16 @@ export function ProfileView() {
         onSubmit={handleSubmit}
         className="space-y-6 rounded-[1.5rem] border border-white/10 bg-[rgba(8,8,8,0.84)] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.42)]"
       >
+        <section className="rounded-[1.2rem] border border-white/10 bg-black/35 p-4">
+          <p className="line-label">Session</p>
+          <p className="mt-2 text-sm text-white/58">
+            Need to switch accounts? Sign out of the Dawn workspace here.
+          </p>
+          <div className="mt-4">
+            <SignOutButton />
+          </div>
+        </section>
+
         <Section title="Business">
           <Field label="Trading name" value={form.name} onChange={setField("name")} />
           <Field label="Legal name" value={form.legalName} onChange={setField("legalName")} />

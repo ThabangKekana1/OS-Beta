@@ -131,12 +131,7 @@ const navItems = [
 ] as const;
 
 export function AdminSidebar({
-  profileName,
-  email,
-}: {
-  profileName: string;
-  email: string;
-}) {
+}: Record<string, never>) {
   const pathname = usePathname();
   const { leads } = useAdminPortal();
   const openLeads = leads.filter(
@@ -205,10 +200,9 @@ export function AdminSidebar({
 
         <div className="mt-auto rounded-[1.2rem] border border-white/10 bg-white/[0.02] p-4">
           <p className="line-label">Session</p>
-          <p className="mt-2 text-sm font-medium text-white">{profileName}</p>
-          <p className="mt-1 text-xs text-white/56">{email}</p>
           <p className="mt-2 text-sm leading-6 text-white/58">
-            This portal is isolated from the migration client workspace and built for internal sales operations.
+            Internal admin session active. This portal is isolated from the migration client
+            workspace and built for internal sales operations.
           </p>
           <div className="mt-4">
             <SignOutButton />

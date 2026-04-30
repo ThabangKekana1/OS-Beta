@@ -11,7 +11,6 @@ import {
 } from "react";
 import {
   ACTIVE_USER_NAME,
-  CONVERSATION_MODES,
   RESOURCE_LIBRARY,
   WORKSPACE_OPTIONS,
 } from "@/lib/mock-data";
@@ -47,10 +46,10 @@ type NavCounts = {
 
 type WorkspaceContextValue = {
   activeWorkspaceId: string;
+  workspaceId: string;
   activeCaseId: string | null;
   activeCase: MigrationCase | null;
   cases: MigrationCase[];
-  conversationModes: readonly ConversationMode[];
   documentCentre: DocumentCentreEntry[];
   navCounts: NavCounts;
   pendingCaseIds: ReadonlySet<string>;
@@ -659,20 +658,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       return;
     }
     userInteractedRef.current = true;
-
-    // Fire-and-forget: notify admin a customer uploaded.
     const targetCase = cases.find((c) => c.id === caseId);
-    void fetch("/api/workspace/notify-upload", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        workspaceId: uploadWorkspaceId,
-        caseId,
-        caseName: targetCase?.business.name ?? caseId,
-        category,
-        fileNames: files.map((f) => f.name),
-      }),
-    }).catch(() => {});
     const categoryToBucket: Record<WorkspaceUploadCategory, string> = {
       EOI: "Registration",
       "Utility Bills": "Qualification",
@@ -696,54 +682,107 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       const mb = bytes / (1024 * 1024);
       return mb >= 0.05 ? `${mb.toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
     };
+    const formData = new FormData();
+    formData.set("workspaceId", uploadWorkspaceId);
+    formData.set("caseId", caseId);
+    formData.set("caseName", targetCase?.business.name ?? caseId);
+    formData.set("category", category);
+    for (const file of files) {
+      formData.append("files", file, file.name);
+    }
 
-    setCases((currentCases: MigrationCase[]) =>
-      currentCases.map((migrationCase: MigrationCase) => {
-        if (migrationCase.id !== caseId) {
-          return migrationCase;
-        }
-
-        const timestamp = nowLabel();
-        let nextDocuments = migrationCase.documents;
-        for (const file of files) {
-          const baseName = file.name.replace(/\.[^.]+$/, "");
-          const submission: DocumentSubmission = {
-            id: makeId("document"),
-            title: `${category} — ${baseName}`,
-            category: categoryToBucket[category],
-            fileType: fileTypeFor(file.name),
-            status: categoryToStatus[category],
-            updatedAt: todayLabel(),
-            size: formatSize(file.size),
-            audience: "Client",
-          };
-          nextDocuments = withDocument(nextDocuments, submission);
-        }
-
-        const fileCount = files.length;
-        const summary = files.map((file) => file.name).join(", ");
-        const messages = appendMessage(migrationCase.messages, {
-          type: "system",
-          title: `${fileCount} ${category} file${fileCount === 1 ? "" : "s"} uploaded`,
-          timestamp,
-          content: `${summary} added to your migration workspace under ${category}.`,
-        });
-        const activity = appendActivity(migrationCase.activity, {
-          title: `${category} upload (${fileCount})`,
-          detail: summary,
-          timestamp: timelineLabel(),
-          tone: "client",
+    void (async () => {
+      try {
+        const response = await fetch("/api/workspace/documents", {
+          method: "POST",
+          body: formData,
         });
 
-        return {
-          ...migrationCase,
-          documents: nextDocuments,
-          messages,
-          activity,
-          lastUpdated: "Just now",
+        const payload = (await response.json().catch(() => ({}))) as {
+          ok?: boolean;
+          error?: string;
         };
-      }),
-    );
+
+        if (!response.ok || payload.ok === false) {
+          throw new Error(payload.error ?? "Document upload failed.");
+        }
+
+        setCases((currentCases: MigrationCase[]) =>
+          currentCases.map((migrationCase: MigrationCase) => {
+            if (migrationCase.id !== caseId) {
+              return migrationCase;
+            }
+
+            const timestamp = nowLabel();
+            let nextDocuments = migrationCase.documents;
+            for (const file of files) {
+              const baseName = file.name.replace(/\.[^.]+$/, "");
+              const submission: DocumentSubmission = {
+                id: makeId("document"),
+                title: `${category} — ${baseName}`,
+                category: categoryToBucket[category],
+                fileType: fileTypeFor(file.name),
+                status: categoryToStatus[category],
+                updatedAt: todayLabel(),
+                size: formatSize(file.size),
+                audience: "Client",
+              };
+              nextDocuments = withDocument(nextDocuments, submission);
+            }
+
+            const fileCount = files.length;
+            const summary = files.map((file) => file.name).join(", ");
+            const messages = appendMessage(migrationCase.messages, {
+              type: "system",
+              title: `${fileCount} ${category} file${fileCount === 1 ? "" : "s"} uploaded`,
+              timestamp,
+              content: `${summary} added to your migration workspace under ${category}.`,
+            });
+            const activity = appendActivity(migrationCase.activity, {
+              title: `${category} upload (${fileCount})`,
+              detail: summary,
+              timestamp: timelineLabel(),
+              tone: "client",
+            });
+
+            return {
+              ...migrationCase,
+              documents: nextDocuments,
+              messages,
+              activity,
+              lastUpdated: "Just now",
+            };
+          }),
+        );
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Document upload failed. Please try again.";
+        setCases((currentCases: MigrationCase[]) =>
+          currentCases.map((migrationCase: MigrationCase) => {
+            if (migrationCase.id !== caseId) {
+              return migrationCase;
+            }
+
+            return {
+              ...migrationCase,
+              messages: appendMessage(migrationCase.messages, {
+                type: "system",
+                title: `${category} upload failed`,
+                timestamp: nowLabel(),
+                content: message,
+              }),
+              activity: appendActivity(migrationCase.activity, {
+                title: `${category} upload failed`,
+                detail: message,
+                timestamp: timelineLabel(),
+                tone: "internal",
+              }),
+              lastUpdated: "Just now",
+            };
+          }),
+        );
+      }
+    })();
   };
 
   const uploadDocument = (caseId: string, title: string) => {
@@ -994,10 +1033,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const value: WorkspaceContextValue = {
     activeWorkspaceId,
+    workspaceId: serverWorkspaceId ?? activeWorkspaceId,
     activeCase,
     activeCaseId,
     cases: sortedCases,
-    conversationModes: CONVERSATION_MODES,
     createBusinessCase,
     documentCentre,
     navCounts,

@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { House, FileText, UserCircle } from "lucide-react";
+import { House, FileText, LifeBuoy, UserCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const iconMap = {
   home: House,
   documents: FileText,
+  support: LifeBuoy,
   profile: UserCircle,
 } as const;
 

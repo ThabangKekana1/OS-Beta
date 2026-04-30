@@ -6,7 +6,6 @@ export default async function SalesPage() {
 
   return (
     <SalesOverviewRoute
-      profileName={session.name}
       email={session.email}
       agentId={session.agentId}
     />

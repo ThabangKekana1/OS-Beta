@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   Download,
@@ -14,6 +14,7 @@ import {
   useWorkspace,
   type WorkspaceUploadCategory,
 } from "@/components/providers/WorkspaceProvider";
+import { downloadBlobFile } from "@/lib/download-utils";
 import type { DocumentSubmission } from "@/lib/types";
 
 const UTILITY_BILLS_REQUIRED = 6;
@@ -106,18 +107,148 @@ function isUtilityBillDoc(doc: DocumentSubmission) {
   return doc.title.toLowerCase().includes("utility bill");
 }
 
+type ClientLeadDocument = {
+  id: string;
+  title: string;
+  category: string;
+  fileType: "PDF" | "DOCX" | "XLSX" | "PNG" | "TXT";
+  status: "pending" | "received" | "reviewed" | "issued" | "signed";
+  uploadedAt: string;
+  uploadedBy: string;
+  fileName: string | null;
+  contentType: string | null;
+  hasStorage: boolean;
+};
+
+type ClientOnboardingLead = {
+  id: string;
+  clientProfileId: string;
+  company: string;
+  stage: string;
+  eoiSigningToken: string | null;
+  eoiSigningPath: string | null;
+  eoiSigningUrl: string | null;
+  eoiSignedBy: string | null;
+  eoiSignedAt: string | null;
+  documents: ClientLeadDocument[];
+};
+
+type DisplayDocument = DocumentSubmission & {
+  leadDocumentId?: string | null;
+};
+
+function filenameFromDisposition(header: string | null, fallback: string) {
+  if (!header) {
+    return fallback;
+  }
+
+  const match = header.match(/filename="?([^";]+)"?/i);
+  return match?.[1]?.trim() || fallback;
+}
+
+function remoteDocumentToSubmission(document: ClientLeadDocument): DisplayDocument {
+  return {
+    id: `lead:${document.id}`,
+    title: document.title,
+    category: document.category,
+    fileType: document.fileType === "TXT" ? "DOCX" : document.fileType,
+    status: document.status,
+    updatedAt: document.uploadedAt,
+    size: document.hasStorage ? "Stored in 1OS" : "Metadata only",
+    audience: "Shared",
+    leadDocumentId: document.id,
+  };
+}
+
 export function DocumentsView() {
   const router = useRouter();
-  const { activeCase, uploadFiles, sendMessage } = useWorkspace();
+  const { activeCase, uploadFiles, sendMessage, workspaceId } = useWorkspace();
   const utilityInputRef = useRef<HTMLInputElement | null>(null);
   const generalInputRef = useRef<HTMLInputElement | null>(null);
   const [generalCategory, setGeneralCategory] = useState<WorkspaceUploadCategory>("EOI");
+  const [clientLead, setClientLead] = useState<ClientOnboardingLead | null>(null);
+  const [isDownloading, setIsDownloading] = useState<string | null>(null);
 
-  const documents = activeCase?.documents ?? [];
-  const utilityBillCount = useMemo(
-    () => documents.filter(isUtilityBillDoc).length,
-    [documents],
+  const documents = useMemo(() => activeCase?.documents ?? [], [activeCase]);
+  const remoteDocuments = useMemo(
+    () => (clientLead ? clientLead.documents.map(remoteDocumentToSubmission) : []),
+    [clientLead],
   );
+  const displayDocuments = useMemo(() => {
+    const merged = new Map<string, DisplayDocument>();
+
+    for (const document of documents) {
+      merged.set(document.title.trim().toLowerCase(), {
+        ...document,
+        leadDocumentId: null,
+      });
+    }
+
+    for (const document of remoteDocuments) {
+      merged.set(document.title.trim().toLowerCase(), document);
+    }
+
+    return Array.from(merged.values());
+  }, [documents, remoteDocuments]);
+  const utilityBillCount = useMemo(
+    () => displayDocuments.filter(isUtilityBillDoc).length,
+    [displayDocuments],
+  );
+
+  useEffect(() => {
+    if (!activeCase) {
+      setClientLead(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadClientLead = async () => {
+      const params = new URLSearchParams();
+      params.set("workspaceId", workspaceId);
+      params.set("caseName", activeCase.business.name);
+
+      const response = await fetch(`/api/workspace/onboarding?${params.toString()}`, {
+        cache: "no-store",
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        lead?: ClientOnboardingLead | null;
+      } | null;
+
+      if (cancelled) {
+        return;
+      }
+
+      if (!response.ok || !payload?.ok) {
+        setClientLead(null);
+        return;
+      }
+
+      setClientLead(payload.lead ?? null);
+    };
+
+    void loadClientLead();
+
+    const handleFocus = () => {
+      void loadClientLead();
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void loadClientLead();
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [activeCase, workspaceId]);
 
   if (!activeCase) {
     return (
@@ -129,9 +260,42 @@ export function DocumentsView() {
 
   const proposal = activeCase.proposal;
   const termSheet = activeCase.termSheet;
-  const eoiSigned = documents.some(
+  const signedEoiDocument =
+    clientLead?.documents.find((doc) =>
+      /signed expression of interest|signed eoi/i.test(doc.title),
+    ) ?? null;
+  const eoiSigned = Boolean(clientLead?.eoiSignedAt) || displayDocuments.some(
     (doc) => doc.title.toLowerCase().includes("expression of interest") && doc.status === "signed",
   );
+
+  const downloadLeadDocument = async (documentId: string, fallbackFilename: string) => {
+    setIsDownloading(documentId);
+
+    try {
+      const params = new URLSearchParams();
+      params.set("documentId", documentId);
+      params.set("workspaceId", workspaceId);
+      params.set("caseName", activeCase.business.name);
+
+      const response = await fetch(`/api/workspace/lead-documents?${params.toString()}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        throw new Error(`Unable to download ${fallbackFilename}.`);
+      }
+
+      const blob = await response.blob();
+      const filename = filenameFromDisposition(
+        response.headers.get("content-disposition"),
+        fallbackFilename,
+      );
+      downloadBlobFile(filename, blob);
+    } finally {
+      setIsDownloading(null);
+    }
+  };
 
   const handleUtilityChange = (event: ChangeEvent<HTMLInputElement>) => {
     const list = event.target.files;
@@ -175,21 +339,38 @@ export function DocumentsView() {
           status={eoiSigned ? "Signed" : "Awaiting your signature"}
           body={
             eoiSigned
-              ? "Thanks — we have your signed EOI on file. You can download a copy below."
-              : "Sign your Expression of Interest to begin the migration. It takes about a minute."
+              ? "Thanks — we have your signed EOI on file. You can download it below and continue with Dawn."
+              : clientLead?.eoiSigningPath
+                ? "Your EOI is ready. Sign it now, then come back here so Dawn can continue with qualification."
+                : "Your EOI link is not ready yet. Finish registration with Dawn first, then return here."
           }
           actions={
             eoiSigned ? (
-              <GhostButton icon={Download}>Download Signed EOI</GhostButton>
+              <GhostButton
+                icon={Download}
+                onClick={() =>
+                  signedEoiDocument?.id
+                    ? void downloadLeadDocument(
+                        signedEoiDocument.id,
+                        signedEoiDocument.fileName || "signed-expression-of-interest.pdf",
+                      )
+                    : undefined
+                }
+                disabled={!signedEoiDocument?.id || isDownloading === signedEoiDocument.id}
+              >
+                {isDownloading === signedEoiDocument?.id ? "Downloading" : "Download Signed EOI"}
+              </GhostButton>
             ) : (
               <>
                 <PrimaryButton
                   icon={FileSignature}
                   onClick={() => {
-                    // Surface inside the workspace; admin issues the signing token,
-                    // and the customer is currently directed to the secure signing page.
-                    window.open("/eoi", "_self");
+                    if (!clientLead?.eoiSigningPath) {
+                      return;
+                    }
+                    window.open(clientLead.eoiSigningPath, "_self");
                   }}
+                  disabled={!clientLead?.eoiSigningPath}
                 >
                   Sign EOI Now
                 </PrimaryButton>
@@ -314,7 +495,7 @@ export function DocumentsView() {
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="line-label">All Documents</p>
-            <h2 className="mt-2 text-lg font-medium text-white">{documents.length} on file</h2>
+            <h2 className="mt-2 text-lg font-medium text-white">{displayDocuments.length} on file</h2>
           </div>
           <div className="flex items-center gap-2">
             <select
@@ -342,10 +523,10 @@ export function DocumentsView() {
         </header>
 
         <ul className="mt-4 divide-y divide-white/8">
-          {documents.length === 0 ? (
+          {displayDocuments.length === 0 ? (
             <li className="py-6 text-center text-sm text-white/56">No documents yet.</li>
           ) : (
-            documents.map((doc) => (
+            displayDocuments.map((doc) => (
               <li key={doc.id} className="flex items-center justify-between gap-3 py-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="flex size-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-white/70">
@@ -364,7 +545,17 @@ export function DocumentsView() {
                   >
                     {doc.status}
                   </StatusPill>
-                  <GhostButton icon={Download}>Download</GhostButton>
+                  <GhostButton
+                    icon={Download}
+                    onClick={() =>
+                      doc.leadDocumentId
+                        ? void downloadLeadDocument(doc.leadDocumentId, `${doc.title}.${doc.fileType.toLowerCase()}`)
+                        : undefined
+                    }
+                    disabled={!doc.leadDocumentId || isDownloading === doc.leadDocumentId}
+                  >
+                    {isDownloading === doc.leadDocumentId ? "Downloading" : "Download"}
+                  </GhostButton>
                 </div>
               </li>
             ))

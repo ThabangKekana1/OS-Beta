@@ -6,14 +6,12 @@ import type { RegistrationSourceRole } from "@/lib/admin-types";
 
 type RegistrationLinkCardProps = {
   email: string;
-  profileName: string;
   role: RegistrationSourceRole;
   agentId: string | null;
 };
 
 export function RegistrationLinkCard({
   email,
-  profileName,
   role,
   agentId,
 }: RegistrationLinkCardProps) {
@@ -37,7 +35,7 @@ export function RegistrationLinkCard({
         <div>
           <p className="line-label">Your Client Registration Link</p>
           <p className="mt-2 text-sm text-white/60">
-            Clients who register through this link are recorded as coming from {profileName}.
+            Clients who register through this link are recorded against this internal profile.
           </p>
           <p className="mt-3 break-all rounded-xl border border-white/10 bg-black/35 px-3 py-2 text-sm text-white/78">
             {url}

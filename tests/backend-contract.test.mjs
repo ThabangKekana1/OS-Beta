@@ -160,7 +160,7 @@ test("workspace chat and uploads use the durable server workspace id", () => {
   assert.match(workspaceProvider, /workspaceId\?: string/);
   assert.match(workspaceProvider, /serverWorkspaceId/);
   assert.match(workspaceProvider, /workspaceId: chatWorkspaceId/);
-  assert.match(workspaceProvider, /workspaceId: uploadWorkspaceId/);
+  assert.match(workspaceProvider, /formData\.set\("workspaceId", uploadWorkspaceId\)/);
   assert.match(workspaceState, /function createStarterCase/);
   assert.match(workspaceState, /ensureWorkspaceCases/);
   assert.match(workspaceState, /You can complete the profile later\. The migration conversation starts immediately\./);
@@ -188,10 +188,16 @@ test("register mode is handled by the server-backed registration state machine",
   const registrationAgent = read("lib/registration-agent.ts");
 
   assert.match(chatRoute, /source:\s*"registration"/);
+  assert.match(chatRoute, /inferConversationMode/);
+  assert.match(chatRoute, /thinkingBudget:\s*0/);
   assert.match(chatRoute, /buildRegistrationReply/);
+  assert.match(chatRoute, /buildAuthoritativeClientProfileNote/);
+  assert.match(chatRoute, /Authoritative saved client profile/);
+  assert.match(chatRoute, /company registration number:/);
   assert.match(chatRoute, /recentHistory:\s*history/);
   assert.match(registrationAgent, /Conversation transcript:/);
   assert.match(registrationAgent, /FIELD_QUESTIONS/);
+  assert.match(registrationAgent, /fallbackNote\?\.trim\(\)/);
 });
 
 test("login page copy changes for admin redirects", () => {

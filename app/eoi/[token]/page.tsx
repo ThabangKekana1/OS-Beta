@@ -30,7 +30,7 @@ export default async function EoiSigningPage({
           This signing link is invalid or has been removed from the onboarding profile.
         </p>
         <Link
-          href="/"
+          href="/documents"
           className="rounded-full border border-white/14 bg-white/[0.04] px-6 py-2.5 text-[0.66rem] uppercase tracking-[0.22em] text-white/72 transition hover:border-white/22 hover:bg-white/[0.08] hover:text-white"
         >
           Return to Workspace

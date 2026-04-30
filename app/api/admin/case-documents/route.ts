@@ -1,27 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireServerAuthSession } from "@/lib/auth-server";
-import { getSupabaseAdminClient } from "@/lib/supabase-admin";
-import { insertCaseDocument, listCaseDocuments, type CaseDocKind } from "@/lib/case-documents";
+import { listCaseDocuments, type CaseDocKind } from "@/lib/case-documents";
+import {
+  MAX_CASE_DOCUMENT_BYTES,
+  persistCaseDocumentUpload,
+} from "@/lib/case-document-upload";
 import { createNotification } from "@/lib/notifications";
 
 export const runtime = "nodejs";
 
 const ALLOWED_KINDS: CaseDocKind[] = ["proposal", "term_sheet", "utility_bill", "eoi", "other"];
-const BUCKET = process.env.ONEOS_SUPABASE_BUCKET?.trim() || "oneos-documents";
-const MAX_BYTES = 15 * 1024 * 1024; // 15MB
-
-async function extractPdfText(buffer: Buffer): Promise<string | null> {
-  try {
-    const mod = await import("pdf-parse");
-    const pdfParse = (mod as unknown as { default?: (b: Buffer) => Promise<{ text?: string }> }).default
-      ?? (mod as unknown as (b: Buffer) => Promise<{ text?: string }>);
-    const result = await pdfParse(buffer);
-    const text = (result?.text ?? "").trim();
-    return text || null;
-  } catch {
-    return null;
-  }
-}
 
 export async function GET(request: NextRequest) {
   await requireServerAuthSession("admin");
@@ -59,42 +47,27 @@ export async function POST(request: NextRequest) {
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "file is required" }, { status: 400 });
   }
-  if (file.size === 0 || file.size > MAX_BYTES) {
-    return NextResponse.json({ error: `File must be 1B–${MAX_BYTES} bytes` }, { status: 400 });
+  if (file.size === 0 || file.size > MAX_CASE_DOCUMENT_BYTES) {
+    return NextResponse.json(
+      { error: `File must be 1B–${MAX_CASE_DOCUMENT_BYTES} bytes` },
+      { status: 400 },
+    );
   }
-
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-
-  let extractedText: string | null = null;
-  if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
-    extractedText = await extractPdfText(buffer);
-  } else if (file.type.startsWith("text/")) {
-    extractedText = buffer.toString("utf8").slice(0, 200_000);
+  let persisted;
+  try {
+    persisted = await persistCaseDocumentUpload({
+      workspaceId,
+      caseId,
+      docKind,
+      file,
+      title,
+      uploadedBy: session.email ?? null,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Upload failed";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  let storagePath: string | null = null;
-  const client = getSupabaseAdminClient();
-  if (client) {
-    const safeName = file.name.replace(/[^\w.\-]+/g, "_");
-    const path = `${workspaceId}/${caseId}/${docKind}/${Date.now()}-${safeName}`;
-    const { error: uploadError } = await client.storage
-      .from(BUCKET)
-      .upload(path, buffer, { contentType: file.type || "application/octet-stream", upsert: false });
-    if (!uploadError) {
-      storagePath = path;
-    }
-  }
-
-  const doc = await insertCaseDocument({
-    workspaceId,
-    caseId,
-    docKind,
-    title: title ?? file.name,
-    storagePath,
-    extractedText,
-    uploadedBy: session.email ?? null,
-  });
+  const { doc, extractedText } = persisted;
 
   const customerEmail = String(form.get("customerEmail") ?? "").trim() || null;
   if (doc) {

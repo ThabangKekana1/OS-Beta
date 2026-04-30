@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FOUNDATION_ASSISTANT_SYSTEM_PROMPT } from "@/lib/assistant/system-prompt";
 import { loadAgentConfig, composeSystemPrompt, type AgentConfig } from "@/lib/assistant/agent-config";
+import type { AdminLead } from "@/lib/admin-types";
 import { getLatestExtractedText } from "@/lib/case-documents";
+import { resolveClientOnboardingLead } from "@/lib/client-onboarding";
+import { buildClientEoiSigningUrl } from "@/lib/eoi-signing";
 import {
   advanceRegistration,
   buildRegistrationReply,
+  loadRegistrationDraft,
+  type RegistrationDraft,
 } from "@/lib/registration-agent";
 
 export const runtime = "nodejs";
@@ -37,12 +42,118 @@ type ChatPayload = {
 
 type ChatTurn = { role: "user" | "assistant"; content: string };
 
+type GoogleCallSuccess = {
+  ok: true;
+  reply: string;
+  finishReason: string | null;
+};
+
+type GoogleCallFailure = {
+  ok: false;
+  error: string;
+  status?: number;
+};
+
+function normalizeModeValue(mode?: string | null) {
+  const normalized = (mode ?? "").trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function messageMatches(message: string, pattern: RegExp) {
+  return pattern.test(message);
+}
+
+function looksLikeRegistrationIntent(message: string) {
+  return messageMatches(
+    message,
+    /\b(register|registration|sign\s*up|signup|enrol|enroll|apply|onboard)\b/i,
+  );
+}
+
+function looksLikeRequirementsQuestion(message: string) {
+  return messageMatches(
+    message,
+    /\b(what do you need|what do i need|what is needed|what's needed|what information|what details|what else|what still|what more|required|requirements?)\b/i,
+  );
+}
+
+function looksLikeQualificationIntent(message: string) {
+  return messageMatches(
+    message,
+    /\b(do i qualify|qualif(?:y|ies|ication)|eligible|eligibility)\b/i,
+  );
+}
+
+function looksLikeProposalIntent(message: string) {
+  return messageMatches(message, /\bproposal\b/i);
+}
+
+function looksLikeTermSheetIntent(message: string) {
+  return messageMatches(message, /\bterm sheet\b/i);
+}
+
+function looksLikeDocumentIntent(message: string) {
+  return messageMatches(
+    message,
+    /\b(document|documents|expression of interest|eoi|utility bill|upload|signed proposal|signed term sheet)\b/i,
+  );
+}
+
+function inferConversationMode(input: {
+  explicitMode: string | null;
+  message: string;
+  registrationDraftStatus: "in_progress" | "submitted" | "disqualified" | "abandoned" | null;
+}) {
+  const explicitMode = normalizeModeValue(input.explicitMode);
+
+  if (explicitMode && explicitMode !== "Migrate") {
+    return explicitMode;
+  }
+
+  if (input.registrationDraftStatus === "in_progress") {
+    return "Register";
+  }
+
+  if (
+    (input.registrationDraftStatus === "submitted" || input.registrationDraftStatus === "disqualified") &&
+    (looksLikeRegistrationIntent(input.message) ||
+      looksLikeRequirementsQuestion(input.message) ||
+      /\b(next step|status|expression of interest|eoi)\b/i.test(input.message))
+  ) {
+    return "Register";
+  }
+
+  if (looksLikeRegistrationIntent(input.message)) {
+    return "Register";
+  }
+
+  if (looksLikeQualificationIntent(input.message)) {
+    return "Qualify";
+  }
+
+  if (looksLikeProposalIntent(input.message)) {
+    return "Proposal Support";
+  }
+
+  if (looksLikeTermSheetIntent(input.message)) {
+    return "Term Sheet Support";
+  }
+
+  if (looksLikeDocumentIntent(input.message)) {
+    return "Review Documents";
+  }
+
+  return explicitMode ?? "Migrate";
+}
+
 function buildSystemPrompt(
   payload: ChatPayload,
   memorySummary: string | null,
   memoryFacts: string[],
   agentConfig: AgentConfig,
   docExcerpts: { proposal: string | null; termSheet: string | null },
+  clientProfileNote: string | null,
+  onboardingNote: string | null,
 ) {
   const sections = [composeSystemPrompt(agentConfig, payload.mode ?? null)];
   void FOUNDATION_ASSISTANT_SYSTEM_PROMPT;
@@ -51,6 +162,8 @@ function buildSystemPrompt(
 
   if (caseName) sections.push(`Active case: ${caseName}`);
   if (context) sections.push(`Current case context:\n${context}`);
+  if (clientProfileNote) sections.push(clientProfileNote);
+  if (onboardingNote) sections.push(onboardingNote);
 
   if (docExcerpts.proposal) {
     sections.push(
@@ -79,6 +192,99 @@ function buildSystemPrompt(
   return sections.filter(Boolean).join("\n\n");
 }
 
+function normalizeProfileText(value?: string | null) {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
+}
+
+function normalizeProfileBoolean(value?: boolean | null) {
+  return typeof value === "boolean" ? (value ? "yes" : "no") : null;
+}
+
+function normalizeProfileCurrency(value?: number | null) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? `R${Math.round(value).toLocaleString("en-ZA")}`
+    : null;
+}
+
+function buildAuthoritativeClientProfileNote(
+  registrationDraft: RegistrationDraft | null,
+  onboardingLead: AdminLead | null,
+) {
+  const fields = registrationDraft?.fields ?? {};
+  const registrationStatus = normalizeProfileText(registrationDraft?.status)
+    ?? (onboardingLead ? "submitted" : null);
+  const onboardingStage = normalizeProfileText(onboardingLead?.stage);
+  const caseReference =
+    normalizeProfileText(registrationDraft?.completedLeadId) ?? normalizeProfileText(onboardingLead?.id);
+  const businessName =
+    normalizeProfileText(onboardingLead?.company) ?? normalizeProfileText(fields.businessName);
+  const businessRegistrationNumber =
+    normalizeProfileText(onboardingLead?.businessRegistrationNumber)
+    ?? normalizeProfileText(fields.businessRegistrationNumber);
+  const industry =
+    normalizeProfileText(onboardingLead?.industry) ?? normalizeProfileText(fields.industry);
+  const contactFirstName =
+    normalizeProfileText(onboardingLead?.contactFirstName) ?? normalizeProfileText(fields.contactFirstName);
+  const contactSurname =
+    normalizeProfileText(onboardingLead?.contactSurname) ?? normalizeProfileText(fields.contactSurname);
+  const contactPosition =
+    normalizeProfileText(onboardingLead?.contactPosition) ?? normalizeProfileText(fields.contactPosition);
+  const contactEmail =
+    normalizeProfileText(onboardingLead?.userProfile.email) ?? normalizeProfileText(fields.contactEmail);
+  const contactNumber =
+    normalizeProfileText(onboardingLead?.userProfile.phone) ?? normalizeProfileText(fields.contactNumber);
+  const monthlyElectricitySpendEstimate =
+    normalizeProfileCurrency(onboardingLead?.monthlyElectricitySpendEstimateZar)
+    ?? normalizeProfileCurrency(fields.monthlyElectricitySpendEstimateZar);
+  const isBusinessRegistered =
+    normalizeProfileBoolean(onboardingLead?.isBusinessRegistered) ?? normalizeProfileBoolean(fields.isBusinessRegistered);
+  const isBusinessOperational =
+    normalizeProfileBoolean(onboardingLead?.isBusinessOperational) ?? normalizeProfileBoolean(fields.isBusinessOperational);
+  const hasSixMonthUtilityBill =
+    normalizeProfileBoolean(onboardingLead?.hasSixMonthUtilityBill) ?? normalizeProfileBoolean(fields.hasSixMonthUtilityBill);
+  const physicalAddress =
+    normalizeProfileText(onboardingLead?.physicalAddress) ?? normalizeProfileText(fields.physicalAddress);
+  const city = normalizeProfileText(onboardingLead?.city) ?? normalizeProfileText(fields.city);
+  const province = normalizeProfileText(onboardingLead?.province) ?? normalizeProfileText(fields.province);
+
+  const lines = [
+    registrationStatus ? `- registration status: ${registrationStatus}` : null,
+    onboardingStage ? `- onboarding stage: ${onboardingStage}` : null,
+    caseReference ? `- case reference: ${caseReference}` : null,
+    businessName ? `- business name: ${businessName}` : null,
+    businessRegistrationNumber
+      ? `- company registration number: ${businessRegistrationNumber}`
+      : null,
+    industry ? `- industry: ${industry}` : null,
+    contactFirstName ? `- contact first name: ${contactFirstName}` : null,
+    contactSurname ? `- contact surname: ${contactSurname}` : null,
+    contactPosition ? `- contact position: ${contactPosition}` : null,
+    contactEmail ? `- contact email: ${contactEmail}` : null,
+    contactNumber ? `- contact number: ${contactNumber}` : null,
+    monthlyElectricitySpendEstimate
+      ? `- monthly electricity spend estimate: ${monthlyElectricitySpendEstimate}`
+      : null,
+    isBusinessRegistered ? `- business registered with CIPC: ${isBusinessRegistered}` : null,
+    isBusinessOperational ? `- business operational: ${isBusinessOperational}` : null,
+    hasSixMonthUtilityBill
+      ? `- has at least six months of utility bills: ${hasSixMonthUtilityBill}`
+      : null,
+    physicalAddress ? `- physical address: ${physicalAddress}` : null,
+    city ? `- city: ${city}` : null,
+    province ? `- province: ${province}` : null,
+  ].filter((line): line is string => line !== null);
+
+  if (lines.length === 0) {
+    return null;
+  }
+
+  return [
+    "Authoritative saved client profile (from the server-side registration and onboarding record — use this as the source of truth for client details and answer directly from it when asked):",
+    ...lines,
+  ].join("\n");
+}
+
 function normalizeTurns(
   raw: Array<{ role?: string; content?: string }> | undefined,
 ): ChatTurn[] {
@@ -102,12 +308,16 @@ function mergeTurns(persisted: ChatTurn[], clientHistory: ChatTurn[]): ChatTurn[
 
 function extractGoogleText(responseJson: unknown) {
   const typed = responseJson as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    candidates?: Array<{
+      content?: { parts?: Array<{ text?: string; thought?: boolean }> };
+    }>;
   };
   const parts = typed?.candidates?.[0]?.content?.parts;
   if (!Array.isArray(parts)) return null;
   const text = parts
-    .map((part) => (typeof part?.text === "string" ? part.text : ""))
+    .map((part) =>
+      part?.thought === true ? "" : typeof part?.text === "string" ? part.text : "",
+    )
     .join("")
     .trim();
   return text || null;
@@ -131,7 +341,7 @@ async function callGoogle(
   system: string,
   turns: ChatTurn[],
   apiKey: string,
-): Promise<{ ok: true; reply: string } | { ok: false; error: string; status?: number }> {
+): Promise<GoogleCallSuccess | GoogleCallFailure> {
   try {
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GOOGLE_MODEL}:generateContent?key=${apiKey}`;
     const contents = turns.map((turn) => ({
@@ -146,7 +356,11 @@ async function callGoogle(
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: system }] },
           contents,
-          generationConfig: { temperature: 0.2, maxOutputTokens: 600 },
+          generationConfig: {
+            temperature: 0.2,
+            maxOutputTokens: 1200,
+            thinkingConfig: { thinkingBudget: 0 },
+          },
         }),
       },
       40_000,
@@ -160,15 +374,70 @@ async function callGoogle(
       };
     }
 
-    const reply = extractGoogleText(await response.json());
+    const responseJson = (await response.json()) as {
+      candidates?: Array<{
+        finishReason?: string;
+        content?: { parts?: Array<{ text?: string; thought?: boolean }> };
+      }>;
+    };
+    const reply = extractGoogleText(responseJson);
     if (!reply) return { ok: false, error: "Empty response from Google API" };
-    return { ok: true, reply };
+    return {
+      ok: true,
+      reply,
+      finishReason:
+        typeof responseJson.candidates?.[0]?.finishReason === "string"
+          ? responseJson.candidates[0].finishReason
+          : null,
+    };
   } catch (err) {
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Unable to reach Google API",
     };
   }
+}
+
+function replyLooksTruncated(reply: string) {
+  const trimmed = reply.trim();
+  if (trimmed.length === 0 || /[.!?]"?$/.test(trimmed)) {
+    return false;
+  }
+
+  const tail = trimmed.split(/\n+/).at(-1)?.trim() ?? trimmed;
+  const tailWords = tail.split(/\s+/).filter(Boolean);
+
+  return trimmed.length < 220 && tailWords.length <= 6;
+}
+
+function mergeContinuedReply(initial: string, continuation: string) {
+  const left = initial.trimEnd();
+  const right = continuation.trimStart();
+
+  if (!right) {
+    return left;
+  }
+
+  return `${left}${/^[,.;:!?)]/.test(right) ? "" : " "}${right}`.trim();
+}
+
+async function continueGoogleReply(
+  system: string,
+  turns: ChatTurn[],
+  partialReply: string,
+  apiKey: string,
+) {
+  const continuationTurns: ChatTurn[] = [
+    ...turns,
+    { role: "assistant", content: partialReply },
+    {
+      role: "user",
+      content:
+        "Continue your previous answer from exactly where you stopped. Do not restart or repeat the opening.",
+    },
+  ];
+
+  return callGoogle(system, continuationTurns, apiKey);
 }
 
 function normalizeReplyText(reply: string) {
@@ -256,12 +525,12 @@ export async function POST(request: NextRequest) {
   const workspaceId = (payload.workspaceId ?? "").trim();
   const caseId = (payload.caseId ?? "").trim() || null;
   const caseName = (payload.caseName ?? "").trim() || null;
-  const mode = (payload.mode ?? "").trim() || null;
+  const requestedMode = normalizeModeValue(payload.mode);
 
   const { loadChatMemory, loadRecentTranscript, logChatTurn, scheduleMemoryMaintenance } =
     await import("@/lib/assistant/chat-memory");
 
-  const [memory, persistedTurns, agentConfig, proposalText, termSheetText] =
+  const [memory, persistedTurns, agentConfig, proposalText, termSheetText, onboardingLead, registrationDraft] =
     await Promise.all([
       workspaceId ? loadChatMemory(workspaceId) : Promise.resolve(null),
       workspaceId
@@ -270,7 +539,26 @@ export async function POST(request: NextRequest) {
       loadAgentConfig(),
       workspaceId && caseId ? getLatestExtractedText(workspaceId, caseId, "proposal") : Promise.resolve(null),
       workspaceId && caseId ? getLatestExtractedText(workspaceId, caseId, "term_sheet") : Promise.resolve(null),
+      resolveClientOnboardingLead({
+        sessionEmail: session.email,
+        workspaceId,
+        caseName,
+      }),
+      workspaceId ? loadRegistrationDraft(workspaceId) : Promise.resolve(null),
     ]);
+
+  const effectiveMode = inferConversationMode({
+    explicitMode: requestedMode,
+    message,
+    registrationDraftStatus: registrationDraft?.status ?? null,
+  });
+
+  const onboardingNote = onboardingLead
+    ? onboardingLead.eoiSignedAt
+      ? `Current onboarding status: the client's Expression of Interest has already been signed by ${onboardingLead.eoiSignedBy ?? onboardingLead.contactName} on ${onboardingLead.eoiSignedAt}. You may proceed with qualification and document collection.`
+      : `Current onboarding status: the client must sign their Expression of Interest before qualification can continue. Direct them to sign it here: ${buildClientEoiSigningUrl(onboardingLead.eoiSigningToken)}. Tell them to come back once it is signed.`
+    : null;
+  const clientProfileNote = buildAuthoritativeClientProfileNote(registrationDraft, onboardingLead);
 
   const clientHistory = normalizeTurns(payload.history);
   const history = mergeTurns(persistedTurns ?? [], clientHistory);
@@ -280,7 +568,7 @@ export async function POST(request: NextRequest) {
       workspaceId,
       caseId,
       caseName,
-      mode,
+      mode: effectiveMode,
       role: "user",
       content: message,
       context: payload.context ?? null,
@@ -289,7 +577,7 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  if (mode === "Register") {
+  if (effectiveMode === "Register") {
     if (!workspaceId) {
       return NextResponse.json(
         { error: "Registration requires a workspace context. Refresh and try again." },
@@ -312,6 +600,7 @@ export async function POST(request: NextRequest) {
       prequal: agentConfig.prequalification,
       submittedLeadId: advanced.submittedLeadId,
       fallbackNote: advanced.noteForUser,
+      latestUser: message,
     });
     const latencyMs = Date.now() - startedAt;
     const registrationStatus = advanced.draft
@@ -325,7 +614,7 @@ export async function POST(request: NextRequest) {
       workspaceId,
       caseId,
       caseName,
-      mode,
+      mode: effectiveMode,
       role: "assistant",
       content: reply,
       provider: "registration",
@@ -353,11 +642,13 @@ export async function POST(request: NextRequest) {
   }
 
   const system = buildSystemPrompt(
-    payload,
+    { ...payload, mode: effectiveMode },
     memory?.summary ?? null,
     memory?.facts ?? [],
     agentConfig,
     { proposal: proposalText, termSheet: termSheetText },
+    clientProfileNote,
+    onboardingNote,
   );
   const turns: ChatTurn[] = [...history, { role: "user", content: message }];
 
@@ -375,6 +666,12 @@ export async function POST(request: NextRequest) {
   }
 
   let reply = sanitizeReply(result.reply);
+  if (result.finishReason === "MAX_TOKENS" || replyLooksTruncated(reply)) {
+    const continuation = await continueGoogleReply(system, turns, reply, googleApiKey);
+    if (continuation.ok) {
+      reply = sanitizeReply(mergeContinuedReply(reply, continuation.reply));
+    }
+  }
   const latencyMs = Date.now() - startedAt;
 
   if (workspaceId) {
@@ -382,7 +679,7 @@ export async function POST(request: NextRequest) {
       workspaceId,
       caseId,
       caseName,
-      mode,
+      mode: effectiveMode,
       role: "assistant",
       content: reply,
       provider: "google",

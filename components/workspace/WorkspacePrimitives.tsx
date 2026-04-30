@@ -3,7 +3,6 @@
 import type { ReactNode, TextareaHTMLAttributes } from "react";
 import { Bot, Info, Mic, Paperclip, Send, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { ConversationMode } from "@/lib/types";
 
 type StatusBadgeProps = {
   label: string;
@@ -115,34 +114,6 @@ export function SendMessageButton({
   );
 }
 
-type ModeSelectorProps = {
-  modes: readonly ConversationMode[];
-  value: ConversationMode;
-  onChange: (mode: ConversationMode) => void;
-};
-
-export function ModeSelector({ modes, value, onChange }: ModeSelectorProps) {
-  return (
-    <div className="flex flex-wrap items-center gap-2 rounded-[1rem] border border-white/8 bg-white/[0.02] p-1.5">
-      {modes.map((mode) => (
-        <button
-          key={mode}
-          type="button"
-          onClick={() => onChange(mode)}
-          className={cn(
-            "rounded-[0.8rem] px-3 py-2 text-[0.62rem] font-medium uppercase tracking-[0.24em] transition",
-            value === mode
-              ? "bg-white text-black"
-              : "text-white/52 hover:bg-white/[0.04] hover:text-white/86",
-          )}
-        >
-          {mode}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 type ComposerInputProps = TextareaHTMLAttributes<HTMLTextAreaElement>;
 
 export function ComposerInput(props: ComposerInputProps) {
@@ -166,7 +137,7 @@ type UserMessageProps = {
 export function UserMessage({ content, timestamp }: UserMessageProps) {
   return (
     <div className="ml-auto max-w-[42rem] rounded-[1.5rem] rounded-br-md bg-white px-5 py-4 text-black shadow-[0_18px_44px_rgba(0,0,0,0.34)]">
-      <p className="text-sm leading-7">{content}</p>
+      <div className="whitespace-pre-wrap text-sm leading-7">{content}</div>
       <p className="mt-2 text-[0.68rem] uppercase tracking-[0.22em] text-black/48">{timestamp}</p>
     </div>
   );
@@ -210,7 +181,7 @@ export function SystemMessage({
         <span>{title ?? (variant === "assistant" ? "1OS" : "System event")}</span>
         <span className="ml-auto text-white/32">{timestamp}</span>
       </div>
-      <p className="mt-3 text-sm leading-7 text-white/72">{content}</p>
+      <div className="mt-3 whitespace-pre-wrap text-sm leading-7 text-white/72">{content}</div>
     </div>
   );
 }

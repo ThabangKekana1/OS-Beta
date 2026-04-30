@@ -35,8 +35,16 @@ The migrations create:
 
 1. In the Supabase dashboard go to **Authentication → Providers** and
    enable Email + (optional) Google.
-2. Set the **Site URL** to your production domain.
-3. Add `https://<your-domain>/auth/callback` to the redirect allow list.
+2. Set the **Site URL** to `https://www.1os.co.za`.
+3. Add these exact URLs to the redirect allow list:
+   - `https://www.1os.co.za/auth/confirm`
+   - `https://www.1os.co.za/auth/callback`
+   - `https://1os.co.za/auth/confirm`
+   - `https://1os.co.za/auth/callback`
+   - `http://localhost:3000/auth/confirm`
+   - `http://localhost:3000/auth/callback`
+
+`/auth/confirm` is used for email confirmation. `/auth/callback` is used for OAuth/invite flows.
 
 ## 4. Invite your first admin
 

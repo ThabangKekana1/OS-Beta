@@ -2,11 +2,10 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AnimatePresence, m } from "framer-motion";
-import { ArrowRight, Bot, UploadCloud } from "lucide-react";
+import { Bot, UploadCloud } from "lucide-react";
 import {
   AttachmentButton,
   ComposerInput,
-  ModeSelector,
   SendMessageButton,
   SystemMessage,
   UserMessage,
@@ -15,9 +14,10 @@ import {
   workspaceUploadCategories,
   type WorkspaceUploadCategory,
 } from "@/components/providers/WorkspaceProvider";
-import { conversationModes, type ConversationMode, type MigrationCase } from "@/lib/types";
+import { type ConversationMode, type MigrationCase } from "@/lib/types";
 
 const DEFAULT_PLACEHOLDER = "Ask anything about your migration, Foundation-1, Generocity, or Lumen-1...";
+const DEFAULT_CONVERSATION_MODE: ConversationMode = "Migrate";
 
 type ConversationPanelProps = {
   activeCase: MigrationCase | null;
@@ -120,7 +120,6 @@ export function ConversationComposer({
   onAfterUpload,
 }: ConversationComposerProps) {
   const [draft, setDraft] = useState("");
-  const [activeMode, setActiveMode] = useState<ConversationMode>("Migrate");
   const [showUploader, setShowUploader] = useState(false);
   const [uploadCategory, setUploadCategory] = useState<WorkspaceUploadCategory>("EOI");
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -136,7 +135,7 @@ export function ConversationComposer({
       return;
     }
 
-    onSendMessage(activeCase.id, trimmed, activeMode);
+    onSendMessage(activeCase.id, trimmed, DEFAULT_CONVERSATION_MODE);
     setDraft("");
     onAfterSend?.(activeCase.id);
     const feed = document.getElementById("conversation-feed");
@@ -190,14 +189,6 @@ export function ConversationComposer({
     <>
       <section className="elevated-input relative rounded-[2rem] p-4 lg:p-5">
         <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="flex items-center justify-between gap-3 px-1">
-            <ModeSelector modes={conversationModes} value={activeMode} onChange={setActiveMode} />
-            <span className="hidden items-center gap-2 text-xs text-white/38 sm:flex">
-              <ArrowRight className="size-3.5" />
-              {activeCase ? activeCase.nextAction : "Choose one of your businesses from the left rail"}
-            </span>
-          </div>
-
           <div className="flex items-end gap-3">
             <AttachmentButton
               disabled={!activeCase}

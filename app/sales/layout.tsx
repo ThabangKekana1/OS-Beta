@@ -31,13 +31,13 @@ export default async function SalesLayout({ children }: { children: ReactNode })
                 Sales
               </span>
               <MobileSidebarToggle>
-                <SalesSidebar profileName={session.name} agentId={session.agentId} />
+                <SalesSidebar agentId={session.agentId} />
               </MobileSidebarToggle>
             </div>
           </div>
         </div>
 
-        <SalesSidebar profileName={session.name} agentId={session.agentId} />
+        <SalesSidebar agentId={session.agentId} />
 
         <main className="min-h-screen px-4 pb-6 pt-20 lg:min-h-0 lg:px-2 lg:pb-2 lg:pt-0">
           {children}

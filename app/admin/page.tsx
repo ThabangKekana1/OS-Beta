@@ -6,7 +6,6 @@ export default async function AdminPage() {
 
   return (
     <AdminOverviewRoute
-      profileName={session.name}
       email={session.email}
       agentId={session.agentId}
     />

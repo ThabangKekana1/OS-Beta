@@ -5,15 +5,6 @@ import { ShieldCheck } from "lucide-react";
 import { AdminHeader } from "@/components/admin/AdminPrimitives";
 import type { AgentConfig } from "@/lib/assistant/agent-config";
 
-const KNOWN_MODES = [
-  "Migrate",
-  "Register",
-  "Review Documents",
-  "Proposal Support",
-  "Term Sheet Support",
-  "Close Deal",
-];
-
 const inputClass =
   "w-full rounded-[0.85rem] border border-white/12 bg-[rgba(8,8,8,0.78)] px-3 py-2 text-sm text-white placeholder:text-white/36 focus:border-white/24 focus:outline-none";
 const textareaClass = `${inputClass} min-h-[7rem] font-mono text-[0.78rem] leading-5`;
@@ -84,13 +75,6 @@ export function AgentGuardrailsRoute({ initialConfig }: { initialConfig: AgentCo
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const payload = buildPayload(config, doNotSayText, escalationText, minMonthlySpendText);
   const isDirty = JSON.stringify(payload) !== lastSavedFingerprint;
-
-  function updateModeOverride(mode: string, value: string) {
-    setConfig((prev) => ({
-      ...prev,
-      modeOverrides: { ...prev.modeOverrides, [mode]: value },
-    }));
-  }
 
   function handleSave() {
     setStatusMessage(null);
@@ -230,27 +214,6 @@ export function AgentGuardrailsRoute({ initialConfig }: { initialConfig: AgentCo
           />
         </section>
       </div>
-
-      <section className="rounded-[1.5rem] border border-white/10 bg-[rgba(8,8,8,0.78)] p-5">
-        <h2 className="text-base font-medium text-white">Per-mode instructions</h2>
-        <p className="mt-1 text-xs text-white/56">
-          Extra direction layered on top when the customer is in a specific conversation mode.
-        </p>
-        <div className="mt-4 space-y-4">
-          {KNOWN_MODES.map((mode) => (
-            <div key={mode}>
-              <label className={labelClass}>{mode}</label>
-              <textarea
-                className={textareaClass}
-                rows={3}
-                placeholder={`Extra instructions for "${mode}" mode…`}
-                value={config.modeOverrides[mode] ?? ""}
-                onChange={(e) => updateModeOverride(mode, e.target.value)}
-              />
-            </div>
-          ))}
-        </div>
-      </section>
 
       <section className="rounded-[1.5rem] border border-white/10 bg-[rgba(8,8,8,0.78)] p-5">
         <h2 className="text-base font-medium text-white">Pre-qualification rules (Register mode)</h2>

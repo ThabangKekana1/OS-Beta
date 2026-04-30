@@ -30,11 +30,9 @@ function scoreTone(score: number) {
 }
 
 export function AdminOverviewRoute({
-  profileName,
   email,
   agentId,
 }: {
-  profileName: string;
   email: string;
   agentId: string | null;
 }) {
@@ -96,7 +94,6 @@ export function AdminOverviewRoute({
 
       <RegistrationLinkCard
         email={email}
-        profileName={profileName}
         role="admin"
         agentId={agentId}
       />

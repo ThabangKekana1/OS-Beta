@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Menu, PanelLeftClose } from "lucide-react";
+import { SignOutButton } from "@/components/auth/SignOutButton";
 import { cn } from "@/lib/utils";
 import { BrandMarkOneOS } from "./BrandMarkOneOS";
 import { SidebarNav } from "./SidebarNav";
@@ -13,6 +14,7 @@ function SidebarContent() {
   const navItems = [
     { id: "home", label: "Home", href: "/workspace", icon: "home" as const },
     { id: "documents", label: "Documents", href: "/documents", icon: "documents" as const },
+    { id: "support", label: "Support", href: "/support", icon: "support" as const },
     { id: "profile", label: "Profile", href: "/settings", icon: "profile" as const },
   ];
 
@@ -24,8 +26,17 @@ function SidebarContent() {
       <WorkspaceSwitcher />
       <SidebarNav items={navItems} />
       <SidebarRecentCases />
-      <div className="mt-auto">
+      <div className="mt-auto space-y-4">
         <SidebarUtilityCard />
+        <div className="rounded-[1.2rem] border border-white/10 bg-white/[0.02] p-4">
+          <p className="line-label">Session</p>
+          <p className="mt-2 text-sm leading-6 text-white/58">
+            Sign out of the Dawn workspace and return to the main login screen.
+          </p>
+          <div className="mt-4">
+            <SignOutButton />
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -10,16 +10,18 @@ function loginVariantForPath(nextPath: string | null) {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string; error?: string }>;
 }) {
   // Intentionally do NOT redirect already-authed users. Visiting /login should
   // always show the form so a user can switch accounts (e.g. log out of CRM
   // and back in as a client / Dawn user).
-  const { next } = await searchParams;
+  const { next, error } = await searchParams;
   const nextPath = next && next.startsWith("/") ? next : null;
+  const initialError = error?.trim() ? error.trim() : null;
 
   return (
     <LoginForm
+      initialError={initialError}
       nextPath={nextPath}
       variant={loginVariantForPath(nextPath)}
     />

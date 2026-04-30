@@ -62,10 +62,8 @@ const navItems = [
 ] as const;
 
 export function SalesSidebar({
-  profileName,
   agentId,
 }: {
-  profileName: string;
   agentId: string | null;
 }) {
   const pathname = usePathname();
@@ -89,7 +87,7 @@ export function SalesSidebar({
 
         <div className="rounded-[1.2rem] border border-white/10 bg-white/[0.03] p-4">
           <p className="line-label">Sales Workspace</p>
-          <h2 className="mt-2 text-lg font-medium tracking-[-0.03em] text-white">{profileName}</h2>
+          <h2 className="mt-2 text-lg font-medium tracking-[-0.03em] text-white">Sales Team</h2>
           <p className="mt-2 text-sm leading-6 text-white/56">
             Dedicated sales workspace for lead qualification and client onboarding.
           </p>
@@ -140,7 +138,7 @@ export function SalesSidebar({
         <div className="mt-auto rounded-[1.2rem] border border-white/10 bg-white/[0.02] p-4">
           <p className="line-label">Session</p>
           <p className="mt-2 text-sm leading-6 text-white/58">
-            Signed in as {profileName}. Admin routes are isolated from this profile.
+            Internal sales session active. Admin routes are isolated from this workspace.
           </p>
           <div className="mt-4">
             <SignOutButton />

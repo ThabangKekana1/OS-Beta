@@ -13,7 +13,7 @@ function isMissingObjectError(error: { message?: string; statusCode?: string | n
   );
 }
 
-async function ensureBucket(bucketName: string) {
+export async function ensurePrivateBucket(bucketName: string) {
   const supabase = getSupabaseAdminClient();
 
   if (!supabase) {
@@ -46,7 +46,7 @@ export async function readJsonObject<T>(
   objectPath: string,
   normalize: JsonNormalizer<T>,
 ) {
-  const supabase = await ensureBucket(bucketName);
+  const supabase = await ensurePrivateBucket(bucketName);
 
   if (!supabase) {
     return null;
@@ -76,7 +76,7 @@ export async function writeJsonObject(
   objectPath: string,
   payload: unknown,
 ) {
-  const supabase = await ensureBucket(bucketName);
+  const supabase = await ensurePrivateBucket(bucketName);
 
   if (!supabase) {
     return false;
@@ -102,7 +102,7 @@ export async function uploadPrivateObject(
   objectPath: string,
   file: File,
 ) {
-  const supabase = await ensureBucket(bucketName);
+  const supabase = await ensurePrivateBucket(bucketName);
 
   if (!supabase) {
     return null;
@@ -127,7 +127,7 @@ export async function downloadPrivateObject(
   bucketName: string,
   objectPath: string,
 ) {
-  const supabase = await ensureBucket(bucketName);
+  const supabase = await ensurePrivateBucket(bucketName);
 
   if (!supabase) {
     return null;

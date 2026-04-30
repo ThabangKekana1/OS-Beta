@@ -44,13 +44,13 @@ export default async function AdminLayout({ children }: { children: ReactNode })
                 Admin
               </span>
               <MobileSidebarToggle>
-                <AdminSidebar profileName={session.name} email={session.email} />
+                <AdminSidebar />
               </MobileSidebarToggle>
             </div>
           </div>
         </div>
 
-        <AdminSidebar profileName={session.name} email={session.email} />
+        <AdminSidebar />
 
         <main className="min-h-screen px-4 pb-6 pt-20 lg:min-h-0 lg:px-2 lg:pb-2 lg:pt-0">
           {children}

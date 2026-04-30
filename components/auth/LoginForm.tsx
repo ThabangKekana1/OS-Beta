@@ -3,8 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
-import { resolveBrowserSiteOrigin } from "@/lib/site-url.browser";
-import { buildAuthCallbackUrl } from "@/lib/url";
 
 type LoginVariant = "admin" | "sales" | "partner" | "client";
 
@@ -60,16 +58,17 @@ const LOGIN_COPY: Record<
 export function LoginForm({
   nextPath,
   variant,
+  initialError,
 }: {
   nextPath: string | null;
   variant: LoginVariant;
+  initialError?: string | null;
 }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError ?? null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
   const copy = LOGIN_COPY[variant];
 
   const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -110,28 +109,6 @@ export function LoginForm({
     }
   };
 
-  const onGoogleClick = async () => {
-    setError(null);
-    setIsGoogleSubmitting(true);
-    try {
-      const supabase = createSupabaseBrowserClient();
-      const next = nextPath ?? "/workspace";
-      const { error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: buildAuthCallbackUrl(resolveBrowserSiteOrigin(), next),
-        },
-      });
-      if (oauthError) {
-        setError(oauthError.message);
-        setIsGoogleSubmitting(false);
-      }
-    } catch {
-      setError("Unable to start Google sign-in. Please try again.");
-      setIsGoogleSubmitting(false);
-    }
-  };
-
   return (
     <div className="grid min-h-screen w-full overflow-hidden bg-[#050505] lg:grid-cols-[1.15fr_0.85fr]">
       <section className="relative flex min-h-[50vh] items-center border-b border-white/10 px-6 py-10 sm:px-10 lg:min-h-screen lg:border-b-0 lg:border-r lg:px-14 lg:py-14">
@@ -154,22 +131,6 @@ export function LoginForm({
           <h2 className="mt-3 text-2xl font-medium tracking-[-0.04em] text-white">
             {copy.formTitle}
           </h2>
-
-          <button
-            type="button"
-            onClick={onGoogleClick}
-            disabled={isGoogleSubmitting || isSubmitting}
-            className="mt-6 flex w-full items-center justify-center gap-3 rounded-xl border border-white/18 bg-white px-3 py-2.5 text-sm font-medium text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <GoogleIcon />
-            {isGoogleSubmitting ? "Redirecting…" : "Continue with Google"}
-          </button>
-
-          <div className="my-6 flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/35">
-            <span className="h-px flex-1 bg-white/10" />
-            or
-            <span className="h-px flex-1 bg-white/10" />
-          </div>
 
           <form className="space-y-5" onSubmit={onSubmit}>
             <div>
@@ -212,7 +173,7 @@ export function LoginForm({
 
             <button
               type="submit"
-              disabled={isSubmitting || isGoogleSubmitting}
+              disabled={isSubmitting}
               className="w-full rounded-xl border border-white/18 bg-white/95 px-3 py-2.5 text-sm font-medium text-black transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSubmitting ? "Signing in..." : "Sign in"}
@@ -232,28 +193,5 @@ export function LoginForm({
         </div>
       </section>
     </div>
-  );
-}
-
-function GoogleIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
-      <path
-        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.76h3.55c2.08-1.92 3.29-4.74 3.29-8.09Z"
-        fill="#4285F4"
-      />
-      <path
-        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.55-2.76c-.98.66-2.24 1.06-3.73 1.06-2.87 0-5.3-1.94-6.17-4.55H2.18v2.84A11 11 0 0 0 12 23Z"
-        fill="#34A853"
-      />
-      <path
-        d="M5.83 14.09a6.6 6.6 0 0 1 0-4.18V7.07H2.18a11 11 0 0 0 0 9.86l3.65-2.84Z"
-        fill="#FBBC05"
-      />
-      <path
-        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.18 7.07l3.65 2.84C6.7 7.32 9.13 5.38 12 5.38Z"
-        fill="#EA4335"
-      />
-    </svg>
   );
 }

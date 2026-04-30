@@ -1,4 +1,5 @@
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
+import { buildClientEoiSigningUrl } from "@/lib/eoi-signing";
 import { createNotification } from "@/lib/notifications";
 
 const TABLE = "oneos_registration_drafts";
@@ -378,6 +379,7 @@ export async function advanceRegistration(input: {
   draft: RegistrationDraft | null;
   noteForUser: string | null;
   submittedLeadId?: string;
+  submittedEoiSigningToken?: string | null;
   disqualified?: { reason: string };
   extracted: RegistrationFields;
 }> {
@@ -385,7 +387,25 @@ export async function advanceRegistration(input: {
 
   const existing = await loadRegistrationDraft(input.workspaceId);
   if (existing && (existing.status === "submitted" || existing.status === "disqualified")) {
-    return { draft: existing, noteForUser: null, extracted: {} };
+    let noteForUser: string | null = null;
+    let submittedEoiSigningToken: string | null = null;
+
+    if (existing.status === "submitted" && existing.completedLeadId) {
+      const { readAdminStateSnapshot } = await import("@/lib/admin-state-store");
+      const { snapshot } = await readAdminStateSnapshot();
+      const lead = snapshot.leads.find((entry) => entry.id === existing.completedLeadId) ?? null;
+      submittedEoiSigningToken = lead?.eoiSigningToken ?? null;
+      if (submittedEoiSigningToken) {
+        noteForUser = `You're registered. Your case reference is ${existing.completedLeadId}. Your Expression of Interest is ready to sign here: ${buildClientEoiSigningUrl(submittedEoiSigningToken)}. Please sign it now, then come back here so we can continue into qualification.`;
+      }
+    }
+
+    return {
+      draft: existing,
+      noteForUser,
+      submittedEoiSigningToken,
+      extracted: {},
+    };
   }
 
   const currentFields = existing?.fields ?? {};
@@ -484,8 +504,9 @@ export async function advanceRegistration(input: {
       disqualificationReason: null,
       updatedAt: new Date().toISOString(),
     },
-    noteForUser: `You're registered. Your case reference is ${submitted.leadId}. Foundation-1 will be in touch shortly with your Expression of Interest to sign.`,
+    noteForUser: `You're registered. Your case reference is ${submitted.leadId}. Your Expression of Interest is ready to sign here: ${buildClientEoiSigningUrl(submitted.eoiSigningToken)}. Please sign it now, then come back here so we can continue into qualification.`,
     submittedLeadId: submitted.leadId,
+    submittedEoiSigningToken: submitted.eoiSigningToken,
     extracted,
   };
 }
@@ -495,14 +516,29 @@ function businessNameFromDraft(draft: RegistrationDraft | null) {
   return name && name.length > 0 ? name : "your business";
 }
 
+function looksLikeRequirementsQuestion(message?: string | null) {
+  if (!message) {
+    return false;
+  }
+
+  return /\b(what do you need|what do i need|what is needed|what's needed|what information|what details|what else|what still|what more|required|requirements?)\b/i.test(
+    message,
+  );
+}
+
+function formatMissingFieldSummary(fields: RegistrationFields) {
+  return missingFields(fields).map((field) => `- ${FIELD_PROMPTS[field]}`).join("\n");
+}
+
 export function buildRegistrationReply(input: {
   draft: RegistrationDraft | null;
   extracted: RegistrationFields;
   prequal: Prequalification;
   submittedLeadId?: string;
   fallbackNote?: string | null;
+  latestUser?: string | null;
 }): string {
-  const { draft, extracted, fallbackNote, submittedLeadId } = input;
+  const { draft, extracted, fallbackNote, latestUser, submittedLeadId } = input;
 
   if (!draft) {
     return "I couldn't access your registration state right now. Please send that again and I'll continue.";
@@ -514,15 +550,29 @@ export function buildRegistrationReply(input: {
 
   if (draft.status === "submitted") {
     const leadId = submittedLeadId ?? draft.completedLeadId;
-    return `You're registered. Your case reference is ${leadId ?? "pending"}. Foundation-1 will issue your Expression of Interest next, then we can move into qualification.`;
+    return (
+      fallbackNote?.trim() ||
+      `You're registered. Your case reference is ${leadId ?? "pending"}. Your Expression of Interest is the next step before qualification can continue.`
+    );
   }
 
-  const nextField = missingFields(draft.fields)[0];
+  const pendingFields = missingFields(draft.fields);
+  const nextField = pendingFields[0];
   if (!nextField) {
     return fallbackNote?.trim() || `I have all the information I need for ${businessNameFromDraft(draft)}. I'm saving it now.`;
   }
 
   const acknowledgedFields = Object.keys(extracted);
+  if (looksLikeRequirementsQuestion(latestUser)) {
+    return `I can handle the registration here for ${businessNameFromDraft(draft)}. To complete it, I still need:\n${formatMissingFieldSummary(
+      draft.fields,
+    )}\n\nLet's start with this: ${FIELD_QUESTIONS[nextField]}`;
+  }
+
+  if (acknowledgedFields.length === 0 && pendingFields.length === REQUIRED_FIELDS.length) {
+    return `I can handle the registration here for ${businessNameFromDraft(draft)}. I'll collect the business details step by step and save them directly into 1OS.\n\n${FIELD_QUESTIONS[nextField]}`;
+  }
+
   const preface =
     acknowledgedFields.length > 0
       ? `Noted for ${businessNameFromDraft(draft)}.`
@@ -534,7 +584,7 @@ export function buildRegistrationReply(input: {
 async function submitConversationalRegistration(
   _workspaceId: string,
   fields: RegistrationFields,
-): Promise<{ leadId: string; clientProfileId: string } | null> {
+): Promise<{ leadId: string; clientProfileId: string; eoiSigningToken: string | null } | null> {
   try {
     const { buildAdminLeadFromClientRegistration, defaultOwnerIdForRegistration } = await import(
       "@/lib/client-registration"
@@ -578,7 +628,11 @@ async function submitConversationalRegistration(
       "agent-conversational-registration",
     );
 
-    return { leadId: created.leadId, clientProfileId: created.clientProfileId };
+    return {
+      leadId: created.leadId,
+      clientProfileId: created.clientProfileId,
+      eoiSigningToken: created.lead.eoiSigningToken,
+    };
   } catch (err) {
     console.error("[registration-agent] submit failed", err);
     return null;

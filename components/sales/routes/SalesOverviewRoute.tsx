@@ -39,11 +39,9 @@ function countLeadsWithDocumentInPeriod(
 }
 
 export function SalesOverviewRoute({
-  profileName,
   email,
   agentId,
 }: {
-  profileName: string;
   email: string;
   agentId: string | null;
 }) {
@@ -104,14 +102,13 @@ export function SalesOverviewRoute({
     <div className="space-y-6 pb-8">
       <AdminHeader
         eyebrow="Sales Dashboard"
-        title={`Welcome, ${profileName}`}
+        title="Sales Dashboard"
         description="This dashboard is isolated to your sales profile so you can focus on your client book and onboarding progress."
         actions={<AdminBadge label={`${openClients.length} Active Clients`} tone="bright" />}
       />
 
       <RegistrationLinkCard
         email={email}
-        profileName={profileName}
         role="sales"
         agentId={agentId}
       />

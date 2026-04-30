@@ -1,5 +1,4 @@
 import {
-  conversationModes,
   migrationStages,
   type BusinessLocation,
   type MigrationCase,
@@ -39,7 +38,6 @@ function seedLocation(
 
 export const ACTIVE_USER_NAME = "Karman";
 export const MIGRATION_STAGES = migrationStages;
-export const CONVERSATION_MODES = conversationModes;
 
 export const WORKSPACE_OPTIONS: WorkspaceOption[] = [
   {

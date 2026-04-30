@@ -4,12 +4,7 @@ import { AdminHeader } from "@/components/admin/AdminPrimitives";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 
 export function SalesSettingsRoute({
-  profileName,
-  email,
-}: {
-  profileName: string;
-  email: string;
-}) {
+}: Record<string, never>) {
   return (
     <div className="space-y-6 pb-8">
       <AdminHeader
@@ -20,9 +15,10 @@ export function SalesSettingsRoute({
 
       <section className="grid gap-4 md:grid-cols-2">
         <article className="rounded-2xl border border-white/12 bg-white/[0.03] p-4">
-          <p className="line-label">Current profile</p>
-          <p className="mt-2 text-lg text-white">{profileName}</p>
-          <p className="mt-1 text-sm text-white/58">{email}</p>
+          <p className="line-label">Workspace Access</p>
+          <p className="mt-2 text-sm text-white/58">
+            This workspace is limited to sales routes and shared pipeline actions.
+          </p>
         </article>
 
         <article className="rounded-2xl border border-white/12 bg-white/[0.03] p-4">
