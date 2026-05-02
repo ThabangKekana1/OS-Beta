@@ -15,6 +15,11 @@ import {
 } from "@/lib/registration-agent";
 
 export const runtime = "nodejs";
+// Allow up to 60s on Vercel Pro so model calls (and registration extractor)
+// have time to finish. On Hobby this is silently capped at 10s — if you see
+// the fallback message in production with no provider error logged, the plan
+// tier is the cause. Upgrade to Pro or shorten the model timeouts below.
+export const maxDuration = 60;
 
 function normalizeEnv(value?: string) {
   if (!value) return "";
@@ -26,7 +31,23 @@ function isTruthyEnv(value?: string) {
   return ["1", "true", "yes", "on"].includes(value.toLowerCase());
 }
 
+function resolveGoogleApiKey() {
+  // Accept any of the common env var names so a misnamed key in Vercel still works.
+  return (
+    normalizeEnv(process.env.GOOGLE_API_KEY) ||
+    normalizeEnv(process.env.GEMINI_API_KEY) ||
+    normalizeEnv(process.env.GOOGLE_GENERATIVE_AI_API_KEY) ||
+    normalizeEnv(process.env.NEXT_PUBLIC_GOOGLE_API_KEY)
+  );
+}
+
 const DEFAULT_GOOGLE_MODEL = "gemini-2.5-flash";
+const FALLBACK_GOOGLE_MODELS = [
+  "gemini-2.5-flash",
+  "gemini-flash-latest",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash",
+];
 const GOOGLE_MODEL = normalizeEnv(process.env.GOOGLE_MODEL) || DEFAULT_GOOGLE_MODEL;
 const DEBUG_AGENT_MODE =
   isTruthyEnv(normalizeEnv(process.env.DEBUG_AGENT_MODE)) ||
@@ -487,13 +508,14 @@ async function fetchWithTimeout(
   }
 }
 
-async function callGoogle(
+async function callGoogleOnce(
+  model: string,
   system: string,
   turns: ChatTurn[],
   apiKey: string,
 ): Promise<GoogleCallSuccess | GoogleCallFailure> {
   try {
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GOOGLE_MODEL}:generateContent?key=${apiKey}`;
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     const contents = turns.map((turn) => ({
       role: turn.role === "assistant" ? "model" : "user",
       parts: [{ text: turn.content }],
@@ -513,13 +535,14 @@ async function callGoogle(
           },
         }),
       },
-      40_000,
+      45_000,
     );
 
     if (!response.ok) {
+      const body = (await response.text()).slice(0, 400);
       return {
         ok: false,
-        error: `Google API ${response.status}: ${(await response.text()).slice(0, 200)}`,
+        error: `Google API ${response.status} (model=${model}): ${body}`,
         status: response.status,
       };
     }
@@ -531,7 +554,7 @@ async function callGoogle(
       }>;
     };
     const reply = extractGoogleText(responseJson);
-    if (!reply) return { ok: false, error: "Empty response from Google API" };
+    if (!reply) return { ok: false, error: `Empty response from Google API (model=${model})` };
     return {
       ok: true,
       reply,
@@ -543,9 +566,61 @@ async function callGoogle(
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Unable to reach Google API",
+      error:
+        err instanceof Error
+          ? `${err.name}: ${err.message} (model=${model})`
+          : `Unable to reach Google API (model=${model})`,
     };
   }
+}
+
+async function callGoogle(
+  system: string,
+  turns: ChatTurn[],
+  apiKey: string,
+): Promise<GoogleCallSuccess | GoogleCallFailure> {
+  // Try the configured model first, then fall back to other Gemini models if
+  // we hit a 404 "model not found" or 400 "unsupported model". Retry once on
+  // transient 5xx / timeout errors before giving up.
+  const tried: string[] = [];
+  const candidates = [
+    GOOGLE_MODEL,
+    ...FALLBACK_GOOGLE_MODELS.filter((m) => m !== GOOGLE_MODEL),
+  ];
+
+  let lastFailure: GoogleCallFailure | null = null;
+  for (const model of candidates) {
+    let attempt = await callGoogleOnce(model, system, turns, apiKey);
+    // One retry for transient failures.
+    if (
+      !attempt.ok &&
+      (attempt.status === undefined || attempt.status >= 500 || attempt.status === 429)
+    ) {
+      attempt = await callGoogleOnce(model, system, turns, apiKey);
+    }
+
+    if (attempt.ok) {
+      if (tried.length > 0) {
+        console.warn(
+          `[chat] Google model "${GOOGLE_MODEL}" failed (${tried.join(", ")}), succeeded with "${model}"`,
+        );
+      }
+      return attempt;
+    }
+
+    lastFailure = attempt;
+    tried.push(`${model}->${attempt.status ?? "err"}`);
+
+    // Only fall through to the next model on "model not found / unsupported".
+    const shouldTryNextModel =
+      attempt.status === 404 ||
+      (attempt.status === 400 && /model|not\s*found|unsupported/i.test(attempt.error));
+    if (!shouldTryNextModel) {
+      break;
+    }
+  }
+
+  return lastFailure ?? { ok: false, error: "Unknown Google API failure" };
 }
 
 function replyLooksTruncated(reply: string) {
@@ -652,8 +727,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const googleApiKey = normalizeEnv(process.env.GOOGLE_API_KEY);
+  const googleApiKey = resolveGoogleApiKey();
   if (!googleApiKey) {
+    console.error("[chat] No Google API key configured (checked GOOGLE_API_KEY, GEMINI_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY)");
     return NextResponse.json(
       { error: "Chat unavailable: GOOGLE_API_KEY is not configured." },
       { status: 503 },
@@ -875,9 +951,14 @@ export async function POST(request: NextRequest) {
   const result = await callGoogle(system, turns, googleApiKey);
 
   if (!result.ok) {
+    // Always log the underlying provider error to Vercel logs so it can be
+    // diagnosed without poking around the network tab.
+    console.error("[chat] Google API call failed:", result.error);
+    const showDetails = DEBUG_AGENT_MODE || session.role === "admin";
+    const detailSuffix = showDetails ? `\n\n(debug: ${result.error})` : "";
     return NextResponse.json({
       reply:
-        "I could not get a model response right now. Please retry in a moment and I will continue from the same context.",
+        `I could not get a model response right now. Please retry in a moment and I will continue from the same context.${detailSuffix}`,
       source: "fallback",
       degraded: true,
       providerFailureSummary: result.error,
