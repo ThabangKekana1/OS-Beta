@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAdminPortal } from "@/components/admin/AdminPortalProvider";
 import { AdminBadge, AdminHeader } from "@/components/admin/AdminPrimitives";
 import { RegistrationLinkCard } from "@/components/registration/RegistrationLinkCard";
+import { isSignupShellLead } from "@/lib/client-registration";
 import {
   DEAL_VALUE_ZAR,
   isEoiDeal,
@@ -36,7 +37,7 @@ export function AdminOverviewRoute({
   email: string;
   agentId: string | null;
 }) {
-  const { leads, salesLeads, leadStages, salesLeadQualificationStages, agents } =
+  const { leads, salesLeads, registrationDrafts, leadStages, salesLeadQualificationStages, agents } =
     useAdminPortal();
   const eoiLeads = leads.filter(isEoiDeal);
   const periods = getStatisticsPeriods();
@@ -61,6 +62,7 @@ export function AdminOverviewRoute({
   const salesLeadsInPeriod = salesLeads.filter((lead) =>
     isWithinStatisticsPeriod(lead.lastUpdatedAt, selectedPeriod),
   );
+  const recentSignupLeads = leads.filter(isSignupShellLead).slice(0, 5);
 
   const selectedStats = [
     ["EOIs", String(eoiSignedLeads.length)],
@@ -85,6 +87,7 @@ export function AdminOverviewRoute({
           actions={
             <div className="flex flex-wrap gap-2">
               <AdminBadge label={`${eoiLeads.length} EOI Deals`} />
+              <AdminBadge label={`${registrationDrafts.length} Registrations In Progress`} tone="muted" />
               <AdminBadge label={`${agents.length} Team Members`} tone="muted" />
               <AdminBadge label={`${toCurrency(DEAL_VALUE_ZAR)} / Deal`} tone="muted" />
             </div>
@@ -140,6 +143,67 @@ export function AdminOverviewRoute({
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="app-surface rounded-[2rem] p-5">
+          <div className="flex items-center justify-between">
+            <p className="line-label">Registrations In Progress</p>
+            <AdminBadge label={String(registrationDrafts.length)} tone="muted" />
+          </div>
+          <div className="mt-4 flex flex-col gap-3">
+            {registrationDrafts.length === 0 ? (
+              <div className="rounded-[1rem] border border-white/10 bg-black/40 px-4 py-4 text-sm text-white/54">
+                No active registration drafts.
+              </div>
+            ) : (
+              registrationDrafts.slice(0, 5).map((draft) => (
+                <div
+                  key={draft.workspaceId}
+                  className="rounded-[1rem] border border-white/10 bg-black/40 px-4 py-4"
+                >
+                  <p className="text-sm font-medium text-white">
+                    {draft.fields.businessName?.trim() || "Unnamed business"}
+                  </p>
+                  <p className="mt-1 text-xs text-white/42">
+                    {draft.fields.contactFirstName || draft.fields.contactSurname
+                      ? `${draft.fields.contactFirstName ?? ""} ${draft.fields.contactSurname ?? ""}`.trim()
+                      : "Contact not fully captured"}
+                    {draft.fields.contactEmail ? ` • ${draft.fields.contactEmail}` : ""}
+                  </p>
+                  <p className="mt-2 text-xs uppercase tracking-[0.18em] text-amber-200/80">
+                    Updated {new Date(draft.updatedAt).toLocaleString("en-ZA")}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="app-surface rounded-[2rem] p-5">
+          <div className="flex items-center justify-between">
+            <p className="line-label">Recent Client Signups</p>
+            <AdminBadge label={String(recentSignupLeads.length)} tone="muted" />
+          </div>
+          <div className="mt-4 flex flex-col gap-3">
+            {recentSignupLeads.length === 0 ? (
+              <div className="rounded-[1rem] border border-white/10 bg-black/40 px-4 py-4 text-sm text-white/54">
+                No recent account signups waiting for business details.
+              </div>
+            ) : (
+              recentSignupLeads.map((lead) => (
+                <div
+                  key={lead.id}
+                  className="rounded-[1rem] border border-white/10 bg-black/40 px-4 py-4"
+                >
+                  <p className="text-sm font-medium text-white">{lead.contactName}</p>
+                  <p className="mt-1 text-xs text-white/42">{lead.userProfile.email}</p>
+                  <p className="mt-2 text-xs uppercase tracking-[0.18em] text-sky-200/80">
+                    {lead.stage} • {lead.company}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
         <div className="app-surface rounded-[2rem] p-5">
           <div className="flex items-center justify-between">
             <p className="line-label">Pipeline Snapshot</p>

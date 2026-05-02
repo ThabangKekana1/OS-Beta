@@ -6,6 +6,7 @@ export type Prequalification = {
   minMonthlySpendZar: number;
   requireRegistered: boolean;
   requireOperational: boolean;
+  requireSixMonthHistory: boolean;
   softDisqualifyMessage: string;
 };
 
@@ -27,9 +28,10 @@ const BUCKET = "oneos-internal-state";
 const OBJECT_PATH = "admin/agent-config-v1.json";
 
 const DEFAULT_PREQUAL: Prequalification = {
-  minMonthlySpendZar: 5000,
+  minMonthlySpendZar: 10000,
   requireRegistered: true,
   requireOperational: true,
+  requireSixMonthHistory: true,
   softDisqualifyMessage:
     "Based on what you have shared, your business may not be a fit for Generocity right now. A Foundation-1 specialist will reach out within one business day to talk through alternatives like Lumen-1.",
 };
@@ -45,6 +47,24 @@ const EMPTY: AgentConfig = {
   updatedAt: null,
   updatedBy: null,
 };
+
+function normalizePrequalification(
+  raw: Partial<Prequalification> | null | undefined,
+): Prequalification {
+  return {
+    minMonthlySpendZar:
+      typeof raw?.minMonthlySpendZar === "number"
+        ? Math.max(DEFAULT_PREQUAL.minMonthlySpendZar, Math.round(raw.minMonthlySpendZar))
+        : DEFAULT_PREQUAL.minMonthlySpendZar,
+    requireRegistered: true,
+    requireOperational: true,
+    requireSixMonthHistory: true,
+    softDisqualifyMessage:
+      typeof raw?.softDisqualifyMessage === "string" && raw.softDisqualifyMessage.trim()
+        ? raw.softDisqualifyMessage
+        : DEFAULT_PREQUAL.softDisqualifyMessage,
+  };
+}
 
 function isMissingRelationError(error: { code?: string; message?: string } | null) {
   const message = error?.message?.toLowerCase() ?? "";
@@ -89,24 +109,7 @@ function normalizeAgentConfig(input: unknown): AgentConfig | null {
               .map(([k, v]) => [k, String(v)]),
           )
         : {},
-    prequalification: {
-      minMonthlySpendZar:
-        typeof prequalRaw?.minMonthlySpendZar === "number"
-          ? prequalRaw.minMonthlySpendZar
-          : DEFAULT_PREQUAL.minMonthlySpendZar,
-      requireRegistered:
-        typeof prequalRaw?.requireRegistered === "boolean"
-          ? prequalRaw.requireRegistered
-          : DEFAULT_PREQUAL.requireRegistered,
-      requireOperational:
-        typeof prequalRaw?.requireOperational === "boolean"
-          ? prequalRaw.requireOperational
-          : DEFAULT_PREQUAL.requireOperational,
-      softDisqualifyMessage:
-        typeof prequalRaw?.softDisqualifyMessage === "string" && prequalRaw.softDisqualifyMessage.trim()
-          ? prequalRaw.softDisqualifyMessage
-          : DEFAULT_PREQUAL.softDisqualifyMessage,
-    },
+    prequalification: normalizePrequalification(prequalRaw),
     updatedAt: typeof typed.updatedAt === "string" && typed.updatedAt ? typed.updatedAt : null,
     updatedBy: typeof typed.updatedBy === "string" && typed.updatedBy ? typed.updatedBy : null,
   };
@@ -139,24 +142,7 @@ export async function loadAgentConfig(): Promise<AgentConfig> {
   }
 
   const prequalRaw = data.prequalification as Partial<Prequalification> | null;
-  const prequalification: Prequalification = {
-    minMonthlySpendZar:
-      typeof prequalRaw?.minMonthlySpendZar === "number"
-        ? prequalRaw.minMonthlySpendZar
-        : DEFAULT_PREQUAL.minMonthlySpendZar,
-    requireRegistered:
-      typeof prequalRaw?.requireRegistered === "boolean"
-        ? prequalRaw.requireRegistered
-        : DEFAULT_PREQUAL.requireRegistered,
-    requireOperational:
-      typeof prequalRaw?.requireOperational === "boolean"
-        ? prequalRaw.requireOperational
-        : DEFAULT_PREQUAL.requireOperational,
-    softDisqualifyMessage:
-      typeof prequalRaw?.softDisqualifyMessage === "string" && prequalRaw.softDisqualifyMessage.trim()
-        ? prequalRaw.softDisqualifyMessage
-        : DEFAULT_PREQUAL.softDisqualifyMessage,
-  };
+  const prequalification = normalizePrequalification(prequalRaw);
 
   return {
     systemPrompt: data.system_prompt ? String(data.system_prompt) : null,
@@ -198,7 +184,9 @@ export async function saveAgentConfig(
     escalation_triggers: patch.escalationTriggers ?? current.escalationTriggers,
     tone: patch.tone ?? current.tone,
     mode_overrides: patch.modeOverrides ?? current.modeOverrides,
-    prequalification: patch.prequalification ?? current.prequalification,
+    prequalification: normalizePrequalification(
+      patch.prequalification ?? current.prequalification,
+    ),
     updated_at: new Date().toISOString(),
     updated_by: updatedBy,
   };
@@ -236,9 +224,8 @@ export async function saveAgentConfig(
  * 2. Tone directive.
  * 3. Onboarding playbook.
  * 4. Hard guardrails (never-say + escalation triggers).
- * 5. Active-mode override (if any).
  */
-export function composeSystemPrompt(config: AgentConfig, mode: string | null): string {
+export function composeSystemPrompt(config: AgentConfig): string {
   const sections: string[] = [];
 
   sections.push(config.systemPrompt?.trim() || FOUNDATION_ASSISTANT_SYSTEM_PROMPT);
@@ -261,11 +248,6 @@ export function composeSystemPrompt(config: AgentConfig, mode: string | null): s
     sections.push(
       `Escalation triggers — if the user mentions any of these, stop advising and tell them a human team member will be in touch within one business day:\n- ${config.escalationTriggers.join("\n- ")}`,
     );
-  }
-
-  const modeKey = (mode ?? "").trim();
-  if (modeKey && config.modeOverrides[modeKey]) {
-    sections.push(`Mode-specific instruction (${modeKey}):\n${config.modeOverrides[modeKey].trim()}`);
   }
 
   return sections.filter(Boolean).join("\n\n");

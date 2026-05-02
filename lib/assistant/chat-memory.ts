@@ -1,11 +1,11 @@
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 
-export type ChatTurn = {
+type ChatTurn = {
   role: "user" | "assistant";
   content: string;
 };
 
-export type ChatMemory = {
+type ChatMemory = {
   workspaceId: string;
   facts: string[];
   summary: string | null;
@@ -77,7 +77,7 @@ export async function loadRecentTranscript(
     .reverse();
 }
 
-export type LogTurnInput = {
+type LogTurnInput = {
   workspaceId: string;
   caseId: string | null;
   caseName: string | null;
@@ -114,7 +114,7 @@ export async function logChatTurn(input: LogTurnInput): Promise<void> {
   });
 }
 
-export async function appendMemoryFacts(
+async function appendMemoryFacts(
   workspaceId: string,
   facts: string[],
 ): Promise<void> {
@@ -133,7 +133,7 @@ export async function appendMemoryFacts(
     .upsert({ workspace_id: workspaceId, facts: merged, summary: existing?.summary ?? null });
 }
 
-export async function updateMemorySummary(
+async function updateMemorySummary(
   workspaceId: string,
   summary: string,
 ): Promise<void> {

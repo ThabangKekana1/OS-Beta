@@ -1,5 +1,4 @@
 import {
-  migrationStages,
   type BusinessLocation,
   type MigrationCase,
   type ResourceItem,
@@ -37,7 +36,6 @@ function seedLocation(
 }
 
 export const ACTIVE_USER_NAME = "Karman";
-export const MIGRATION_STAGES = migrationStages;
 
 export const WORKSPACE_OPTIONS: WorkspaceOption[] = [
   {
@@ -149,7 +147,7 @@ const baseChecklist = [
   { id: "close", label: "Migration completed", complete: false },
 ];
 
-export const INITIAL_CASES: MigrationCase[] = [
+const INITIAL_CASES: MigrationCase[] = [
   {
     id: "volt-flow",
     business: {
@@ -199,7 +197,7 @@ export const INITIAL_CASES: MigrationCase[] = [
         id: "vf-message-2",
         type: "user",
         timestamp: "09:16",
-        mode: "Qualify",
+        mode: "Onboarding",
         content:
           "We want the zero-capex path if the site qualifies. What do you need from us first?",
       },
@@ -340,7 +338,7 @@ export const INITIAL_CASES: MigrationCase[] = [
       {
         id: "fcrm-message-3",
         type: "user",
-        mode: "Proposal Support",
+        mode: "Onboarding",
         timestamp: "11:18",
         content: "Show me the savings range and the key commitments again.",
       },
@@ -641,7 +639,7 @@ export const INITIAL_CASES: MigrationCase[] = [
       {
         id: "clover-message-2",
         type: "user",
-        mode: "Migrate",
+        mode: "Onboarding",
         timestamp: "08:39",
         content:
           "Please guide me through creating and signing the EOI first.",

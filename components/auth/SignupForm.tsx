@@ -140,7 +140,7 @@ export function SignupForm() {
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 className="admin-input w-full rounded-xl px-3 py-2.5 text-sm"
-                placeholder="you@example.com"
+                placeholder="adalove@email.com"
                 autoComplete="email"
                 required
               />

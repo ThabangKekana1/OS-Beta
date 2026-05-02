@@ -4,9 +4,11 @@ import { loadAgentConfig, composeSystemPrompt, type AgentConfig } from "@/lib/as
 import type { AdminLead } from "@/lib/admin-types";
 import { getLatestExtractedText } from "@/lib/case-documents";
 import { resolveClientOnboardingLead } from "@/lib/client-onboarding";
-import { buildClientEoiSigningUrl } from "@/lib/eoi-signing";
+import { isSignupShellLead } from "@/lib/client-registration";
+import { buildClientEoiSigningPath, buildClientEoiSigningUrl } from "@/lib/eoi-signing";
 import {
   advanceRegistration,
+  buildRegistrationStatePrompt,
   buildRegistrationReply,
   loadRegistrationDraft,
   type RegistrationDraft,
@@ -36,7 +38,6 @@ type ChatPayload = {
   caseName?: string;
   workspaceId?: string;
   caseId?: string;
-  mode?: string;
   history?: Array<{ role?: string; content?: string }>;
 };
 
@@ -53,11 +54,6 @@ type GoogleCallFailure = {
   error: string;
   status?: number;
 };
-
-function normalizeModeValue(mode?: string | null) {
-  const normalized = (mode ?? "").trim();
-  return normalized.length > 0 ? normalized : null;
-}
 
 function messageMatches(message: string, pattern: RegExp) {
   return pattern.test(message);
@@ -77,41 +73,79 @@ function looksLikeRequirementsQuestion(message: string) {
   );
 }
 
-function looksLikeQualificationIntent(message: string) {
-  return messageMatches(
-    message,
-    /\b(do i qualify|qualif(?:y|ies|ication)|eligible|eligibility)\b/i,
+function looksLikeRegistrationData(message: string) {
+  const patterns = [
+    /\b\d{4}\/\d{6}\/\d{2}\b/i,
+    /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i,
+    /\b(?:\+27|0)\d{9}\b/,
+    /\bR\s?\d[\d,.]*/i,
+    /\b(?:registered|operational|cipc)\b/i,
+    /\b(?:utility bill|utility bills|prepaid receipt|prepaid receipts|electricity spend|monthly spend|6 months?)\b/i,
+    /\b(?:gauteng|western cape|kwazulu-natal|eastern cape|free state|limpopo|mpumalanga|north west|northern cape)\b/i,
+    /\b(?:registration number|industry|contact email|contact number|physical address|city|province)\b/i,
+    /\b(?:founder|director|owner|manager|operations|ceo|cfo)\b/i,
+  ];
+  const signalCount = patterns.reduce(
+    (count, pattern) => count + (pattern.test(message) ? 1 : 0),
+    0,
+  );
+  const separatorCount = (message.match(/[;,]/g) ?? []).length;
+
+  return signalCount >= 2 || (signalCount >= 1 && separatorCount >= 3);
+}
+
+function assistantRecentlyAskedForRegistration(turns: ChatTurn[]) {
+  const lastAssistantMessage =
+    [...turns].reverse().find((turn) => turn.role === "assistant")?.content ?? "";
+
+  return /\b(register|registration|expression of interest|eoi|cipc|registered|operational|business registration number|industry|contact email|contact number|physical address|city|province|monthly electricity spend|prepaid receipts|utility bills)\b/i.test(
+    lastAssistantMessage,
   );
 }
 
-function looksLikeProposalIntent(message: string) {
-  return messageMatches(message, /\bproposal\b/i);
-}
-
-function looksLikeTermSheetIntent(message: string) {
-  return messageMatches(message, /\bterm sheet\b/i);
-}
-
-function looksLikeDocumentIntent(message: string) {
-  return messageMatches(
-    message,
-    /\b(document|documents|expression of interest|eoi|utility bill|upload|signed proposal|signed term sheet)\b/i,
+function recentConversationLooksLikeRegistration(turns: ChatTurn[]) {
+  const recentTurns = turns.slice(-6);
+  const assistantAsked = recentTurns.some(
+    (turn) => turn.role === "assistant" && assistantRecentlyAskedForRegistration([turn]),
   );
+  const userProvidedData = recentTurns.some(
+    (turn) => turn.role === "user" && looksLikeRegistrationData(turn.content),
+  );
+
+  return assistantAsked && userProvidedData;
 }
 
-function inferConversationMode(input: {
-  explicitMode: string | null;
+function shouldRunRegistrationFlow(input: {
   message: string;
   registrationDraftStatus: "in_progress" | "submitted" | "disqualified" | "abandoned" | null;
+  history: ChatTurn[];
+  onboardingLead: AdminLead | null;
 }) {
-  const explicitMode = normalizeModeValue(input.explicitMode);
+  // Once the EOI has been signed in admin, registration is conclusively done —
+  // never re-enter the registration extractor flow. Utility-bill collection and
+  // beyond are handled by the general chat path with a tailored onboarding note.
+  if (input.onboardingLead?.eoiSignedAt) {
+    return false;
+  }
 
-  if (explicitMode && explicitMode !== "Migrate") {
-    return explicitMode;
+  const hasRegistrationData = looksLikeRegistrationData(input.message);
+  const registrationContinuation =
+    hasRegistrationData && assistantRecentlyAskedForRegistration(input.history);
+  const statusFollowUpAfterRegistration =
+    recentConversationLooksLikeRegistration(input.history) &&
+    /\b(is it ready|ready|next step|status|what now|continue|done|submitted)\b/i.test(
+      input.message,
+    );
+
+  // Force the registration extractor for any client whose admin record is still
+  // a signup shell (pre-qualification has not even started). This guarantees
+  // Dawn's very first reply asks the prequal questions instead of small talk.
+  if (input.onboardingLead && isSignupShellLead(input.onboardingLead)) {
+    return true;
   }
 
   if (input.registrationDraftStatus === "in_progress") {
-    return "Register";
+    return true;
   }
 
   if (
@@ -120,33 +154,62 @@ function inferConversationMode(input: {
       looksLikeRequirementsQuestion(input.message) ||
       /\b(next step|status|expression of interest|eoi)\b/i.test(input.message))
   ) {
-    return "Register";
+    return true;
   }
 
-  if (looksLikeRegistrationIntent(input.message)) {
-    return "Register";
+  if (
+    looksLikeRegistrationIntent(input.message) ||
+    registrationContinuation ||
+    hasRegistrationData ||
+    statusFollowUpAfterRegistration
+  ) {
+    return true;
   }
 
-  if (looksLikeQualificationIntent(input.message)) {
-    return "Qualify";
+  if (
+    input.onboardingLead &&
+    !input.onboardingLead.eoiSignedAt &&
+    /\b(eoi|expression of interest|sign|signed|ready|documents|document section|utility bill|upload)\b/i.test(
+      input.message,
+    )
+  ) {
+    return true;
   }
 
-  if (looksLikeProposalIntent(input.message)) {
-    return "Proposal Support";
+  if (
+    input.onboardingLead &&
+    isSignupShellLead(input.onboardingLead) &&
+    /\b(next step|what now|continue|start|get started)\b/i.test(input.message)
+  ) {
+    return true;
   }
 
-  if (looksLikeTermSheetIntent(input.message)) {
-    return "Term Sheet Support";
-  }
-
-  if (looksLikeDocumentIntent(input.message)) {
-    return "Review Documents";
-  }
-
-  return explicitMode ?? "Migrate";
+  return false;
 }
 
-function buildSystemPrompt(
+function buildSystemPrompt(agentConfig: AgentConfig) {
+  const sections = [composeSystemPrompt(agentConfig)];
+  void FOUNDATION_ASSISTANT_SYSTEM_PROMPT;
+  sections.push(
+    [
+      "Primary operational objective:",
+      "- Successfully onboard the client.",
+      "- Educate the client about Foundation-1's products whenever they ask, especially Generocity and Lumen-1.",
+      "- Explain proposals and term sheets clearly in plain English when those documents are available or the client asks about them.",
+      "- Before collecting full registration details, first confirm that the business is CIPC-registered, operational, spending at least R10,000 per month on electricity, and has access to 6 months of utility bills or prepaid receipts.",
+      "- Collect and save the registration details.",
+      "- Once registration is complete, direct the client to sign the EOI generated by the system in their documents flow.",
+      "- Once the EOI is signed, collect the latest 6 months of utility bills.",
+      "- After utility bills are in, explain that the allocated sales agent will handle the remaining documentation.",
+      "- Answer the client's questions directly, then bring them back to the next onboarding step.",
+      "- Never talk about internal conversation modes or switch the workflow away from this onboarding sequence.",
+    ].join("\n"),
+  );
+
+  return sections.join("\n\n");
+}
+
+function buildPromptContext(
   payload: ChatPayload,
   memorySummary: string | null,
   memoryFacts: string[],
@@ -155,8 +218,9 @@ function buildSystemPrompt(
   clientProfileNote: string | null,
   onboardingNote: string | null,
 ) {
-  const sections = [composeSystemPrompt(agentConfig, payload.mode ?? null)];
-  void FOUNDATION_ASSISTANT_SYSTEM_PROMPT;
+  const sections = [
+    buildSystemPrompt(agentConfig),
+  ];
   const caseName = (payload.caseName ?? "").trim();
   const context = (payload.context ?? "").trim();
 
@@ -189,6 +253,9 @@ function buildSystemPrompt(
   sections.push(
     "Use the conversation history to maintain continuity. If the user refers to something said earlier, find it in history. Never claim to have no memory of the case — you have full access to it.",
   );
+  sections.push(
+    "If the user asks about products, educate them clearly before returning to onboarding. If the user asks about a proposal or term sheet and a document extract is available, ground the explanation in that document rather than giving a generic answer.",
+  );
   return sections.filter(Boolean).join("\n\n");
 }
 
@@ -207,46 +274,129 @@ function normalizeProfileCurrency(value?: number | null) {
     : null;
 }
 
+function pickProfileText(
+  leadValue: string | null | undefined,
+  draftValue: string | null | undefined,
+  preferDraft: boolean,
+) {
+  return preferDraft
+    ? normalizeProfileText(draftValue) ?? normalizeProfileText(leadValue)
+    : normalizeProfileText(leadValue) ?? normalizeProfileText(draftValue);
+}
+
+function pickProfileBoolean(
+  leadValue: boolean | null | undefined,
+  draftValue: boolean | null | undefined,
+  preferDraft: boolean,
+) {
+  return preferDraft
+    ? normalizeProfileBoolean(draftValue) ?? normalizeProfileBoolean(leadValue)
+    : normalizeProfileBoolean(leadValue) ?? normalizeProfileBoolean(draftValue);
+}
+
+function pickProfileCurrency(
+  leadValue: number | null | undefined,
+  draftValue: number | null | undefined,
+  preferDraft: boolean,
+) {
+  return preferDraft
+    ? normalizeProfileCurrency(draftValue) ?? normalizeProfileCurrency(leadValue)
+    : normalizeProfileCurrency(leadValue) ?? normalizeProfileCurrency(draftValue);
+}
+
+function deriveRegistrationStatus(
+  registrationDraft: RegistrationDraft | null,
+  onboardingLead: AdminLead | null,
+) {
+  const fromDraft = normalizeProfileText(registrationDraft?.status);
+  if (fromDraft) {
+    return fromDraft;
+  }
+
+  if (!onboardingLead) {
+    return null;
+  }
+
+  if (isSignupShellLead(onboardingLead)) {
+    return "account created";
+  }
+
+  if (onboardingLead.stage === "Disqualified") {
+    return "disqualified";
+  }
+
+  return "submitted";
+}
+
 function buildAuthoritativeClientProfileNote(
   registrationDraft: RegistrationDraft | null,
   onboardingLead: AdminLead | null,
 ) {
   const fields = registrationDraft?.fields ?? {};
-  const registrationStatus = normalizeProfileText(registrationDraft?.status)
-    ?? (onboardingLead ? "submitted" : null);
+  const preferDraft = isSignupShellLead(onboardingLead);
+  const registrationStatus = deriveRegistrationStatus(registrationDraft, onboardingLead);
   const onboardingStage = normalizeProfileText(onboardingLead?.stage);
   const caseReference =
     normalizeProfileText(registrationDraft?.completedLeadId) ?? normalizeProfileText(onboardingLead?.id);
-  const businessName =
-    normalizeProfileText(onboardingLead?.company) ?? normalizeProfileText(fields.businessName);
-  const businessRegistrationNumber =
-    normalizeProfileText(onboardingLead?.businessRegistrationNumber)
-    ?? normalizeProfileText(fields.businessRegistrationNumber);
-  const industry =
-    normalizeProfileText(onboardingLead?.industry) ?? normalizeProfileText(fields.industry);
-  const contactFirstName =
-    normalizeProfileText(onboardingLead?.contactFirstName) ?? normalizeProfileText(fields.contactFirstName);
-  const contactSurname =
-    normalizeProfileText(onboardingLead?.contactSurname) ?? normalizeProfileText(fields.contactSurname);
-  const contactPosition =
-    normalizeProfileText(onboardingLead?.contactPosition) ?? normalizeProfileText(fields.contactPosition);
-  const contactEmail =
-    normalizeProfileText(onboardingLead?.userProfile.email) ?? normalizeProfileText(fields.contactEmail);
-  const contactNumber =
-    normalizeProfileText(onboardingLead?.userProfile.phone) ?? normalizeProfileText(fields.contactNumber);
-  const monthlyElectricitySpendEstimate =
-    normalizeProfileCurrency(onboardingLead?.monthlyElectricitySpendEstimateZar)
-    ?? normalizeProfileCurrency(fields.monthlyElectricitySpendEstimateZar);
-  const isBusinessRegistered =
-    normalizeProfileBoolean(onboardingLead?.isBusinessRegistered) ?? normalizeProfileBoolean(fields.isBusinessRegistered);
-  const isBusinessOperational =
-    normalizeProfileBoolean(onboardingLead?.isBusinessOperational) ?? normalizeProfileBoolean(fields.isBusinessOperational);
-  const hasSixMonthUtilityBill =
-    normalizeProfileBoolean(onboardingLead?.hasSixMonthUtilityBill) ?? normalizeProfileBoolean(fields.hasSixMonthUtilityBill);
-  const physicalAddress =
-    normalizeProfileText(onboardingLead?.physicalAddress) ?? normalizeProfileText(fields.physicalAddress);
-  const city = normalizeProfileText(onboardingLead?.city) ?? normalizeProfileText(fields.city);
-  const province = normalizeProfileText(onboardingLead?.province) ?? normalizeProfileText(fields.province);
+  const businessName = pickProfileText(onboardingLead?.company, fields.businessName, preferDraft);
+  const businessRegistrationNumber = pickProfileText(
+    onboardingLead?.businessRegistrationNumber,
+    fields.businessRegistrationNumber,
+    preferDraft,
+  );
+  const industry = pickProfileText(onboardingLead?.industry, fields.industry, preferDraft);
+  const contactFirstName = pickProfileText(
+    onboardingLead?.contactFirstName,
+    fields.contactFirstName,
+    preferDraft,
+  );
+  const contactSurname = pickProfileText(
+    onboardingLead?.contactSurname,
+    fields.contactSurname,
+    preferDraft,
+  );
+  const contactPosition = pickProfileText(
+    onboardingLead?.contactPosition,
+    fields.contactPosition,
+    preferDraft,
+  );
+  const contactEmail = pickProfileText(
+    onboardingLead?.userProfile.email,
+    fields.contactEmail,
+    preferDraft,
+  );
+  const contactNumber = pickProfileText(
+    onboardingLead?.userProfile.phone,
+    fields.contactNumber,
+    preferDraft,
+  );
+  const monthlyElectricitySpendEstimate = pickProfileCurrency(
+    onboardingLead?.monthlyElectricitySpendEstimateZar,
+    fields.monthlyElectricitySpendEstimateZar,
+    preferDraft,
+  );
+  const isBusinessRegistered = pickProfileBoolean(
+    onboardingLead?.isBusinessRegistered,
+    fields.isBusinessRegistered,
+    preferDraft,
+  );
+  const isBusinessOperational = pickProfileBoolean(
+    onboardingLead?.isBusinessOperational,
+    fields.isBusinessOperational,
+    preferDraft,
+  );
+  const hasSixMonthUtilityBill = pickProfileBoolean(
+    onboardingLead?.hasSixMonthUtilityBill,
+    fields.hasSixMonthUtilityBill,
+    preferDraft,
+  );
+  const physicalAddress = pickProfileText(
+    onboardingLead?.physicalAddress,
+    fields.physicalAddress,
+    preferDraft,
+  );
+  const city = pickProfileText(onboardingLead?.city, fields.city, preferDraft);
+  const province = pickProfileText(onboardingLead?.province, fields.province, preferDraft);
 
   const lines = [
     registrationStatus ? `- registration status: ${registrationStatus}` : null,
@@ -268,7 +418,7 @@ function buildAuthoritativeClientProfileNote(
     isBusinessRegistered ? `- business registered with CIPC: ${isBusinessRegistered}` : null,
     isBusinessOperational ? `- business operational: ${isBusinessOperational}` : null,
     hasSixMonthUtilityBill
-      ? `- has at least six months of utility bills: ${hasSixMonthUtilityBill}`
+      ? `- has at least six months of utility bills or prepaid receipts: ${hasSixMonthUtilityBill}`
       : null,
     physicalAddress ? `- physical address: ${physicalAddress}` : null,
     city ? `- city: ${city}` : null,
@@ -525,7 +675,7 @@ export async function POST(request: NextRequest) {
   const workspaceId = (payload.workspaceId ?? "").trim();
   const caseId = (payload.caseId ?? "").trim() || null;
   const caseName = (payload.caseName ?? "").trim() || null;
-  const requestedMode = normalizeModeValue(payload.mode);
+  const conversationMode = "Onboarding";
 
   const { loadChatMemory, loadRecentTranscript, logChatTurn, scheduleMemoryMaintenance } =
     await import("@/lib/assistant/chat-memory");
@@ -544,31 +694,56 @@ export async function POST(request: NextRequest) {
         workspaceId,
         caseName,
       }),
-      workspaceId ? loadRegistrationDraft(workspaceId) : Promise.resolve(null),
+      workspaceId ? loadRegistrationDraft({ workspaceId, caseId }) : Promise.resolve(null),
     ]);
 
-  const effectiveMode = inferConversationMode({
-    explicitMode: requestedMode,
+  const clientHistory = normalizeTurns(payload.history);
+  const history = mergeTurns(persistedTurns ?? [], clientHistory);
+
+  const runRegistrationFlow = shouldRunRegistrationFlow({
     message,
     registrationDraftStatus: registrationDraft?.status ?? null,
+    history,
+    onboardingLead,
   });
 
   const onboardingNote = onboardingLead
     ? onboardingLead.eoiSignedAt
-      ? `Current onboarding status: the client's Expression of Interest has already been signed by ${onboardingLead.eoiSignedBy ?? onboardingLead.contactName} on ${onboardingLead.eoiSignedAt}. You may proceed with qualification and document collection.`
-      : `Current onboarding status: the client must sign their Expression of Interest before qualification can continue. Direct them to sign it here: ${buildClientEoiSigningUrl(onboardingLead.eoiSigningToken)}. Tell them to come back once it is signed.`
+      ? (() => {
+          const stagesPastUtilityBills = new Set([
+            "Utility Bills Uploaded",
+            "Compliance Pack Uploaded",
+            "Term Sheet Uploaded",
+            "Onboarding Complete",
+          ]);
+          const utilityBillsAlreadyDone = stagesPastUtilityBills.has(onboardingLead.stage);
+          if (utilityBillsAlreadyDone) {
+            return `Current onboarding status: the EOI is signed and utility bills are uploaded. Stage is "${onboardingLead.stage}". Confirm the next step (compliance pack or term sheet review depending on stage) and answer questions about the proposal/term sheet when asked.`;
+          }
+          return [
+            `Current onboarding status: the EOI is SIGNED (signed by ${onboardingLead.eoiSignedBy ?? onboardingLead.contactName} on ${onboardingLead.eoiSignedAt}). Stage is "${onboardingLead.stage}". The next mandatory step is collecting the last 6 months of utility bills or prepaid electricity receipts.`,
+            "ACTIVE TASK: in your reply you must explicitly request the 6 monthly utility bills.",
+            "Tell the client:",
+            "- Nedbank uses the last 6 months of usage data to prepare the Generocity proposal, so these documents are required before we can move on.",
+            "- They should upload the files in the Documents tab of their workspace, in the \"Utility Bills (last 6 months)\" section.",
+            "- One file per month (municipal utility bill OR prepaid electricity slip) for the last 6 calendar months.",
+            "- After all 6 are uploaded they should reply here so you can confirm and move to the next step.",
+            "Do not advance to compliance pack, term sheet, or proposal explanation until all 6 utility bills are uploaded.",
+            "If the client says they have uploaded some bills, ask how many are in and which months are still missing.",
+          ].join("\n");
+        })()
+      : onboardingLead.eoiSigningToken
+        ? `Current onboarding status: the client must sign their Expression of Interest before qualification can continue. Direct them to open Documents and sign it there, or send this signing path: ${buildClientEoiSigningPath(onboardingLead.eoiSigningToken)}. Tell them to come back once it is signed so you can request their 6 months of utility bills for Nedbank's proposal.`
+        : "Current onboarding status: the client account exists, but business registration is not complete yet. Open with the four pre-qualification questions (CIPC-registered, operational, ≥R10,000/month spend, 6 months of utility bills or prepaid receipts) before collecting the rest of the registration details. Do not greet without asking the first prequal question."
     : null;
   const clientProfileNote = buildAuthoritativeClientProfileNote(registrationDraft, onboardingLead);
-
-  const clientHistory = normalizeTurns(payload.history);
-  const history = mergeTurns(persistedTurns ?? [], clientHistory);
 
   if (workspaceId) {
     void logChatTurn({
       workspaceId,
       caseId,
       caseName,
-      mode: effectiveMode,
+      mode: conversationMode,
       role: "user",
       content: message,
       context: payload.context ?? null,
@@ -577,7 +752,7 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  if (effectiveMode === "Register") {
+  if (runRegistrationFlow) {
     if (!workspaceId) {
       return NextResponse.json(
         { error: "Registration requires a workspace context. Refresh and try again." },
@@ -588,13 +763,14 @@ export async function POST(request: NextRequest) {
     const startedAt = Date.now();
     const advanced = await advanceRegistration({
       workspaceId,
+      caseId,
       apiKey: googleApiKey,
       model: GOOGLE_MODEL,
       recentHistory: history,
       latestUser: message,
       prequal: agentConfig.prequalification,
     });
-    const reply = buildRegistrationReply({
+    const fallbackReply = buildRegistrationReply({
       draft: advanced.draft,
       extracted: advanced.extracted,
       prequal: agentConfig.prequalification,
@@ -602,11 +778,54 @@ export async function POST(request: NextRequest) {
       fallbackNote: advanced.noteForUser,
       latestUser: message,
     });
+    let reply = fallbackReply;
+
+    if (advanced.draft?.status === "in_progress") {
+      const registerSystem = [
+        buildPromptContext(
+          payload,
+          memory?.summary ?? null,
+          memory?.facts ?? [],
+          agentConfig,
+          { proposal: proposalText, termSheet: termSheetText },
+          clientProfileNote,
+          onboardingNote,
+        ),
+        buildRegistrationStatePrompt(advanced.draft),
+        `Latest extracted registration fields from the user's last message:\n${JSON.stringify(advanced.extracted)}`,
+        `Fallback next-step reply if you cannot improve it:\n${fallbackReply}`,
+        "Use the registration state as the source of truth for what is still missing.",
+        "Ask for only one next thing at a time unless the user explicitly asks for a requirements summary.",
+        "Answer clarification questions directly, then return the user to the next onboarding step.",
+        "Do not restart the process, do not list irrelevant steps, and do not contradict the saved registration state.",
+      ].join("\n\n");
+
+      const registerTurns: ChatTurn[] = [...history, { role: "user", content: message }];
+      const registerResult = await callGoogle(registerSystem, registerTurns, googleApiKey);
+
+      if (registerResult.ok) {
+        reply = sanitizeReply(registerResult.reply);
+        if (registerResult.finishReason === "MAX_TOKENS" || replyLooksTruncated(reply)) {
+          const continuation = await continueGoogleReply(
+            registerSystem,
+            registerTurns,
+            reply,
+            googleApiKey,
+          );
+          if (continuation.ok) {
+            reply = sanitizeReply(mergeContinuedReply(reply, continuation.reply));
+          }
+        }
+      }
+    }
+
     const latencyMs = Date.now() - startedAt;
     const registrationStatus = advanced.draft
       ? {
           status: advanced.draft.status,
           leadId: advanced.draft.completedLeadId,
+          businessName: advanced.draft.fields.businessName ?? null,
+          eoiSigningPath: buildClientEoiSigningPath(advanced.submittedEoiSigningToken),
         }
       : null;
 
@@ -614,7 +833,7 @@ export async function POST(request: NextRequest) {
       workspaceId,
       caseId,
       caseName,
-      mode: effectiveMode,
+      mode: conversationMode,
       role: "assistant",
       content: reply,
       provider: "registration",
@@ -641,8 +860,8 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const system = buildSystemPrompt(
-    { ...payload, mode: effectiveMode },
+  const system = buildPromptContext(
+    payload,
     memory?.summary ?? null,
     memory?.facts ?? [],
     agentConfig,
@@ -679,7 +898,7 @@ export async function POST(request: NextRequest) {
       workspaceId,
       caseId,
       caseName,
-      mode: effectiveMode,
+      mode: conversationMode,
       role: "assistant",
       content: reply,
       provider: "google",

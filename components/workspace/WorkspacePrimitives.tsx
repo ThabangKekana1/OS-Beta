@@ -1,74 +1,8 @@
 "use client";
 
-import type { ReactNode, TextareaHTMLAttributes } from "react";
-import { Bot, Info, Mic, Paperclip, Send, Sparkles } from "lucide-react";
+import type { TextareaHTMLAttributes } from "react";
+import { Bot, Info, Paperclip, Send, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-type StatusBadgeProps = {
-  label: string;
-  tone?: "neutral" | "bright" | "muted";
-  className?: string;
-};
-
-export function StatusBadge({
-  label,
-  tone = "neutral",
-  className,
-}: StatusBadgeProps) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[0.62rem] font-medium uppercase tracking-[0.26em]",
-        tone === "bright" && "border-white/18 bg-white text-black",
-        tone === "neutral" && "border-white/12 bg-white/[0.04] text-white/74",
-        tone === "muted" && "border-white/8 bg-transparent text-white/46",
-        className,
-      )}
-    >
-      <span className="status-dot" />
-      {label}
-    </span>
-  );
-}
-
-export function HeroGradientCanvas({ className }: { className?: string }) {
-  return (
-    <div className={cn("absolute inset-0 overflow-hidden rounded-[inherit]", className)}>
-      <div className="ambient-grid" />
-      <div className="soft-bloom soft-bloom-blue left-[-8%] top-[4%] size-[26rem]" />
-      <div className="soft-bloom soft-bloom-magenta right-[-6%] top-[8%] size-[22rem]" />
-      <div className="soft-bloom soft-bloom-blue bottom-[-28%] left-[28%] size-[34rem] opacity-30" />
-      <div className="subtle-noise" />
-    </div>
-  );
-}
-
-type WorkspaceHeaderProps = {
-  eyebrow: string;
-  title: string;
-  description: string;
-  actions?: ReactNode;
-};
-
-export function WorkspaceHeader({
-  eyebrow,
-  title,
-  description,
-  actions,
-}: WorkspaceHeaderProps) {
-  return (
-    <div className="flex flex-col gap-4 border-b border-white/8 pb-5 lg:flex-row lg:items-end lg:justify-between">
-      <div>
-        <p className="line-label">{eyebrow}</p>
-        <h1 className="mt-3 max-w-4xl text-[clamp(2rem,4vw,4.5rem)] font-medium tracking-[-0.06em] text-white">
-          {title}
-        </h1>
-        <p className="mt-3 max-w-3xl text-base leading-7 text-white/62">{description}</p>
-      </div>
-      {actions ? <div className="shrink-0">{actions}</div> : null}
-    </div>
-  );
-}
 
 type AttachmentButtonProps = {
   disabled?: boolean;
@@ -182,14 +116,6 @@ export function SystemMessage({
         <span className="ml-auto text-white/32">{timestamp}</span>
       </div>
       <div className="mt-3 whitespace-pre-wrap text-sm leading-7 text-white/72">{content}</div>
-    </div>
-  );
-}
-
-export function VoicePlaceholder() {
-  return (
-    <div className="flex size-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-white/44">
-      <Mic className="size-4" />
     </div>
   );
 }

@@ -17,7 +17,7 @@ import {
 import { type ConversationMode, type MigrationCase } from "@/lib/types";
 
 const DEFAULT_PLACEHOLDER = "Ask anything about your migration, Foundation-1, Generocity, or Lumen-1...";
-const DEFAULT_CONVERSATION_MODE: ConversationMode = "Migrate";
+const DEFAULT_CONVERSATION_MODE: ConversationMode = "Onboarding";
 
 type ConversationPanelProps = {
   activeCase: MigrationCase | null;
@@ -106,7 +106,7 @@ function TypingIndicator() {
 
 type ConversationComposerProps = {
   activeCase: MigrationCase | null;
-  onSendMessage: (caseId: string, content: string, mode: ConversationMode) => void;
+  onSendMessage: (caseId: string, content: string) => void;
   onUploadFiles: (caseId: string, category: WorkspaceUploadCategory, files: File[]) => void;
   onAfterSend?: (caseId: string) => void;
   onAfterUpload?: (caseId: string) => void;
@@ -135,7 +135,7 @@ export function ConversationComposer({
       return;
     }
 
-    onSendMessage(activeCase.id, trimmed, DEFAULT_CONVERSATION_MODE);
+    onSendMessage(activeCase.id, trimmed);
     setDraft("");
     onAfterSend?.(activeCase.id);
     const feed = document.getElementById("conversation-feed");

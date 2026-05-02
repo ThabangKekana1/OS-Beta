@@ -13,10 +13,13 @@ import { ADMIN_AGENTS } from "@/lib/admin-mock-data";
 import {
   buildAdminLeadFromClientRegistration,
   buildAdminLeadStubFromSalesLead,
+  findSignupShellLeadByEmail,
+  promoteSignupLeadToClientRegistration,
   splitContactName,
 } from "@/lib/client-registration";
 import { makeId, timelineLabel } from "@/lib/formatting";
 import { registrationLinkIdForProfile } from "@/lib/registration-links";
+import type { RegistrationDraft } from "@/lib/registration-agent";
 import {
   ADMIN_STORAGE_KEY,
   readAdminStorageSnapshot,
@@ -109,6 +112,7 @@ type AdminPortalContextValue = {
   actorAgentId: string | null;
   leads: AdminLead[];
   salesLeads: SalesLead[];
+  registrationDrafts: RegistrationDraft[];
   leadStages: readonly AdminLeadStage[];
   contactStatuses: readonly AdminLeadContactStatus[];
   salesLeadQualificationStages: readonly SalesLeadQualificationStage[];
@@ -297,6 +301,7 @@ export function AdminPortalProvider({
   const [salesLeads, setSalesLeads] = useState<SalesLead[]>(
     () => initialSnapshot.salesLeads,
   );
+  const [registrationDrafts, setRegistrationDrafts] = useState<RegistrationDraft[]>([]);
   const [activeLeadId, setActiveLeadId] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
   const [syncBackend, setSyncBackend] = useState<"loading" | "supabase" | "local">(
@@ -347,6 +352,7 @@ export function AdminPortalProvider({
           ok?: boolean;
           backend?: "supabase" | "local";
           snapshot?: unknown;
+          registrationDrafts?: RegistrationDraft[];
         };
 
         if (!payload.ok) {
@@ -393,6 +399,9 @@ export function AdminPortalProvider({
           salesLeadsBaselineRef.current = new Map(
             snapshot.salesLeads.map((lead) => [lead.id, lead]),
           );
+          setRegistrationDrafts(
+            Array.isArray(payload.registrationDrafts) ? payload.registrationDrafts : [],
+          );
         }
 
         if (!cancelled) {
@@ -411,8 +420,13 @@ export function AdminPortalProvider({
 
     void loadRemoteState();
 
+    const interval = window.setInterval(() => {
+      void loadRemoteState();
+    }, 10000);
+
     return () => {
       cancelled = true;
+      window.clearInterval(interval);
     };
   }, []);
 
@@ -924,18 +938,24 @@ export function AdminPortalProvider({
             channel: "dashboard" as const,
           }
         : null;
-    const created = buildAdminLeadFromClientRegistration({
+    const registrationInput = {
       ...input,
       origin: input.origin ?? "created",
       registrationSource,
-    });
+    } as const;
+    const existingSignupShell = findSignupShellLeadByEmail(leads, input.contactEmail);
+    const created = existingSignupShell
+      ? promoteSignupLeadToClientRegistration(existingSignupShell, registrationInput)
+      : buildAdminLeadFromClientRegistration(registrationInput);
 
     if (!created) {
       return null;
     }
 
     setLeads((current) => {
-      const nextLeads = [created.lead, ...current];
+      const nextLeads = existingSignupShell
+        ? [created.lead, ...current.filter((lead) => lead.id !== existingSignupShell.id)]
+        : [created.lead, ...current];
       persistSnapshotImmediately({
         leads: nextLeads,
         salesLeads,
@@ -1777,6 +1797,7 @@ export function AdminPortalProvider({
     actorAgentId,
     leads,
     salesLeads,
+    registrationDrafts,
     leadStages: adminLeadStages,
     contactStatuses: adminLeadContactStatuses,
     salesLeadQualificationStages,

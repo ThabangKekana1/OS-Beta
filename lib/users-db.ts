@@ -49,22 +49,6 @@ export async function listAgents(): Promise<DbAgent[] | null> {
   }));
 }
 
-export async function upsertAgents(agents: DbAgent[]): Promise<void> {
-  const supabase = getSupabaseAdminClient();
-  if (!supabase || agents.length === 0) return;
-
-  const rows = agents.map((agent) => ({
-    id: agent.id,
-    name: agent.name,
-    role: agent.role,
-    region: agent.region,
-    is_active: agent.isActive,
-  }));
-
-  const { error } = await supabase.from("oneos_agents").upsert(rows, { onConflict: "id" });
-  if (error && !isMissingRelationError(error)) throw error;
-}
-
 // ---------------------------------------------------------------------------
 // User profiles (role + agent + partner-org mapping for Supabase Auth users)
 // ---------------------------------------------------------------------------

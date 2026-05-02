@@ -110,7 +110,8 @@ export function createWorkspaceCase({
     },
     stage: "New",
     owner: "Dawn",
-    nextAction: "Tell Dawn about your business, locations, and current Eskom spend to start your migration.",
+    nextAction:
+      "Answer Dawn's four pre-qualification questions so 1OS can confirm the business qualifies to proceed.",
     lastUpdated: "Just now",
     priority: "Standard",
     productRecommendation: null,
@@ -120,8 +121,8 @@ export function createWorkspaceCase({
       tariffProfile: "Pending discovery",
       loadProfile: "Pending discovery",
       rationale: [
-        "Start by telling Dawn about your business, locations, and monthly Eskom spend.",
-        "You can complete the profile later. The migration conversation starts immediately.",
+        "Start with Dawn's four pre-qualification checks: CIPC registration, operational status, monthly electricity spend, and 6 months of utility bills or prepaid receipts.",
+        "Once those pass, Dawn will complete the business registration and generate the EOI.",
       ],
     },
     missingItems: [],
@@ -131,7 +132,7 @@ export function createWorkspaceCase({
         type: "assistant",
         timestamp: "Now",
         content:
-          "Hi, I'm Dawn. Tell me about your business, the locations you want to register, and what you're currently spending on Eskom each month. I'll use that to start your migration plan.",
+          "Hi, I'm Dawn. Before I register the business, I need to confirm four quick points: is the business CIPC-registered, is it currently operational, is it spending at least R10,000 per month on electricity, and do you have access to 6 months of utility bills or prepaid receipts?",
       },
     ],
     documents: [],
@@ -149,7 +150,7 @@ export function createWorkspaceCase({
     tasks: [
       {
         id: `${caseId}-task-1`,
-        title: "Tell Dawn about this business",
+        title: "Answer Dawn's pre-qualification questions",
         owner: "Client",
         dueLabel: "Now",
         status: "open",

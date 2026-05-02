@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
+import { readAdminStateSnapshot, writeAdminStateSnapshot } from "@/lib/admin-state-store";
+import {
+  buildAdminLeadShellFromSignup,
+  defaultOwnerIdForRegistration,
+  findSignupShellLeadByEmail,
+} from "@/lib/client-registration";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { buildAuthRedirectUrl } from "@/lib/url";
+import { upsertProfile } from "@/lib/users-db";
 import { resolveServerSiteOrigin } from "@/lib/site-url.server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -11,6 +18,64 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function clientKey(request: Request) {
   const forwarded = request.headers.get("x-forwarded-for");
   return forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
+}
+
+async function createSignupShell(input: { email: string; name: string }) {
+  try {
+    const { snapshot } = await readAdminStateSnapshot();
+    const existingShell = findSignupShellLeadByEmail(snapshot.leads, input.email);
+    const existingLead = snapshot.leads.find(
+      (lead) => lead.userProfile.email.trim().toLowerCase() === input.email,
+    );
+
+    if (existingShell) {
+      const refreshedLead = {
+        ...existingShell,
+        contactName: input.name || existingShell.contactName,
+        contactFirstName: input.name ? input.name.split(/\s+/)[0] ?? existingShell.contactFirstName : existingShell.contactFirstName,
+        contactSurname: input.name ? input.name.trim().split(/\s+/).slice(1).join(" ") : existingShell.contactSurname,
+        userProfile: {
+          ...existingShell.userProfile,
+          fullName: input.name || existingShell.userProfile.fullName,
+        },
+        lastTouched: "Just now",
+      };
+
+      await writeAdminStateSnapshot(
+        {
+          ...snapshot,
+          leads: snapshot.leads.map((lead) => (lead.id === existingShell.id ? refreshedLead : lead)),
+          activeLeadId: existingShell.id,
+        },
+        "auth-signup-shell-refresh",
+      );
+      return;
+    }
+
+    if (existingLead) {
+      return;
+    }
+
+    const created = buildAdminLeadShellFromSignup({
+      name: input.name,
+      email: input.email,
+      ownerId: defaultOwnerIdForRegistration(null),
+    });
+    if (!created) {
+      return;
+    }
+
+    await writeAdminStateSnapshot(
+      {
+        ...snapshot,
+        leads: [created.lead, ...snapshot.leads],
+        activeLeadId: created.leadId,
+      },
+      "auth-signup-shell-create",
+    );
+  } catch (error) {
+    console.error("[auth/signup] failed to create admin signup shell", error);
+  }
 }
 
 export async function POST(request: Request) {
@@ -88,6 +153,20 @@ export async function POST(request: Request) {
   // When email confirmation is enabled the session will be null until the user
   // confirms their address.
   const requiresConfirmation = !data.session;
+
+  const resolvedName = name || email.split("@")[0] || "Client";
+  await Promise.allSettled([
+    upsertProfile({
+      email,
+      name: resolvedName,
+      role: "client",
+      isActive: true,
+    }),
+    createSignupShell({
+      email,
+      name: resolvedName,
+    }),
+  ]);
 
   return NextResponse.json({
     ok: true,

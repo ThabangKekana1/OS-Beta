@@ -42,22 +42,16 @@ export async function PUT(request: NextRequest) {
   if (typeof body.tone === "string" || body.tone === null) {
     patch.tone = body.tone ?? null;
   }
-  if (body.modeOverrides && typeof body.modeOverrides === "object") {
-    patch.modeOverrides = Object.fromEntries(
-      Object.entries(body.modeOverrides as Record<string, unknown>)
-        .filter(([, v]) => typeof v === "string")
-        .map(([k, v]) => [k.trim(), String(v)]),
-    );
-  }
   if (body.prequalification && typeof body.prequalification === "object") {
     const raw = body.prequalification as Record<string, unknown>;
     patch.prequalification = {
       minMonthlySpendZar:
         typeof raw.minMonthlySpendZar === "number" && Number.isFinite(raw.minMonthlySpendZar)
-          ? Math.max(0, Math.round(raw.minMonthlySpendZar))
-          : 5000,
-      requireRegistered: raw.requireRegistered !== false,
-      requireOperational: raw.requireOperational !== false,
+          ? Math.max(10000, Math.round(raw.minMonthlySpendZar))
+          : 10000,
+      requireRegistered: true,
+      requireOperational: true,
+      requireSixMonthHistory: true,
       softDisqualifyMessage:
         typeof raw.softDisqualifyMessage === "string" && raw.softDisqualifyMessage.trim()
           ? raw.softDisqualifyMessage.trim()

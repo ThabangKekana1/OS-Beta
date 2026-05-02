@@ -1,31 +1,19 @@
-export const migrationStages = [
-  "New",
-  "Registered",
-  "Qualification In Progress",
-  "Awaiting Service Acceptance",
-  "Awaiting Documents",
-  "Documents Under Review",
-  "Proposal Issued",
-  "Awaiting Signed Proposal",
-  "Term Sheet Issued",
-  "Awaiting Signed Term Sheet",
-  "Internal Review",
-  "Close Ready",
-  "Closed",
-] as const;
+export type CaseStage =
+  | "New"
+  | "Registered"
+  | "Qualification In Progress"
+  | "Awaiting Service Acceptance"
+  | "Awaiting Documents"
+  | "Documents Under Review"
+  | "Proposal Issued"
+  | "Awaiting Signed Proposal"
+  | "Term Sheet Issued"
+  | "Awaiting Signed Term Sheet"
+  | "Internal Review"
+  | "Close Ready"
+  | "Closed";
 
-export const conversationModes = [
-  "Migrate",
-  "Qualify",
-  "Register",
-  "Review Documents",
-  "Proposal Support",
-  "Term Sheet Support",
-  "Close Deal",
-] as const;
-
-export type CaseStage = (typeof migrationStages)[number];
-export type ConversationMode = (typeof conversationModes)[number];
+export type ConversationMode = "Onboarding";
 export type MessageType = "user" | "assistant" | "system" | "internal";
 export type ProductLine = "Generocity" | "Lumen-1";
 export type DocumentStatus =
@@ -41,13 +29,6 @@ export interface WorkspaceOption {
   id: string;
   label: string;
   description: string;
-}
-
-export interface NavItem {
-  id: string;
-  label: string;
-  href: string;
-  count?: number;
 }
 
 export interface BusinessLocation {

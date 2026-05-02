@@ -9,6 +9,7 @@ import {
   type AdminStateBackend,
 } from "@/lib/admin-state-store";
 import { getServerAuthSession } from "@/lib/auth-server";
+import { listRegistrationDrafts, type RegistrationDraft } from "@/lib/registration-agent";
 
 export const runtime = "nodejs";
 
@@ -16,6 +17,7 @@ type StateResponseBody = {
   ok: true;
   backend: AdminStateBackend;
   snapshot: AdminStateSnapshot;
+  registrationDrafts: RegistrationDraft[];
 };
 
 async function requireSession() {
@@ -36,12 +38,16 @@ export async function GET() {
   }
 
   try {
-    const result = await readAdminStateSnapshot();
+    const [result, registrationDrafts] = await Promise.all([
+      readAdminStateSnapshot(),
+      listRegistrationDrafts("in_progress"),
+    ]);
 
     return NextResponse.json<StateResponseBody>({
       ok: true,
       backend: result.backend,
       snapshot: result.snapshot,
+      registrationDrafts,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown Supabase error";

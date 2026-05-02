@@ -12,7 +12,7 @@ export default async function WorkspaceLayout({
   const showSidebar = Boolean(session);
 
   return (
-    <WorkspaceProvider>
+    <WorkspaceProvider storageScope={session?.email ?? null}>
       <div className="min-h-screen bg-[var(--black)] text-[var(--ink)]">
         {showSidebar ? <SidebarShell /> : null}
         <main

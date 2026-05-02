@@ -1,10 +1,10 @@
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
-import { buildClientEoiSigningUrl } from "@/lib/eoi-signing";
+import { buildClientEoiSigningPath } from "@/lib/eoi-signing";
 import { createNotification } from "@/lib/notifications";
 
 const TABLE = "oneos_registration_drafts";
 
-export type RegistrationFields = {
+type RegistrationFields = {
   businessName?: string;
   businessRegistrationNumber?: string;
   industry?: string;
@@ -23,7 +23,9 @@ export type RegistrationFields = {
 };
 
 export type RegistrationDraft = {
+  draftKey: string;
   workspaceId: string;
+  caseId: string | null;
   fields: RegistrationFields;
   status: "in_progress" | "submitted" | "disqualified" | "abandoned";
   completedLeadId: string | null;
@@ -31,19 +33,28 @@ export type RegistrationDraft = {
   updatedAt: string;
 };
 
-export type RegistrationConversationTurn = {
+type RegistrationConversationTurn = {
   role: "user" | "assistant";
   content: string;
 };
 
-export type Prequalification = {
+type Prequalification = {
   minMonthlySpendZar: number;
   requireRegistered: boolean;
   requireOperational: boolean;
+  requireSixMonthHistory: boolean;
   softDisqualifyMessage: string;
 };
 
+const PREQUAL_FIELDS = [
+  "isBusinessRegistered",
+  "isBusinessOperational",
+  "monthlyElectricitySpendEstimateZar",
+  "hasSixMonthUtilityBill",
+] as const;
+
 const REQUIRED_FIELDS: (keyof RegistrationFields)[] = [
+  ...PREQUAL_FIELDS,
   "businessName",
   "businessRegistrationNumber",
   "industry",
@@ -52,10 +63,6 @@ const REQUIRED_FIELDS: (keyof RegistrationFields)[] = [
   "contactPosition",
   "contactEmail",
   "contactNumber",
-  "monthlyElectricitySpendEstimateZar",
-  "isBusinessRegistered",
-  "isBusinessOperational",
-  "hasSixMonthUtilityBill",
   "physicalAddress",
   "city",
   "province",
@@ -70,10 +77,12 @@ const FIELD_PROMPTS: Record<keyof RegistrationFields, string> = {
   contactPosition: "the contact's position/role at the business",
   contactEmail: "the contact's email address",
   contactNumber: "the contact's phone number",
-  monthlyElectricitySpendEstimateZar: "the average monthly electricity spend in Rand",
+  monthlyElectricitySpendEstimateZar:
+    "the average monthly electricity spend in Rand (minimum R10,000 to proceed)",
   isBusinessRegistered: "whether the business is officially registered with CIPC (yes/no)",
   isBusinessOperational: "whether the business is currently operational (yes/no)",
-  hasSixMonthUtilityBill: "whether they have at least 6 months of utility bills available (yes/no)",
+  hasSixMonthUtilityBill:
+    "whether they have at least 6 months of utility bills or prepaid electricity receipts available (yes/no)",
   physicalAddress: "the physical street address of the business",
   city: "the city",
   province: "the South African province",
@@ -90,28 +99,48 @@ const FIELD_QUESTIONS: Record<keyof RegistrationFields, string> = {
   contactEmail: "What is the contact's email address?",
   contactNumber: "What is the contact's phone number?",
   monthlyElectricitySpendEstimateZar:
-    "What is the average monthly electricity spend in Rand?",
+    "What is the average monthly electricity spend in Rand? We need at least R10,000 per month to proceed.",
   isBusinessRegistered: "Is the business officially registered with CIPC?",
   isBusinessOperational: "Is the business currently operational?",
-  hasSixMonthUtilityBill: "Do you have at least 6 months of utility bills available?",
+  hasSixMonthUtilityBill:
+    "Do you have access to at least 6 months of utility bills or prepaid electricity receipts?",
   physicalAddress: "What is the full physical street address of the business?",
   city: "What city is the business located in?",
   province: "Which South African province is the business located in?",
 };
 
+function buildDraftKey(workspaceId: string, caseId?: string | null) {
+  const normalizedWorkspaceId = workspaceId.trim();
+  const normalizedCaseId = caseId?.trim() ?? "";
+  return normalizedCaseId ? `${normalizedWorkspaceId}::${normalizedCaseId}` : normalizedWorkspaceId;
+}
+
+function parseDraftKey(draftKey: string) {
+  const [workspaceId, ...rest] = draftKey.split("::");
+  return {
+    draftKey,
+    workspaceId: workspaceId ?? "",
+    caseId: rest.length > 0 ? rest.join("::") : null,
+  };
+}
+
 export async function loadRegistrationDraft(
-  workspaceId: string,
+  input: { workspaceId: string; caseId?: string | null },
 ): Promise<RegistrationDraft | null> {
   const client = getSupabaseAdminClient();
-  if (!client || !workspaceId) return null;
+  const draftKey = buildDraftKey(input.workspaceId, input.caseId);
+  if (!client || !draftKey) return null;
   const { data } = await client
     .from(TABLE)
     .select("*")
-    .eq("workspace_id", workspaceId)
+    .eq("workspace_id", draftKey)
     .maybeSingle();
   if (!data) return null;
+  const scope = parseDraftKey(String(data.workspace_id));
   return {
-    workspaceId: String(data.workspace_id),
+    draftKey: scope.draftKey,
+    workspaceId: scope.workspaceId,
+    caseId: scope.caseId,
     fields: (data.fields ?? {}) as RegistrationFields,
     status: data.status as RegistrationDraft["status"],
     completedLeadId: data.completed_lead_id ? String(data.completed_lead_id) : null,
@@ -120,17 +149,48 @@ export async function loadRegistrationDraft(
   };
 }
 
-export async function saveRegistrationDraft(
-  workspaceId: string,
+export async function listRegistrationDrafts(
+  status?: RegistrationDraft["status"],
+): Promise<RegistrationDraft[]> {
+  const client = getSupabaseAdminClient();
+  if (!client) return [];
+
+  let query = client
+    .from(TABLE)
+    .select("*")
+    .order("updated_at", { ascending: false });
+
+  if (status) {
+    query = query.eq("status", status);
+  }
+
+  const { data } = await query;
+  if (!Array.isArray(data)) {
+    return [];
+  }
+
+  return data.map((row) => ({
+    ...parseDraftKey(String(row.workspace_id)),
+    fields: (row.fields ?? {}) as RegistrationFields,
+    status: row.status as RegistrationDraft["status"],
+    completedLeadId: row.completed_lead_id ? String(row.completed_lead_id) : null,
+    disqualificationReason: row.disqualification_reason ? String(row.disqualification_reason) : null,
+    updatedAt: String(row.updated_at),
+  }));
+}
+
+async function saveRegistrationDraft(
+  input: { workspaceId: string; caseId?: string | null },
   fields: RegistrationFields,
 ): Promise<void> {
   const client = getSupabaseAdminClient();
-  if (!client || !workspaceId) return;
+  const draftKey = buildDraftKey(input.workspaceId, input.caseId);
+  if (!client || !draftKey) return;
   await client
     .from(TABLE)
     .upsert(
       {
-        workspace_id: workspaceId,
+        workspace_id: draftKey,
         fields,
         status: "in_progress",
         updated_at: new Date().toISOString(),
@@ -140,12 +200,13 @@ export async function saveRegistrationDraft(
 }
 
 async function markDraftStatus(
-  workspaceId: string,
+  input: { workspaceId: string; caseId?: string | null },
   status: RegistrationDraft["status"],
   extras: { completedLeadId?: string; reason?: string } = {},
 ): Promise<void> {
   const client = getSupabaseAdminClient();
-  if (!client) return;
+  const draftKey = buildDraftKey(input.workspaceId, input.caseId);
+  if (!client || !draftKey) return;
   await client
     .from(TABLE)
     .update({
@@ -155,7 +216,7 @@ async function markDraftStatus(
       disqualification_reason: extras.reason ?? null,
       updated_at: new Date().toISOString(),
     })
-    .eq("workspace_id", workspaceId);
+    .eq("workspace_id", draftKey);
 }
 
 function missingFields(fields: RegistrationFields): (keyof RegistrationFields)[] {
@@ -167,8 +228,65 @@ function missingFields(fields: RegistrationFields): (keyof RegistrationFields)[]
   });
 }
 
-export function isDraftComplete(fields: RegistrationFields): boolean {
+function missingPrequalificationFields(fields: RegistrationFields) {
+  return PREQUAL_FIELDS.filter((key) => {
+    const value = fields[key];
+    return value === undefined || value === null;
+  });
+}
+
+function nextRequiredField(fields: RegistrationFields): keyof RegistrationFields | null {
+  const pendingPrequal = missingPrequalificationFields(fields);
+  if (pendingPrequal.length > 0) {
+    return pendingPrequal[0];
+  }
+
+  const pendingFields = missingFields(fields);
+  return pendingFields[0] ?? null;
+}
+
+function isDraftComplete(fields: RegistrationFields): boolean {
   return missingFields(fields).length === 0;
+}
+
+function looksLikeRegistrationConfirmation(message?: string | null) {
+  if (!message) {
+    return false;
+  }
+
+  return /\b(confirm|confirmed|that'?s correct|that is correct|looks good|all correct|go ahead|proceed|submit it|submit)\b/i.test(
+    message,
+  );
+}
+
+function formatFieldValue(field: keyof RegistrationFields, value: RegistrationFields[keyof RegistrationFields]) {
+  if (typeof value === "boolean") {
+    return value ? "Yes" : "No";
+  }
+
+  if (field === "monthlyElectricitySpendEstimateZar" && typeof value === "number") {
+    return `R${Math.round(value).toLocaleString("en-ZA")}`;
+  }
+
+  return String(value);
+}
+
+function buildRegistrationConfirmationPrompt(fields: RegistrationFields) {
+  const summary = REQUIRED_FIELDS.map((field) => {
+    const value = fields[field];
+    return value === undefined || value === null || value === ""
+      ? null
+      : `- ${FIELD_PROMPTS[field]}: ${formatFieldValue(field, value)}`;
+  })
+    .filter((line): line is string => line !== null)
+    .join("\n");
+
+  return [
+    `I have all the registration details for ${fields.businessName?.trim() || "your business"}. Please confirm these details before I submit them into 1OS:`,
+    summary,
+    "",
+    "Reply with `confirm` to submit, or send the correction if anything is wrong.",
+  ].join("\n");
 }
 
 export function buildRegistrationStatePrompt(draft: RegistrationDraft | null): string {
@@ -184,16 +302,21 @@ export function buildRegistrationStatePrompt(draft: RegistrationDraft | null): s
     collected.length > 0
       ? `Already collected:\n- ${collected.join("\n- ")}`
       : "Nothing collected yet.",
-    missing.length > 0
-      ? `Still needed (ask for ONE at a time, naturally — do NOT list these to the user):\n- ${missing.map((k) => FIELD_PROMPTS[k]).join("\n- ")}`
-      : "All required fields are collected. Confirm to the user that you have everything and submit.",
+    missingPrequalificationFields(fields).length > 0
+      ? `Pre-qualification still needed first (ask for ONE at a time, naturally — do NOT list these to the user):\n- ${missingPrequalificationFields(fields).map((k) => FIELD_PROMPTS[k]).join("\n- ")}`
+      : missing.length > 0
+        ? `Eligibility is confirmed. Still needed for full registration (ask for ONE at a time, naturally — do NOT list these to the user):\n- ${missing.map((k) => FIELD_PROMPTS[k]).join("\n- ")}`
+        : "All required fields are collected. Summarise the captured details and ask the user to confirm or correct them. Do not submit until they clearly confirm.",
     "Rules:",
+    "- Always complete the pre-qualification questions before moving on to the rest of the registration details.",
     "- Ask for ONE missing field per message, in a natural, friendly way.",
     "- Acknowledge what they just told you before asking the next question.",
     "- If they provide multiple things in one message, that's fine — extraction handles it.",
     "- Never invent or assume values.",
+    "- If the user's last reply was vague, off-topic, or did not contain the exact value for the field you just asked about, ask again EXPLICITLY for that exact value, with an example of the format you need (e.g. \"I need a clear yes or no\", \"I need the CIPC number in format YYYY/NNNNNN/NN like 2018/123456/07\", \"I need a Rand figure like R12,500 per month\", \"I need a valid email like name@business.co.za\"). Do not move on until they answer that specific field with a concrete value.",
     "- If they ask what you need, summarise the missing items in plain language.",
-    "- When all fields are collected the system will auto-submit; tell them you're saving it now.",
+    "- Once all fields are collected, pause for an explicit confirmation before submission.",
+    "- After submission, the EOI is generated automatically. Direct the client to sign it in the Documents tab and tell them the next step after signing is uploading 6 months of utility bills so Nedbank can prepare their Generocity proposal.",
   ];
 
   return lines.join("\n");
@@ -240,12 +363,125 @@ Rules:
 - isBusinessRegistered=false ONLY if the user explicitly says the business is NOT registered.
 - Same strictness for isBusinessOperational and hasSixMonthUtilityBill — only set them when the user makes a direct statement about the business.
 - "physicalAddress" is the street line only (e.g. "12 Long Street"); "city" and "province" are separate. South African provinces: Gauteng, Western Cape, KwaZulu-Natal, Eastern Cape, Free State, Limpopo, Mpumalanga, North West, Northern Cape.
-- "hasSixMonthUtilityBill" is true if they have 6 OR MORE months of utility bills.
+- "hasSixMonthUtilityBill" is true if they have 6 OR MORE months of utility bills OR prepaid electricity receipts.
 - Output ONLY the raw JSON object. No markdown fences, no preamble. If nothing can be extracted, return {}.`;
 
-export async function extractRegistrationFields(
+function parseCurrencyNumber(value: string) {
+  const digits = value.replace(/[^\d]/g, "");
+  return digits ? Math.max(0, Number.parseInt(digits, 10)) : null;
+}
+
+function normalizeBusinessRegistrationNumber(value: string | null | undefined) {
+  const normalized = value?.trim() ?? "";
+  return /^\d{4}\/\d{6}\/\d{2}$/i.test(normalized) ? normalized : null;
+}
+
+function captureLabelValue(text: string, labels: string[]) {
+  for (const label of labels) {
+    const pattern = new RegExp(`${label}\\s*[:\\-]\\s*([^\\n.]+)`, "i");
+    const match = text.match(pattern);
+    const value = match?.[1]?.trim();
+    if (value) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function extractDeterministicRegistrationFields(text: string): RegistrationFields {
+  const extracted: RegistrationFields = {};
+
+  const businessName = captureLabelValue(text, ["business name", "registered business name"]);
+  if (businessName) extracted.businessName = businessName;
+
+  const businessRegistrationNumber = normalizeBusinessRegistrationNumber(
+    captureLabelValue(text, [
+      "business registration number",
+      "registration number",
+      "cipc business registration number",
+    ]) ?? text.match(/\b\d{4}\/\d{6}\/\d{2}\b/i)?.[0],
+  );
+  if (businessRegistrationNumber) {
+    extracted.businessRegistrationNumber = businessRegistrationNumber.trim();
+    extracted.isBusinessRegistered = true;
+  }
+
+  const industry = captureLabelValue(text, ["industry", "industry sector", "industry of business"]);
+  if (industry) extracted.industry = industry;
+
+  const contactFirstName = captureLabelValue(text, ["contact first name", "first name"]);
+  if (contactFirstName) extracted.contactFirstName = contactFirstName;
+
+  const contactSurname = captureLabelValue(text, ["contact surname", "surname", "last name"]);
+  if (contactSurname) extracted.contactSurname = contactSurname;
+
+  const contactPosition = captureLabelValue(text, ["contact position", "position", "role"]);
+  if (contactPosition) extracted.contactPosition = contactPosition;
+
+  const contactEmail =
+    text.match(
+      /(?:contact email|email address|email)\s*[:\-]\s*([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i,
+    )?.[1]
+    ?? text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0]
+    ?? null;
+  if (contactEmail) extracted.contactEmail = contactEmail.trim().toLowerCase();
+
+  const contactNumber =
+    captureLabelValue(text, ["contact number", "phone number", "mobile number", "phone"])
+    ?? text.match(/\b(?:\+27|0)\d(?:[\d\s-]{7,}\d)\b/)?.[0]
+    ?? null;
+  if (contactNumber) extracted.contactNumber = contactNumber.trim();
+
+  const spendRaw = captureLabelValue(text, [
+    "monthly electricity spend",
+    "average monthly electricity spend",
+    "monthly spend",
+  ]);
+  const spendNaturalMatch =
+    text.match(/\b(?:spend|spending|pay|paying)\b[^.\n]*?\bR\s?[\d,.]+/i)?.[0]
+    ?? text.match(/\bR\s?[\d,.]+\s*(?:per month|monthly)[^.\n]*/i)?.[0]
+    ?? null;
+  const parsedSpendSource = spendRaw ?? spendNaturalMatch;
+  if (parsedSpendSource) {
+    const parsedSpend = parseCurrencyNumber(parsedSpendSource);
+    if (parsedSpend !== null) extracted.monthlyElectricitySpendEstimateZar = parsedSpend;
+  }
+
+  const physicalAddress = captureLabelValue(text, ["physical address", "street address", "address"]);
+  if (physicalAddress) extracted.physicalAddress = physicalAddress;
+
+  const city = captureLabelValue(text, ["city"]);
+  if (city) extracted.city = city;
+
+  const province = captureLabelValue(text, ["province"]);
+  if (province) extracted.province = province;
+
+  if (/\b(?:the business is registered|business is registered|officially registered|registered and operational)\b/i.test(text)) {
+    extracted.isBusinessRegistered = true;
+  } else if (/\b(?:business is not registered|not registered)\b/i.test(text)) {
+    extracted.isBusinessRegistered = false;
+  }
+
+  if (/\b(?:registered and operational|business is operational|currently operational)\b/i.test(text)) {
+    extracted.isBusinessOperational = true;
+  } else if (/\b(?:business is not operational|not operational)\b/i.test(text)) {
+    extracted.isBusinessOperational = false;
+  }
+
+  if (/\b(?:have 6 months of utility bills|have six months of utility bills|6 months of utility bills available|at least 6 months of utility bills|have 6 months of prepaid receipts|have six months of prepaid receipts|prepaid receipts for 6 months|prepaid electricity receipts)\b/i.test(text)) {
+    extracted.hasSixMonthUtilityBill = true;
+  } else if (/\b(?:do not have 6 months of utility bills|don't have 6 months of utility bills|no 6 months of utility bills|do not have 6 months of prepaid receipts|don't have 6 months of prepaid receipts|no prepaid receipts)\b/i.test(text)) {
+    extracted.hasSixMonthUtilityBill = false;
+  }
+
+  return sanitizeExtracted(extracted);
+}
+
+async function extractRegistrationFields(
   input: ExtractInput,
 ): Promise<RegistrationFields> {
+  const deterministic = extractDeterministicRegistrationFields(input.latestUser);
   const transcript = [...input.recentHistory, { role: "user", content: input.latestUser }]
     .slice(-40)
     .map((turn) => `${turn.role === "assistant" ? "Assistant" : "User"}: ${turn.content}`)
@@ -270,25 +506,32 @@ export async function extractRegistrationFields(
       }),
     }).finally(() => clearTimeout(timer));
 
-    if (!response.ok) return {};
+    if (!response.ok) return deterministic;
     const json = (await response.json()) as {
       candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
     };
     const text = json?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-    if (!text) return {};
+    if (!text) return deterministic;
     const cleaned = text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
     const parsed = JSON.parse(cleaned) as RegistrationFields;
-    return sanitizeExtracted(parsed);
+    const llmExtracted = sanitizeExtracted(parsed);
+    return mergeFields(llmExtracted, deterministic);
   } catch {
-    return {};
+    return deterministic;
   }
 }
 
 function sanitizeExtracted(raw: RegistrationFields): RegistrationFields {
   const out: RegistrationFields = {};
   if (typeof raw.businessName === "string") out.businessName = raw.businessName.trim();
-  if (typeof raw.businessRegistrationNumber === "string")
-    out.businessRegistrationNumber = raw.businessRegistrationNumber.trim();
+  if (typeof raw.businessRegistrationNumber === "string") {
+    const normalizedRegistrationNumber = normalizeBusinessRegistrationNumber(
+      raw.businessRegistrationNumber,
+    );
+    if (normalizedRegistrationNumber) {
+      out.businessRegistrationNumber = normalizedRegistrationNumber;
+    }
+  }
   if (typeof raw.industry === "string") out.industry = raw.industry.trim();
   if (typeof raw.contactFirstName === "string") out.contactFirstName = raw.contactFirstName.trim();
   if (typeof raw.contactSurname === "string") out.contactSurname = raw.contactSurname.trim();
@@ -306,7 +549,7 @@ function sanitizeExtracted(raw: RegistrationFields): RegistrationFields {
   return out;
 }
 
-export function mergeFields(
+function mergeFields(
   current: RegistrationFields,
   incoming: RegistrationFields,
 ): RegistrationFields {
@@ -317,32 +560,7 @@ export function mergeFields(
 // Pre-qualification + submission
 // ---------------------------------------------------------------------------
 
-const DEFAULT_PREQUAL: Prequalification = {
-  minMonthlySpendZar: 5000,
-  requireRegistered: true,
-  requireOperational: true,
-  softDisqualifyMessage:
-    "Based on what you have shared, your business may not be a fit for Generocity right now. A Foundation-1 specialist will reach out within one business day to talk through alternatives like Lumen-1.",
-};
-
-export function loadPrequalFromAgentConfig(modeOverridesOrPrequalRaw: unknown): Prequalification {
-  if (!modeOverridesOrPrequalRaw || typeof modeOverridesOrPrequalRaw !== "object") return DEFAULT_PREQUAL;
-  const raw = modeOverridesOrPrequalRaw as Partial<Prequalification>;
-  return {
-    minMonthlySpendZar:
-      typeof raw.minMonthlySpendZar === "number" ? raw.minMonthlySpendZar : DEFAULT_PREQUAL.minMonthlySpendZar,
-    requireRegistered:
-      typeof raw.requireRegistered === "boolean" ? raw.requireRegistered : DEFAULT_PREQUAL.requireRegistered,
-    requireOperational:
-      typeof raw.requireOperational === "boolean" ? raw.requireOperational : DEFAULT_PREQUAL.requireOperational,
-    softDisqualifyMessage:
-      typeof raw.softDisqualifyMessage === "string" && raw.softDisqualifyMessage.trim()
-        ? raw.softDisqualifyMessage
-        : DEFAULT_PREQUAL.softDisqualifyMessage,
-  };
-}
-
-export function evaluatePrequalification(
+function evaluatePrequalification(
   fields: RegistrationFields,
   prequal: Prequalification,
 ): { ok: true } | { ok: false; reason: string } {
@@ -351,6 +569,12 @@ export function evaluatePrequalification(
   }
   if (prequal.requireOperational && fields.isBusinessOperational === false) {
     return { ok: false, reason: "Business is not currently operational." };
+  }
+  if (prequal.requireSixMonthHistory && fields.hasSixMonthUtilityBill === false) {
+    return {
+      ok: false,
+      reason: "Client does not have 6 months of utility bills or prepaid electricity receipts available.",
+    };
   }
   if (
     typeof fields.monthlyElectricitySpendEstimateZar === "number" &&
@@ -370,6 +594,7 @@ export function evaluatePrequalification(
  */
 export async function advanceRegistration(input: {
   workspaceId: string;
+  caseId?: string | null;
   apiKey: string;
   model: string;
   recentHistory: RegistrationConversationTurn[];
@@ -385,7 +610,8 @@ export async function advanceRegistration(input: {
 }> {
   if (!input.workspaceId) return { draft: null, noteForUser: null, extracted: {} };
 
-  const existing = await loadRegistrationDraft(input.workspaceId);
+  const scope = { workspaceId: input.workspaceId, caseId: input.caseId };
+  const existing = await loadRegistrationDraft(scope);
   if (existing && (existing.status === "submitted" || existing.status === "disqualified")) {
     let noteForUser: string | null = null;
     let submittedEoiSigningToken: string | null = null;
@@ -396,7 +622,7 @@ export async function advanceRegistration(input: {
       const lead = snapshot.leads.find((entry) => entry.id === existing.completedLeadId) ?? null;
       submittedEoiSigningToken = lead?.eoiSigningToken ?? null;
       if (submittedEoiSigningToken) {
-        noteForUser = `You're registered. Your case reference is ${existing.completedLeadId}. Your Expression of Interest is ready to sign here: ${buildClientEoiSigningUrl(submittedEoiSigningToken)}. Please sign it now, then come back here so we can continue into qualification.`;
+        noteForUser = `You're registered. Your case reference is ${existing.completedLeadId}. Your Expression of Interest is ready in Documents. Sign it there, or use this signing link: ${buildClientEoiSigningPath(submittedEoiSigningToken)}. Once it's signed, come back here so we can continue into qualification.`;
       }
     }
 
@@ -424,11 +650,12 @@ export async function advanceRegistration(input: {
   const haveAllPrequalSignals =
     merged.isBusinessRegistered !== undefined &&
     merged.isBusinessOperational !== undefined &&
-    typeof merged.monthlyElectricitySpendEstimateZar === "number";
+    typeof merged.monthlyElectricitySpendEstimateZar === "number" &&
+    merged.hasSixMonthUtilityBill !== undefined;
   const prequalCheck = evaluatePrequalification(merged, input.prequal);
   if (!prequalCheck.ok && haveAllPrequalSignals) {
-    await saveRegistrationDraft(input.workspaceId, merged);
-    await markDraftStatus(input.workspaceId, "disqualified", { reason: prequalCheck.reason });
+    await saveRegistrationDraft(scope, merged);
+    await markDraftStatus(scope, "disqualified", { reason: prequalCheck.reason });
     void createNotification({
       audience: "admin",
       kind: "system",
@@ -438,19 +665,35 @@ export async function advanceRegistration(input: {
       metadata: { workspaceId: input.workspaceId, fields: merged, reason: prequalCheck.reason },
     });
     return {
-      draft: { ...(existing ?? { workspaceId: input.workspaceId, fields: {}, status: "in_progress", completedLeadId: null, disqualificationReason: null, updatedAt: "" }), fields: merged, status: "disqualified", disqualificationReason: prequalCheck.reason },
+      draft: {
+        ...(existing ?? {
+          draftKey: buildDraftKey(scope.workspaceId, scope.caseId),
+          workspaceId: scope.workspaceId,
+          caseId: scope.caseId ?? null,
+          fields: {},
+          status: "in_progress",
+          completedLeadId: null,
+          disqualificationReason: null,
+          updatedAt: "",
+        }),
+        fields: merged,
+        status: "disqualified",
+        disqualificationReason: prequalCheck.reason,
+      },
       noteForUser: input.prequal.softDisqualifyMessage,
       disqualified: { reason: prequalCheck.reason },
       extracted,
     };
   }
 
-  await saveRegistrationDraft(input.workspaceId, merged);
+  await saveRegistrationDraft(scope, merged);
 
   if (!isDraftComplete(merged)) {
     return {
       draft: {
+        draftKey: buildDraftKey(scope.workspaceId, scope.caseId),
         workspaceId: input.workspaceId,
+        caseId: input.caseId ?? null,
         fields: merged,
         status: "in_progress",
         completedLeadId: null,
@@ -462,12 +705,31 @@ export async function advanceRegistration(input: {
     };
   }
 
+  if (!looksLikeRegistrationConfirmation(input.latestUser)) {
+    return {
+      draft: {
+        draftKey: buildDraftKey(scope.workspaceId, scope.caseId),
+        workspaceId: input.workspaceId,
+        caseId: input.caseId ?? null,
+        fields: merged,
+        status: "in_progress",
+        completedLeadId: null,
+        disqualificationReason: null,
+        updatedAt: new Date().toISOString(),
+      },
+      noteForUser: buildRegistrationConfirmationPrompt(merged),
+      extracted,
+    };
+  }
+
   // All fields present + passes prequal — submit.
   const submitted = await submitConversationalRegistration(input.workspaceId, merged);
   if (!submitted) {
     return {
       draft: {
+        draftKey: buildDraftKey(scope.workspaceId, scope.caseId),
         workspaceId: input.workspaceId,
+        caseId: input.caseId ?? null,
         fields: merged,
         status: "in_progress",
         completedLeadId: null,
@@ -480,7 +742,7 @@ export async function advanceRegistration(input: {
     };
   }
 
-  await markDraftStatus(input.workspaceId, "submitted", { completedLeadId: submitted.leadId });
+  await markDraftStatus(scope, "submitted", { completedLeadId: submitted.leadId });
 
   void createNotification({
     audience: "admin",
@@ -497,14 +759,16 @@ export async function advanceRegistration(input: {
 
   return {
     draft: {
+      draftKey: buildDraftKey(scope.workspaceId, scope.caseId),
       workspaceId: input.workspaceId,
+      caseId: input.caseId ?? null,
       fields: merged,
       status: "submitted",
       completedLeadId: submitted.leadId,
       disqualificationReason: null,
       updatedAt: new Date().toISOString(),
     },
-    noteForUser: `You're registered. Your case reference is ${submitted.leadId}. Your Expression of Interest is ready to sign here: ${buildClientEoiSigningUrl(submitted.eoiSigningToken)}. Please sign it now, then come back here so we can continue into qualification.`,
+    noteForUser: `You're registered. Your case reference is ${submitted.leadId}. Your Expression of Interest is ready in Documents. Sign it there, or use this signing link: ${buildClientEoiSigningPath(submitted.eoiSigningToken)}. Once it's signed, come back here so we can continue into qualification.`,
     submittedLeadId: submitted.leadId,
     submittedEoiSigningToken: submitted.eoiSigningToken,
     extracted,
@@ -527,7 +791,9 @@ function looksLikeRequirementsQuestion(message?: string | null) {
 }
 
 function formatMissingFieldSummary(fields: RegistrationFields) {
-  return missingFields(fields).map((field) => `- ${FIELD_PROMPTS[field]}`).join("\n");
+  const pendingPrequal = missingPrequalificationFields(fields);
+  const pendingFields = pendingPrequal.length > 0 ? pendingPrequal : missingFields(fields);
+  return pendingFields.map((field) => `- ${FIELD_PROMPTS[field]}`).join("\n");
 }
 
 export function buildRegistrationReply(input: {
@@ -557,7 +823,8 @@ export function buildRegistrationReply(input: {
   }
 
   const pendingFields = missingFields(draft.fields);
-  const nextField = pendingFields[0];
+  const pendingPrequalFields = missingPrequalificationFields(draft.fields);
+  const nextField = nextRequiredField(draft.fields);
   if (!nextField) {
     return fallbackNote?.trim() || `I have all the information I need for ${businessNameFromDraft(draft)}. I'm saving it now.`;
   }
@@ -570,12 +837,23 @@ export function buildRegistrationReply(input: {
   }
 
   if (acknowledgedFields.length === 0 && pendingFields.length === REQUIRED_FIELDS.length) {
-    return `I can handle the registration here for ${businessNameFromDraft(draft)}. I'll collect the business details step by step and save them directly into 1OS.\n\n${FIELD_QUESTIONS[nextField]}`;
+    return [
+      `I can handle the registration here for ${businessNameFromDraft(draft)} and save it directly into 1OS.`,
+      "Before I collect the full registration details, I need to confirm four qualifying points:",
+      "- whether the business is CIPC-registered",
+      "- whether it is currently operational",
+      "- whether it spends at least R10,000 per month on electricity",
+      "- whether you have 6 months of utility bills or prepaid receipts",
+      "",
+      `First question: ${FIELD_QUESTIONS[nextField]}`,
+    ].join("\n");
   }
 
   const preface =
     acknowledgedFields.length > 0
-      ? `Noted for ${businessNameFromDraft(draft)}.`
+      ? pendingPrequalFields.length > 0
+        ? `Noted for ${businessNameFromDraft(draft)}. I still need to finish the pre-qualification checks first.`
+        : `Noted for ${businessNameFromDraft(draft)}.`
       : `To continue registering ${businessNameFromDraft(draft)}, I still need one detail.`;
 
   return `${preface}\n\n${FIELD_QUESTIONS[nextField]}`;
@@ -586,12 +864,15 @@ async function submitConversationalRegistration(
   fields: RegistrationFields,
 ): Promise<{ leadId: string; clientProfileId: string; eoiSigningToken: string | null } | null> {
   try {
-    const { buildAdminLeadFromClientRegistration, defaultOwnerIdForRegistration } = await import(
-      "@/lib/client-registration"
-    );
+    const {
+      buildAdminLeadFromClientRegistration,
+      defaultOwnerIdForRegistration,
+      findSignupShellLeadByEmail,
+      promoteSignupLeadToClientRegistration,
+    } = await import("@/lib/client-registration");
     const { readAdminStateSnapshot, writeAdminStateSnapshot } = await import("@/lib/admin-state-store");
 
-    const created = buildAdminLeadFromClientRegistration({
+    const registrationInput = {
       businessName: fields.businessName ?? "",
       businessRegistrationNumber: fields.businessRegistrationNumber ?? "",
       industry: fields.industry ?? "",
@@ -611,18 +892,29 @@ async function submitConversationalRegistration(
       origin: "website",
       ownerId: defaultOwnerIdForRegistration(null),
       registrationSource: null,
-    });
+    } as const;
+
+    const { snapshot } = await readAdminStateSnapshot();
+    const existingSignupShell = findSignupShellLeadByEmail(
+      snapshot.leads,
+      fields.contactEmail ?? "",
+    );
+
+    const created = existingSignupShell
+      ? promoteSignupLeadToClientRegistration(existingSignupShell, registrationInput)
+      : buildAdminLeadFromClientRegistration(registrationInput);
 
     if (!created) {
       console.error("[registration-agent] buildAdminLeadFromClientRegistration returned null", { fields });
       return null;
     }
 
-    const { snapshot } = await readAdminStateSnapshot();
     await writeAdminStateSnapshot(
       {
         ...snapshot,
-        leads: [created.lead, ...snapshot.leads],
+        leads: existingSignupShell
+          ? [created.lead, ...snapshot.leads.filter((lead) => lead.id !== existingSignupShell.id)]
+          : [created.lead, ...snapshot.leads],
         activeLeadId: created.leadId,
       },
       "agent-conversational-registration",

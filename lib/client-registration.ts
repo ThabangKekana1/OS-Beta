@@ -40,6 +40,23 @@ export type ClientRegistrationResult = {
   clientProfileId: string;
 };
 
+export type ClientSignupShellInput = {
+  name: string;
+  email: string;
+  ownerId: string;
+};
+
+const SIGNUP_PENDING_BUSINESS_NAME = "Business details pending";
+const SIGNUP_COMPLETE_REGISTRATION_TASK = "Complete business registration";
+
+function normalizeEmail(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function fallbackNameFromEmail(email: string) {
+  return normalizeEmail(email).split("@")[0] ?? "Client";
+}
+
 function buildAccountIdFromBusinessName(businessName: string) {
   const slug = businessName
     .toLowerCase()
@@ -72,6 +89,28 @@ function setTaskStatus(
         }
       : task,
   );
+}
+
+function mergeLeadTasks(
+  primary: AdminLead["tasks"],
+  secondary: AdminLead["tasks"],
+): AdminLead["tasks"] {
+  const seenTitles = new Set(primary.map((task) => task.title));
+  const carryForward = secondary.filter(
+    (task) =>
+      task.title !== SIGNUP_COMPLETE_REGISTRATION_TASK &&
+      !seenTitles.has(task.title),
+  );
+
+  return [...primary, ...carryForward];
+}
+
+function buildRegistrationEventDetail(
+  registrationSource: AdminLeadRegistrationSource | null,
+) {
+  return registrationSource
+    ? `Registered through ${registrationSource.profileName}'s unique ${registrationSource.profileRole} link.`
+    : "Business registered in dashboard onboarding profile.";
 }
 
 export function splitContactName(contactName: string) {
@@ -136,9 +175,7 @@ export function buildAdminLeadFromClientRegistration(
   const newLeadId = makeId("lead");
   const clientProfileId = makeId("profile");
   const eoiSigningToken = buildEoiSigningToken(businessName);
-  const registrationDetail = input.registrationSource
-    ? `Registered through ${input.registrationSource.profileName}'s unique ${input.registrationSource.profileRole} link.`
-    : "Business registered in dashboard onboarding profile.";
+  const registrationDetail = buildRegistrationEventDetail(input.registrationSource);
 
   const nextLead: AdminLead = {
     id: newLeadId,
@@ -238,6 +275,191 @@ export function buildAdminLeadFromClientRegistration(
     lead: nextLead,
     leadId: newLeadId,
     clientProfileId,
+  };
+}
+
+export function buildAdminLeadShellFromSignup(
+  input: ClientSignupShellInput,
+): ClientRegistrationResult | null {
+  const email = normalizeEmail(input.email);
+  const ownerId = input.ownerId.trim();
+  const contactName = input.name.trim() || fallbackNameFromEmail(email);
+
+  if (!email || !ownerId || !contactName) {
+    return null;
+  }
+
+  const { contactFirstName, contactSurname } = splitContactName(contactName);
+  const leadId = makeId("lead");
+  const clientProfileId = makeId("profile");
+  const joinedAt = new Date().toISOString().slice(0, 10);
+
+  const lead: AdminLead = {
+    id: leadId,
+    clientProfileId,
+    company: SIGNUP_PENDING_BUSINESS_NAME,
+    businessRegistrationNumber: "",
+    industry: "",
+    contactFirstName,
+    contactSurname,
+    contactPosition: "",
+    contactName,
+    monthlyElectricitySpendEstimateZar: 0,
+    isBusinessRegistered: false,
+    isClientRegistered: true,
+    isBusinessOperational: false,
+    hasSixMonthUtilityBill: false,
+    physicalAddress: "",
+    city: "",
+    province: "",
+    source: "Migrate Portal",
+    origin: "website",
+    partner: null,
+    stage: "Client Registered",
+    contactStatus: "Not Contacted",
+    priority: "Standard",
+    ownerId,
+    linkedSalesLeadId: null,
+    registrationSource: null,
+    readinessScore: 15,
+    estimatedValueZar: DEAL_VALUE_ZAR,
+    lastTouched: "Just now",
+    nextAction:
+      "Client account created. Dawn must complete pre-qualification, then full business registration to generate the EOI.",
+    migrateAccountName: SIGNUP_PENDING_BUSINESS_NAME,
+    migrateAccountId: buildAccountIdFromBusinessName(`signup-${contactName}`),
+    userProfile: {
+      id: makeId("usr"),
+      fullName: contactName,
+      email,
+      phone: "",
+      role: "",
+      joinedAt,
+    },
+    eoiSigningToken: null,
+    eoiSignedBy: null,
+    eoiSignedAt: null,
+    eoiAcceptedTermsAt: null,
+    onboardingCompletedAt: null,
+    disqualification: null,
+    tasks: [
+      {
+        id: makeId("task"),
+        title: SIGNUP_COMPLETE_REGISTRATION_TASK,
+        owner: "Client",
+        dueLabel: "Now",
+        status: "open",
+      },
+    ],
+    documents: [],
+    notes: [],
+    events: [
+      {
+        id: makeId("event"),
+        title: "Client account created",
+        detail:
+          "Client signed up in 1OS. Name and email are visible in admin. Dawn must complete pre-qualification before full registration and EOI generation.",
+        createdAt: timelineLabel(),
+        tone: "system",
+      },
+    ],
+  };
+
+  return {
+    lead,
+    leadId,
+    clientProfileId,
+  };
+}
+
+export function isSignupShellLead(lead: AdminLead | null | undefined) {
+  if (!lead) {
+    return false;
+  }
+
+  return (
+    lead.stage === "Client Registered" &&
+    lead.source === "Migrate Portal" &&
+    lead.origin === "website" &&
+    lead.eoiSigningToken === null &&
+    lead.company.trim() === SIGNUP_PENDING_BUSINESS_NAME &&
+    lead.businessRegistrationNumber.trim().length === 0 &&
+    lead.industry.trim().length === 0 &&
+    lead.contactPosition?.trim().length === 0 &&
+    lead.userProfile.phone.trim().length === 0 &&
+    lead.physicalAddress.trim().length === 0 &&
+    lead.city.trim().length === 0 &&
+    lead.province.trim().length === 0
+  );
+}
+
+export function findSignupShellLeadByEmail(
+  leads: AdminLead[],
+  email: string,
+): AdminLead | null {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) {
+    return null;
+  }
+
+  return (
+    leads.find(
+      (lead) =>
+        isSignupShellLead(lead) &&
+        normalizeEmail(lead.userProfile.email) === normalizedEmail,
+    ) ?? null
+  );
+}
+
+export function promoteSignupLeadToClientRegistration(
+  existingLead: AdminLead,
+  input: ClientRegistrationInput,
+): ClientRegistrationResult | null {
+  const created = buildAdminLeadFromClientRegistration({
+    ...input,
+    ownerId: existingLead.ownerId || input.ownerId,
+    origin: existingLead.origin,
+    partner: existingLead.partner,
+  });
+
+  if (!created) {
+    return null;
+  }
+
+  const upgradedLead: AdminLead = {
+    ...created.lead,
+    id: existingLead.id,
+    clientProfileId: existingLead.clientProfileId,
+    ownerId: existingLead.ownerId || created.lead.ownerId,
+    linkedSalesLeadId: existingLead.linkedSalesLeadId,
+    partnerOrgId: existingLead.partnerOrgId ?? null,
+    contactStatus: existingLead.contactStatus,
+    priority: existingLead.priority,
+    lastTouched: "Just now",
+    userProfile: {
+      ...created.lead.userProfile,
+      id: existingLead.userProfile.id,
+      joinedAt: existingLead.userProfile.joinedAt || created.lead.userProfile.joinedAt,
+    },
+    tasks: mergeLeadTasks(created.lead.tasks, existingLead.tasks),
+    documents: existingLead.documents,
+    notes: existingLead.notes,
+    events: [
+      {
+        id: makeId("event"),
+        title: "Client registration completed",
+        detail: buildRegistrationEventDetail(input.registrationSource),
+        createdAt: timelineLabel(),
+        tone: "client",
+      },
+      ...existingLead.events,
+    ],
+  };
+
+  return {
+    lead: upgradedLead,
+    leadId: upgradedLead.id,
+    clientProfileId: upgradedLead.clientProfileId,
   };
 }
 

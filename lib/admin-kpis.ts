@@ -2,11 +2,11 @@ import type { AdminLead } from "@/lib/admin-types";
 
 export const DEAL_VALUE_ZAR = 10_000;
 
-export function leadDealValue() {
+function leadDealValue() {
   return DEAL_VALUE_ZAR;
 }
 
-export function isClosedDeal(lead: AdminLead) {
+function isClosedDeal(lead: AdminLead) {
   return lead.stage === "Onboarding Complete";
 }
 

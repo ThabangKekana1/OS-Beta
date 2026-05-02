@@ -1,6 +1,6 @@
-import type { AdminLead, AdminLeadDocument, AdminLeadStage } from "@/lib/admin-types";
+import type { AdminLead, AdminLeadStage } from "@/lib/admin-types";
 import { readAdminStateSnapshot } from "@/lib/admin-state-store";
-import { loadRegistrationDraft } from "@/lib/registration-agent";
+import { listRegistrationDrafts, loadRegistrationDraft } from "@/lib/registration-agent";
 
 const ACTIVE_STAGE_ORDER: AdminLeadStage[] = [
   "EOI Generated",
@@ -31,12 +31,37 @@ async function findLeadByWorkspaceId(workspaceId: string | null | undefined, lea
     return null;
   }
 
-  const draft = await loadRegistrationDraft(workspaceId);
+  const draft = await loadRegistrationDraft({ workspaceId });
   if (!draft?.completedLeadId) {
     return null;
   }
 
   return leads.find((lead) => lead.id === draft.completedLeadId) ?? null;
+}
+
+async function findLeadByWorkspaceCaseName(
+  workspaceId: string | null | undefined,
+  caseName: string | null | undefined,
+  leads: AdminLead[],
+) {
+  const normalizedWorkspaceId = normalize(workspaceId);
+  const normalizedCaseName = normalize(caseName);
+  if (!normalizedWorkspaceId || !normalizedCaseName) {
+    return null;
+  }
+
+  const drafts = await listRegistrationDrafts();
+  const matchingDraft = drafts.find(
+    (draft) =>
+      normalize(draft.workspaceId) === normalizedWorkspaceId &&
+      normalize(draft.fields.businessName) === normalizedCaseName &&
+      draft.completedLeadId,
+  );
+  if (!matchingDraft?.completedLeadId) {
+    return null;
+  }
+
+  return leads.find((lead) => lead.id === matchingDraft.completedLeadId) ?? null;
 }
 
 export async function resolveClientOnboardingLead(input: {
@@ -55,6 +80,11 @@ export async function resolveClientOnboardingLead(input: {
     return workspaceLead;
   }
 
+  const draftLead = await findLeadByWorkspaceCaseName(input.workspaceId, input.caseName, snapshot.leads);
+  if (draftLead) {
+    return draftLead;
+  }
+
   const matchingEmail = snapshot.leads.filter(
     (lead) => normalize(lead.userProfile.email) === sessionEmail,
   );
@@ -71,11 +101,4 @@ export async function resolveClientOnboardingLead(input: {
   }
 
   return [...matchingEmail].sort(sortLeads)[0] ?? null;
-}
-
-export function findLeadDocument(
-  lead: AdminLead,
-  predicate: (document: AdminLeadDocument) => boolean,
-) {
-  return lead.documents.find(predicate) ?? null;
 }

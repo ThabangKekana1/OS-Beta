@@ -93,6 +93,7 @@ test("auth uses Supabase Auth exclusively (no legacy custom-cookie code)", () =>
   const authServer = read("lib/auth-server.ts");
   const proxyTs = read("proxy.ts");
   const signupRoute = read("app/api/auth/signup/route.ts");
+  const clientRegistration = read("lib/client-registration.ts");
   const callbackRoute = read("app/auth/callback/route.ts");
   const confirmPage = read("app/auth/confirm/page.tsx");
 
@@ -108,6 +109,10 @@ test("auth uses Supabase Auth exclusively (no legacy custom-cookie code)", () =>
   assert.match(authServer, /supabase\.auth\.getUser\(\)/);
   assert.match(proxyTs, /supabase\.auth\.getClaims\(\)/);
   assert.match(signupRoute, /"\/auth\/confirm"/);
+  assert.match(signupRoute, /buildAdminLeadShellFromSignup/);
+  assert.match(signupRoute, /upsertProfile/);
+  assert.match(clientRegistration, /buildAdminLeadShellFromSignup/);
+  assert.match(clientRegistration, /stage: "Client Registered"/);
   assert.match(callbackRoute, /verifyOtp/);
   assert.match(confirmPage, /setSession/);
   assert.match(confirmPage, /window\.location\.replace\(nextPath\)/);
@@ -163,7 +168,8 @@ test("workspace chat and uploads use the durable server workspace id", () => {
   assert.match(workspaceProvider, /formData\.set\("workspaceId", uploadWorkspaceId\)/);
   assert.match(workspaceState, /function createStarterCase/);
   assert.match(workspaceState, /ensureWorkspaceCases/);
-  assert.match(workspaceState, /You can complete the profile later\. The migration conversation starts immediately\./);
+  assert.match(workspaceState, /spending at least R10,000 per month on electricity/);
+  assert.match(workspaceState, /utility bills or prepaid receipts/);
 });
 
 test("workspace supports multiple businesses and multiple locations", () => {
@@ -188,15 +194,24 @@ test("register mode is handled by the server-backed registration state machine",
   const registrationAgent = read("lib/registration-agent.ts");
 
   assert.match(chatRoute, /source:\s*"registration"/);
-  assert.match(chatRoute, /inferConversationMode/);
+  assert.doesNotMatch(chatRoute, /inferConversationMode/);
   assert.match(chatRoute, /thinkingBudget:\s*0/);
   assert.match(chatRoute, /buildRegistrationReply/);
   assert.match(chatRoute, /buildAuthoritativeClientProfileNote/);
+  assert.match(chatRoute, /isSignupShellLead/);
+  assert.match(chatRoute, /four pre-qualification questions/);
   assert.match(chatRoute, /Authoritative saved client profile/);
   assert.match(chatRoute, /company registration number:/);
   assert.match(chatRoute, /recentHistory:\s*history/);
+  assert.match(chatRoute, /spending at least R10,000 per month on electricity/);
+  assert.match(chatRoute, /Nedbank uses the last 6 months of usage data/);
+  assert.match(chatRoute, /Utility Bills \(last 6 months\)/);
   assert.match(registrationAgent, /Conversation transcript:/);
+  assert.match(registrationAgent, /const PREQUAL_FIELDS =/);
   assert.match(registrationAgent, /FIELD_QUESTIONS/);
+  assert.match(registrationAgent, /looksLikeRegistrationConfirmation/);
+  assert.match(registrationAgent, /Reply with `confirm` to submit/);
+  assert.match(registrationAgent, /utility bills or prepaid electricity receipts/);
   assert.match(registrationAgent, /fallbackNote\?\.trim\(\)/);
 });
 

@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { normalizeWorkspaceStateSnapshot } from "@/lib/workspace-state";
 import {
   readWorkspaceStateSnapshot,
@@ -11,19 +12,33 @@ export const runtime = "nodejs";
 const WORKSPACE_COOKIE_NAME = "oneos_workspace_id";
 const WORKSPACE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
-function getWorkspaceId(request: NextRequest) {
+async function getWorkspaceIdentity(request: NextRequest) {
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.auth.getUser();
+
+    if (!error && data.user?.id) {
+      return {
+        workspaceId: `workspace_user_${data.user.id.replace(/-/g, "")}`,
+        scope: "authenticated" as const,
+      };
+    }
+  } catch {
+    // Fall back to cookie-scoped workspace for anonymous sessions.
+  }
+
   const existing = request.cookies.get(WORKSPACE_COOKIE_NAME)?.value;
 
   if (existing && /^[a-zA-Z0-9_-]{12,80}$/.test(existing)) {
     return {
       workspaceId: existing,
-      isNew: false,
+      scope: "cookie" as const,
     };
   }
 
   return {
     workspaceId: `workspace_${randomUUID().replace(/-/g, "")}`,
-    isNew: true,
+    scope: "cookie" as const,
   };
 }
 
@@ -38,7 +53,7 @@ function setWorkspaceCookie(response: NextResponse, workspaceId: string) {
 }
 
 export async function GET(request: NextRequest) {
-  const { workspaceId } = getWorkspaceId(request);
+  const { workspaceId, scope } = await getWorkspaceIdentity(request);
 
   try {
     const result = await readWorkspaceStateSnapshot(workspaceId);
@@ -49,7 +64,11 @@ export async function GET(request: NextRequest) {
       snapshot: result.snapshot,
     });
 
-    setWorkspaceCookie(response, workspaceId);
+    if (scope === "cookie") {
+      setWorkspaceCookie(response, workspaceId);
+    } else {
+      response.cookies.delete(WORKSPACE_COOKIE_NAME);
+    }
     return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown workspace backend error";
@@ -65,7 +84,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const { workspaceId } = getWorkspaceId(request);
+  const { workspaceId, scope } = await getWorkspaceIdentity(request);
   let payload: { snapshot?: unknown };
 
   try {
@@ -91,7 +110,11 @@ export async function PUT(request: NextRequest) {
       snapshot,
     });
 
-    setWorkspaceCookie(response, workspaceId);
+    if (scope === "cookie") {
+      setWorkspaceCookie(response, workspaceId);
+    } else {
+      response.cookies.delete(WORKSPACE_COOKIE_NAME);
+    }
     return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown workspace backend error";

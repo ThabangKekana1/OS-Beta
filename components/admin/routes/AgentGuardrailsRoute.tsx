@@ -37,11 +37,6 @@ function buildPayload(
     tone: config.tone?.trim() || null,
     doNotSay: textToList(doNotSayText),
     escalationTriggers: textToList(escalationText),
-    modeOverrides: Object.fromEntries(
-      Object.entries(config.modeOverrides)
-        .map(([k, v]) => [k, v.trim()])
-        .filter(([, v]) => v),
-    ),
     prequalification: {
       ...config.prequalification,
       minMonthlySpendZar: Number(minMonthlySpendText || "0") || 0,
@@ -216,7 +211,7 @@ export function AgentGuardrailsRoute({ initialConfig }: { initialConfig: AgentCo
       </div>
 
       <section className="rounded-[1.5rem] border border-white/10 bg-[rgba(8,8,8,0.78)] p-5">
-        <h2 className="text-base font-medium text-white">Pre-qualification rules (Register mode)</h2>
+        <h2 className="text-base font-medium text-white">Onboarding pre-qualification rules</h2>
         <p className="mt-1 text-xs text-white/56">
           When the agent collects business details conversationally, it must pass these gates before submitting a lead.
         </p>
@@ -238,7 +233,7 @@ export function AgentGuardrailsRoute({ initialConfig }: { initialConfig: AgentCo
               onChange={(e) => setMinMonthlySpendText(normalizeIntegerInput(e.target.value))}
               onBlur={() => {
                 if (!minMonthlySpendText) {
-                  setMinMonthlySpendText("0");
+                  setMinMonthlySpendText("10000");
                 }
               }}
             />
@@ -248,30 +243,34 @@ export function AgentGuardrailsRoute({ initialConfig }: { initialConfig: AgentCo
               <input
                 type="checkbox"
                 checked={config.prequalification.requireRegistered}
-                onChange={(e) =>
-                  setConfig({
-                    ...config,
-                    prequalification: { ...config.prequalification, requireRegistered: e.target.checked },
-                  })
-                }
+                disabled
+                readOnly
               />
-              Require business to be CIPC-registered
+              Business must be CIPC-registered
             </label>
             <label className="flex items-center gap-2 text-xs text-white/72">
               <input
                 type="checkbox"
                 checked={config.prequalification.requireOperational}
-                onChange={(e) =>
-                  setConfig({
-                    ...config,
-                    prequalification: { ...config.prequalification, requireOperational: e.target.checked },
-                  })
-                }
+                disabled
+                readOnly
               />
-              Require business to be currently operational
+              Business must be currently operational
+            </label>
+            <label className="flex items-center gap-2 text-xs text-white/72">
+              <input
+                type="checkbox"
+                checked={config.prequalification.requireSixMonthHistory}
+                disabled
+                readOnly
+              />
+              Client must have 6 months of utility bills or prepaid receipts
             </label>
           </div>
         </div>
+        <p className="mt-3 text-xs text-white/48">
+          These onboarding gates are hard requirements in Dawn&apos;s flow. Only the spend floor and the soft disqualify message are editable here.
+        </p>
         <label className={`${labelClass} mt-4`}>Soft disqualify message</label>
         <textarea
           className={textareaClass}

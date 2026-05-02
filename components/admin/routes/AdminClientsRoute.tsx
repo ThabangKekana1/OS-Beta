@@ -6,6 +6,25 @@ import { useMemo, useState } from "react";
 import { useAdminPortal } from "@/components/admin/AdminPortalProvider";
 import { AdminBadge, AdminHeader } from "@/components/admin/AdminPrimitives";
 import type { AdminLead, AdminLeadStage } from "@/lib/admin-types";
+import type { RegistrationDraft } from "@/lib/registration-agent";
+
+const REGISTRATION_FIELDS: Array<keyof RegistrationDraft["fields"]> = [
+  "businessName",
+  "businessRegistrationNumber",
+  "industry",
+  "contactFirstName",
+  "contactSurname",
+  "contactPosition",
+  "contactEmail",
+  "contactNumber",
+  "monthlyElectricitySpendEstimateZar",
+  "isBusinessRegistered",
+  "isBusinessOperational",
+  "hasSixMonthUtilityBill",
+  "physicalAddress",
+  "city",
+  "province",
+];
 
 function clientDocCount(documents: AdminLead["documents"]) {
   return documents.filter((doc) => doc.uploadedByType === "Client").length;
@@ -16,7 +35,7 @@ function salesDocCount(documents: AdminLead["documents"]) {
 }
 
 export function AdminClientsRoute({ viewerAgentId }: { viewerAgentId?: string | null } = {}) {
-  const { leads, agents, leadStages } = useAdminPortal();
+  const { leads, agents, registrationDrafts, leadStages } = useAdminPortal();
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<AdminLeadStage | "All">("All");
@@ -44,6 +63,20 @@ export function AdminClientsRoute({ viewerAgentId }: { viewerAgentId?: string | 
     });
   }, [leads, search, stageFilter, viewerAgentId]);
 
+  const filteredRegistrationDrafts = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return registrationDrafts.filter((draft) => {
+      if (!query) return true;
+
+      return (
+        (draft.fields.businessName ?? "").toLowerCase().includes(query) ||
+        (draft.fields.contactEmail ?? "").toLowerCase().includes(query) ||
+        (draft.fields.businessRegistrationNumber ?? "").toLowerCase().includes(query) ||
+        draft.workspaceId.toLowerCase().includes(query)
+      );
+    });
+  }, [registrationDrafts, search]);
+
   return (
     <div className="flex w-full flex-col gap-4 lg:gap-5">
       <section className="app-surface rounded-[1.6rem] px-5 py-5 lg:px-6 lg:py-6">
@@ -54,6 +87,7 @@ export function AdminClientsRoute({ viewerAgentId }: { viewerAgentId?: string | 
           actions={
             <div className="flex gap-2">
               <AdminBadge label={`${filteredClients.length} Client Profiles`} />
+              <AdminBadge label={`${filteredRegistrationDrafts.length} In Progress`} tone="muted" />
               <Link
                 href="/admin/registration"
                 className="inline-flex items-center justify-center whitespace-nowrap rounded-full border border-white/16 bg-white/[0.14] px-4 py-1.5 text-[0.66rem] font-semibold uppercase tracking-[0.16em] text-white transition hover:border-white/30 hover:bg-white/[0.22]"
@@ -72,7 +106,7 @@ export function AdminClientsRoute({ viewerAgentId }: { viewerAgentId?: string | 
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Business, profile ID, reg number..."
+              placeholder="Business, profile ID, email, reg number..."
               className="admin-input rounded-[0.8rem] px-3 py-2 text-sm"
             />
           </label>
@@ -95,6 +129,67 @@ export function AdminClientsRoute({ viewerAgentId }: { viewerAgentId?: string | 
       </section>
 
       <section className="app-surface rounded-[1.4rem] p-4">
+        <p className="line-label">Registrations In Progress</p>
+        <div className="mt-3 overflow-auto rounded-[0.9rem] border border-white/10">
+          <table className="w-full min-w-[1080px] text-left">
+            <thead className="bg-black/70">
+              <tr className="text-[0.64rem] uppercase tracking-[0.18em] text-white/50">
+                <th className="px-3 py-2">Business</th>
+                <th className="px-3 py-2">Registration Progress</th>
+                <th className="px-3 py-2">Primary Contact</th>
+                <th className="px-3 py-2">Email</th>
+                <th className="px-3 py-2">Workspace</th>
+                <th className="px-3 py-2">Last Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredRegistrationDrafts.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-3 py-6 text-sm text-white/54">
+                    No in-progress registrations match the current search.
+                  </td>
+                </tr>
+              ) : (
+                filteredRegistrationDrafts.map((draft) => {
+                  const completedCount = REGISTRATION_FIELDS.filter((field) => {
+                    const value = draft.fields[field];
+                    return value !== undefined && value !== null && value !== "";
+                  }).length;
+
+                  return (
+                    <tr
+                      key={draft.draftKey}
+                      className="border-t border-white/8 bg-black/35 text-sm"
+                    >
+                      <td className="px-3 py-2 text-white/78">
+                        {draft.fields.businessName?.trim() || "Unnamed business"}
+                      </td>
+                      <td className="px-3 py-2 text-white/62">
+                        {completedCount} / {REGISTRATION_FIELDS.length} fields captured
+                      </td>
+                      <td className="px-3 py-2 text-white/62">
+                        {`${draft.fields.contactFirstName ?? ""} ${draft.fields.contactSurname ?? ""}`.trim() ||
+                          "Not captured"}
+                      </td>
+                      <td className="px-3 py-2 text-white/62">
+                        {draft.fields.contactEmail ?? "Not captured"}
+                      </td>
+                      <td className="px-3 py-2 text-white/52">
+                        {draft.caseId ? `${draft.workspaceId} / ${draft.caseId}` : draft.workspaceId}
+                      </td>
+                      <td className="px-3 py-2 text-white/52">
+                        {new Date(draft.updatedAt).toLocaleString("en-ZA")}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="app-surface rounded-[1.4rem] p-4">
         <p className="line-label">Client Profiles</p>
         <div className="mt-3 overflow-auto rounded-[0.9rem] border border-white/10">
           <table className="w-full min-w-[1180px] text-left">
@@ -105,6 +200,7 @@ export function AdminClientsRoute({ viewerAgentId }: { viewerAgentId?: string | 
                 <th className="px-3 py-2">Stage</th>
                 <th className="px-3 py-2">Owner</th>
                 <th className="px-3 py-2">Primary Contact</th>
+                <th className="px-3 py-2">Email</th>
                 <th className="px-3 py-2">Client Docs</th>
                 <th className="px-3 py-2">Sales Docs</th>
                 <th className="px-3 py-2">Last Touched</th>
@@ -114,7 +210,7 @@ export function AdminClientsRoute({ viewerAgentId }: { viewerAgentId?: string | 
             <tbody>
               {filteredClients.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-3 py-6 text-sm text-white/54">
+                  <td colSpan={10} className="px-3 py-6 text-sm text-white/54">
                     No clients match the selected filters.
                   </td>
                 </tr>
@@ -148,6 +244,9 @@ export function AdminClientsRoute({ viewerAgentId }: { viewerAgentId?: string | 
                     <td className="px-3 py-2 text-white/62">
                       {lead.contactName}
                       <span className="block text-xs text-white/42">Profile No: {lead.clientProfileId}</span>
+                    </td>
+                    <td className="px-3 py-2 text-white/62">
+                      {lead.userProfile.email || "Not captured"}
                     </td>
                     <td className="px-3 py-2 text-white/62">{clientDocCount(lead.documents)}</td>
                     <td className="px-3 py-2 text-white/62">{salesDocCount(lead.documents)}</td>

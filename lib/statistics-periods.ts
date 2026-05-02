@@ -59,7 +59,7 @@ function applyTimeLabel(date: Date, label: string) {
   return date;
 }
 
-export function parseStatisticDate(value: string | null | undefined, now = new Date()) {
+function parseStatisticDate(value: string | null | undefined, now = new Date()) {
   if (!value) {
     return null;
   }

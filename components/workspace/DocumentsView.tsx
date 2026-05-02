@@ -311,8 +311,8 @@ export function DocumentsView() {
     if (generalInputRef.current) generalInputRef.current.value = "";
   };
 
-  const askAi = (mode: "Proposal Support" | "Term Sheet Support" | "Review Documents", prompt: string) => {
-    sendMessage(activeCase.id, prompt, mode);
+  const askAi = (prompt: string) => {
+    sendMessage(activeCase.id, prompt);
     router.push(`/case/${activeCase.id}`);
   };
 
@@ -377,10 +377,7 @@ export function DocumentsView() {
                 <GhostButton
                   icon={MessageSquareText}
                   onClick={() =>
-                    askAi(
-                      "Review Documents",
-                      "Please walk me through what the Expression of Interest commits me to before I sign it.",
-                    )
+                    askAi("Please walk me through what the Expression of Interest commits me to before I sign it.")
                   }
                 >
                   Explain the EOI
@@ -445,10 +442,7 @@ export function DocumentsView() {
                 <PrimaryButton
                   icon={Sparkles}
                   onClick={() =>
-                    askAi(
-                      "Proposal Support",
-                      "Can you explain my proposal to me in plain English — what it commits me to, the savings, and what I should look out for?",
-                    )
+                    askAi("Can you explain my proposal to me in plain English — what it commits me to, the savings, and what I should look out for?")
                   }
                 >
                   Explain my proposal
@@ -476,10 +470,7 @@ export function DocumentsView() {
                 <PrimaryButton
                   icon={Sparkles}
                   onClick={() =>
-                    askAi(
-                      "Term Sheet Support",
-                      "Please walk me through every clause of my term sheet — explain what each one means and what I am committing to.",
-                    )
+                    askAi("Please walk me through every clause of my term sheet — explain what each one means and what I am committing to.")
                   }
                 >
                   Explain my term sheet

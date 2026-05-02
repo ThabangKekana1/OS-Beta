@@ -4,6 +4,8 @@ import { ADMIN_AGENTS } from "@/lib/admin-mock-data";
 import {
   buildAdminLeadFromClientRegistration,
   defaultOwnerIdForRegistration,
+  findSignupShellLeadByEmail,
+  promoteSignupLeadToClientRegistration,
 } from "@/lib/client-registration";
 import { registrationLinkIdForProfile } from "@/lib/registration-links";
 import type { AdminLeadRegistrationSource } from "@/lib/admin-types";
@@ -104,7 +106,7 @@ export async function POST(
     return NextResponse.json({ ok: false, error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const created = buildAdminLeadFromClientRegistration({
+  const registrationInput = {
     businessName: typeof payload.businessName === "string" ? payload.businessName : "",
     businessRegistrationNumber:
       typeof payload.businessRegistrationNumber === "string"
@@ -132,7 +134,16 @@ export async function POST(
     origin: "website",
     ownerId: defaultOwnerIdForRegistration(source),
     registrationSource: source,
-  });
+  } as const;
+
+  const { snapshot } = await readAdminStateSnapshot();
+  const existingSignupShell = findSignupShellLeadByEmail(
+    snapshot.leads,
+    typeof payload.contactEmail === "string" ? payload.contactEmail : "",
+  );
+  const created = existingSignupShell
+    ? promoteSignupLeadToClientRegistration(existingSignupShell, registrationInput)
+    : buildAdminLeadFromClientRegistration(registrationInput);
 
   if (!created) {
     return NextResponse.json(
@@ -141,10 +152,11 @@ export async function POST(
     );
   }
 
-  const { snapshot } = await readAdminStateSnapshot();
   const nextSnapshot = {
     ...snapshot,
-    leads: [created.lead, ...snapshot.leads],
+    leads: existingSignupShell
+      ? [created.lead, ...snapshot.leads.filter((lead) => lead.id !== existingSignupShell.id)]
+      : [created.lead, ...snapshot.leads],
     activeLeadId: created.leadId,
   };
   const backend = await writeAdminStateSnapshot(nextSnapshot, `public-registration:${linkId}`);
