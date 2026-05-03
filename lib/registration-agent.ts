@@ -99,7 +99,7 @@ const FIELD_QUESTIONS: Record<keyof RegistrationFields, string> = {
   contactEmail: "What is the contact's email address?",
   contactNumber: "What is the contact's phone number?",
   monthlyElectricitySpendEstimateZar:
-    "What is the average monthly electricity spend in Rand? We need at least R10,000 per month to proceed.",
+    "What is the average monthly electricity spend in Rand? Please give a clear figure, e.g. \"R15,000 per month\" or \"R10k–R20k\". We need at least R10,000 per month to proceed.",
   isBusinessRegistered: "Is the business officially registered with CIPC?",
   isBusinessOperational: "Is the business currently operational?",
   hasSixMonthUtilityBill:
@@ -297,7 +297,13 @@ export function buildRegistrationStatePrompt(draft: RegistrationDraft | null): s
   const missing = missingFields(fields);
 
   const lines = [
-    "REGISTRATION MODE — you are conversationally collecting business registration details.",
+    "REGISTRATION MODE — you are Dawn, the conversational onboarding agent for 1OS / Nedbank Generocity.",
+    "Your purpose, in this exact order, is to:",
+    "  1. PRE-QUALIFY the client (CIPC-registered, currently operational, ≥R10,000/month electricity spend, has 6 months of utility bills or prepaid receipts).",
+    "  2. COLLECT the full business registration details and submit the registration into 1OS.",
+    "  3. Direct the client to sign their auto-generated EOI in the Documents tab.",
+    "  4. After EOI is signed, request the last 6 months of utility bills/prepaid receipts so Nedbank can prepare the Generocity proposal.",
+    "Stay focused on these goals. Do not advance to a later goal until the current one is complete.",
     `Status: ${draft?.status ?? "not started"}`,
     collected.length > 0
       ? `Already collected:\n- ${collected.join("\n- ")}`
@@ -313,7 +319,14 @@ export function buildRegistrationStatePrompt(draft: RegistrationDraft | null): s
     "- Acknowledge what they just told you before asking the next question.",
     "- If they provide multiple things in one message, that's fine — extraction handles it.",
     "- Never invent or assume values.",
-    "- If the user's last reply was vague, off-topic, or did not contain the exact value for the field you just asked about, ask again EXPLICITLY for that exact value, with an example of the format you need (e.g. \"I need a clear yes or no\", \"I need the CIPC number in format YYYY/NNNNNN/NN like 2018/123456/07\", \"I need a Rand figure like R12,500 per month\", \"I need a valid email like name@business.co.za\"). Do not move on until they answer that specific field with a concrete value.",
+    "- If you DO NOT understand the user's reply, or it is ambiguous, vague, or off-topic, you MUST say so plainly and ask again with a concrete example of the format you need. Examples you should use:",
+    "    • Spend: \"I'm not sure I caught that — please give me the average monthly Rand figure, e.g. 'R15,000 per month' or 'R10k–R20k per month'.\"",
+    "    • CIPC number: \"I need the CIPC number in the format YYYY/NNNNNN/NN, e.g. 2018/123456/07.\"",
+    "    • Yes/no: \"Just to confirm — please reply yes or no.\"",
+    "    • Email: \"Please share an email address in the format name@company.co.za.\"",
+    "    • Phone: \"Please share a South African phone number, e.g. 0821234567 or +27821234567.\"",
+    "  Do not move on until they answer that specific field with a concrete, parseable value.",
+    "- If the spend the user gave looks suspiciously small (e.g. they typed '10' or 'R10' with no 'k', no 'thousand', and no thousands separator), assume they meant a larger figure and ask: \"Did you mean R10,000 per month? Please confirm the full Rand amount, e.g. 'R10,000' or 'R10k'.\" Do NOT silently accept tiny figures.",
     "- If they ask what you need, summarise the missing items in plain language.",
     "- Once all fields are collected, pause for an explicit confirmation before submission.",
     "- After submission, the EOI is generated automatically. Direct the client to sign it in the Documents tab and tell them the next step after signing is uploading 6 months of utility bills so Nedbank can prepare their Generocity proposal.",
@@ -356,7 +369,9 @@ Return STRICT JSON matching this TypeScript type. Include EVERY field that is pr
 }
 
 Rules:
-- Numbers are plain numbers, not strings (e.g. "R12,500/month" -> 12500; "about R28,500" -> 28500).
+- Numbers are plain numbers, not strings. Convert k/K to thousands and m/M to millions: "R12,500/month" -> 12500; "about R28,500" -> 28500; "R10k" -> 10000; "R1.5m" -> 1500000; "R10 000" -> 10000.
+- For ranges like "R15k-R20k" or "between R15,000 and R20,000" or "R15 to R20 thousand", return the LOWER bound (e.g. 15000) — pre-qualification is conservative.
+- DO NOT extract monthlyElectricitySpendEstimateZar if the user's number is below R1,000 unless they explicitly state a sub-R1,000 figure with the "R" prefix or "per month" suffix. Bare numbers like "10" most likely mean "R10,000" — omit the field so the agent can ask for clarification.
 - Use ONLY the user's statements as facts. You may use assistant questions only to resolve short replies like "yes", "no", "I do", or "same address".
 - Booleans ONLY when the user explicitly states the fact about their business. Phrases like "I want to register" or "I'd like to sign up" or "register me" are NOT statements about CIPC registration status — omit isBusinessRegistered in that case.
 - isBusinessRegistered=true ONLY if the user explicitly says the business is registered, or supplies a CIPC number, or affirms "yes" / "yeah" / "yep" / "correct" / "we are" to the assistant's most recent direct registration question.
@@ -372,6 +387,86 @@ function parseCurrencyNumber(value: string) {
   const digits = value.replace(/[^\d]/g, "");
   return digits ? Math.max(0, Number.parseInt(digits, 10)) : null;
 }
+
+/**
+ * Parse a single Rand amount token, honouring k/K (thousands) and m/M
+ * (millions) suffixes. Examples:
+ *   "R10k"        -> 10000
+ *   "R10 000"     -> 10000
+ *   "R12,500"     -> 12500
+ *   "R1.5m"       -> 1500000
+ *   "R10.5k"      -> 10500
+ *   "10"          -> 10        (caller decides if this is plausible)
+ */
+function parseRandAmount(token: string): number | null {
+  const trimmed = token.trim().toLowerCase().replace(/^r\s*/, "");
+  const match = trimmed.match(/^(\d+(?:[\s,.]\d+)*)\s*([km])?$/i);
+  if (!match) return parseCurrencyNumber(token);
+  const numericPart = match[1].replace(/[\s,]/g, "");
+  // Decide if the dot is a decimal point (single dot, ≤3 trailing digits) or a
+  // thousands separator. Accountants in SA use both; default to decimal when
+  // the suffix is k/m, otherwise treat as thousands separator.
+  const suffix = match[2]?.toLowerCase();
+  let value: number;
+  if (suffix) {
+    value = Number.parseFloat(numericPart);
+    if (!Number.isFinite(value)) return null;
+    value *= suffix === "m" ? 1_000_000 : 1_000;
+  } else {
+    value = Number.parseInt(numericPart.replace(/\./g, ""), 10);
+    if (!Number.isFinite(value)) return null;
+  }
+  return Math.max(0, Math.round(value));
+}
+
+/**
+ * Find Rand amounts in a free-text reply. Returns the LOWER bound when a
+ * range like "R15k-R20k" or "between R15,000 and R20,000" is detected, since
+ * pre-qualification should be conservative.
+ */
+function extractMonthlyRandAmount(text: string): number | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+
+  const tokenPattern = /\bR?\s?\d+(?:[\s,.]\d+)*\s*[km]?\b/gi;
+  const tokens = trimmed.match(tokenPattern) ?? [];
+  // Drop tokens that are obviously not currency (years, phone fragments).
+  const amounts = tokens
+    .map((tok) => ({ raw: tok, value: parseRandAmount(tok) }))
+    .filter((entry): entry is { raw: string; value: number } => {
+      if (entry.value === null) return false;
+      // Reject 4-digit numbers that look like a year (1900-2099) unless they
+      // explicitly carry an R prefix or k/m suffix.
+      if (/^\d{4}$/.test(entry.raw.trim()) && entry.value >= 1900 && entry.value <= 2099) {
+        return false;
+      }
+      return true;
+    });
+
+  if (amounts.length === 0) return null;
+
+  // Prefer tokens that explicitly carried an R prefix or k/m suffix.
+  const explicit = amounts.filter((entry) => /^R/i.test(entry.raw.trim()) || /[km]\b/i.test(entry.raw.trim()));
+  const candidates = explicit.length > 0 ? explicit : amounts;
+
+  // If two amounts appear and the message looks like a range, take the lower.
+  const isRange =
+    /\b(?:between|from)\b/i.test(trimmed) ||
+    /[-–—]/.test(trimmed) ||
+    /\bto\b/i.test(trimmed);
+  if (candidates.length >= 2 && isRange) {
+    return Math.min(...candidates.map((c) => c.value));
+  }
+
+  return candidates[0].value;
+}
+
+/**
+ * Treat any value below R1,000/month as ambiguous. People type "10" when they
+ * mean "R10,000", and we should not silently disqualify them — the agent
+ * should ask for clarification with an example.
+ */
+const SUSPICIOUSLY_LOW_SPEND_ZAR = 1_000;
 
 function normalizeBusinessRegistrationNumber(value: string | null | undefined) {
   const normalized = value?.trim() ?? "";
@@ -463,14 +558,9 @@ function extractDeterministicRegistrationFields(
     "average monthly electricity spend",
     "monthly spend",
   ]);
-  const spendNaturalMatch =
-    text.match(/\b(?:spend|spending|pay|paying)\b[^.\n]*?\bR\s?[\d,.]+/i)?.[0]
-    ?? text.match(/\bR\s?[\d,.]+\s*(?:per month|monthly)[^.\n]*/i)?.[0]
-    ?? null;
-  const parsedSpendSource = spendRaw ?? spendNaturalMatch;
-  if (parsedSpendSource) {
-    const parsedSpend = parseCurrencyNumber(parsedSpendSource);
-    if (parsedSpend !== null) extracted.monthlyElectricitySpendEstimateZar = parsedSpend;
+  const spendCandidate = spendRaw ? parseRandAmount(spendRaw) : extractMonthlyRandAmount(text);
+  if (spendCandidate !== null && spendCandidate >= SUSPICIOUSLY_LOW_SPEND_ZAR) {
+    extracted.monthlyElectricitySpendEstimateZar = spendCandidate;
   }
 
   const physicalAddress = captureLabelValue(text, ["physical address", "street address", "address"]);
@@ -564,8 +654,14 @@ function sanitizeExtracted(raw: RegistrationFields): RegistrationFields {
   if (typeof raw.contactPosition === "string") out.contactPosition = raw.contactPosition.trim();
   if (typeof raw.contactEmail === "string") out.contactEmail = raw.contactEmail.trim().toLowerCase();
   if (typeof raw.contactNumber === "string") out.contactNumber = raw.contactNumber.trim();
-  if (typeof raw.monthlyElectricitySpendEstimateZar === "number" && Number.isFinite(raw.monthlyElectricitySpendEstimateZar))
-    out.monthlyElectricitySpendEstimateZar = Math.max(0, Math.round(raw.monthlyElectricitySpendEstimateZar));
+  if (typeof raw.monthlyElectricitySpendEstimateZar === "number" && Number.isFinite(raw.monthlyElectricitySpendEstimateZar)) {
+    const rounded = Math.max(0, Math.round(raw.monthlyElectricitySpendEstimateZar));
+    // Reject obviously-too-small values (e.g. user typed "10" meaning R10,000).
+    // The agent will ask for clarification with an example.
+    if (rounded >= SUSPICIOUSLY_LOW_SPEND_ZAR) {
+      out.monthlyElectricitySpendEstimateZar = rounded;
+    }
+  }
   if (typeof raw.isBusinessRegistered === "boolean") out.isBusinessRegistered = raw.isBusinessRegistered;
   if (typeof raw.isBusinessOperational === "boolean") out.isBusinessOperational = raw.isBusinessOperational;
   if (typeof raw.hasSixMonthUtilityBill === "boolean") out.hasSixMonthUtilityBill = raw.hasSixMonthUtilityBill;
@@ -639,11 +735,13 @@ export async function advanceRegistration(input: {
 
   const scope = { workspaceId: input.workspaceId, caseId: input.caseId };
   const existing = await loadRegistrationDraft(scope);
-  if (existing && (existing.status === "submitted" || existing.status === "disqualified")) {
+
+  // Submitted is final — we never want to recreate the lead.
+  if (existing && existing.status === "submitted") {
     let noteForUser: string | null = null;
     let submittedEoiSigningToken: string | null = null;
 
-    if (existing.status === "submitted" && existing.completedLeadId) {
+    if (existing.completedLeadId) {
       const { readAdminStateSnapshot } = await import("@/lib/admin-state-store");
       const { snapshot } = await readAdminStateSnapshot();
       const lead = snapshot.leads.find((entry) => entry.id === existing.completedLeadId) ?? null;
@@ -661,7 +759,34 @@ export async function advanceRegistration(input: {
     };
   }
 
-  const currentFields = existing?.fields ?? {};
+  // Disqualified is RECOVERABLE: if the user clarifies (e.g. "sorry, I meant
+  // R20k not R10") and the corrected facts pass pre-qualification, we resume
+  // the draft instead of stonewalling them.
+  let workingDraft = existing;
+  if (workingDraft && workingDraft.status === "disqualified") {
+    const recheckExtracted = await extractRegistrationFields({
+      apiKey: input.apiKey,
+      model: input.model,
+      currentFields: workingDraft.fields,
+      recentHistory: input.recentHistory,
+      latestUser: input.latestUser,
+    });
+    const candidateFields = mergeFields(workingDraft.fields, recheckExtracted);
+    const recheck = evaluatePrequalification(candidateFields, input.prequal);
+    if (recheck.ok) {
+      await saveRegistrationDraft(scope, candidateFields);
+      workingDraft = await loadRegistrationDraft(scope);
+    } else {
+      return {
+        draft: workingDraft,
+        noteForUser: `${input.prequal.softDisqualifyMessage}\n\nReason: ${workingDraft.disqualificationReason ?? recheck.reason}`,
+        disqualified: { reason: workingDraft.disqualificationReason ?? recheck.reason },
+        extracted: recheckExtracted,
+      };
+    }
+  }
+
+  const currentFields = workingDraft?.fields ?? {};
   const extracted = await extractRegistrationFields({
     apiKey: input.apiKey,
     model: input.model,
