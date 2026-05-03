@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import {
   useWorkspace,
-  type WorkspaceUploadCategory,
 } from "@/components/providers/WorkspaceProvider";
 import { downloadBlobFile } from "@/lib/download-utils";
 import type { DocumentSubmission } from "@/lib/types";
@@ -164,8 +163,6 @@ export function DocumentsView() {
   const router = useRouter();
   const { activeCase, uploadFiles, sendMessage, workspaceId } = useWorkspace();
   const utilityInputRef = useRef<HTMLInputElement | null>(null);
-  const generalInputRef = useRef<HTMLInputElement | null>(null);
-  const [generalCategory, setGeneralCategory] = useState<WorkspaceUploadCategory>("EOI");
   const [clientLead, setClientLead] = useState<ClientOnboardingLead | null>(null);
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
 
@@ -302,13 +299,6 @@ export function DocumentsView() {
     if (!list || list.length === 0) return;
     uploadFiles(activeCase.id, "Utility Bills", Array.from(list));
     if (utilityInputRef.current) utilityInputRef.current.value = "";
-  };
-
-  const handleGeneralChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const list = event.target.files;
-    if (!list || list.length === 0) return;
-    uploadFiles(activeCase.id, generalCategory, Array.from(list));
-    if (generalInputRef.current) generalInputRef.current.value = "";
   };
 
   const askAi = (prompt: string) => {
@@ -487,29 +477,6 @@ export function DocumentsView() {
           <div>
             <p className="line-label">All Documents</p>
             <h2 className="mt-2 text-lg font-medium text-white">{displayDocuments.length} on file</h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <select
-              value={generalCategory}
-              onChange={(event) => setGeneralCategory(event.target.value as WorkspaceUploadCategory)}
-              className="h-9 rounded-full border border-white/12 bg-black/55 px-3 text-xs font-medium text-white outline-none transition focus:border-white/32"
-            >
-              {(["EOI", "Utility Bills", "Proposal", "Term Sheet"] as const).map((option) => (
-                <option key={option} value={option} className="bg-zinc-950">
-                  {option}
-                </option>
-              ))}
-            </select>
-            <input
-              ref={generalInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={handleGeneralChange}
-            />
-            <GhostButton icon={Upload} onClick={() => generalInputRef.current?.click()}>
-              Upload
-            </GhostButton>
           </div>
         </header>
 
