@@ -516,6 +516,44 @@ function extractDeterministicRegistrationFields(
     }
   }
 
+  // Resolve short free-text replies (1-6 words, no labels) against the
+  // assistant's most recent question. Without this, a bare "Technology!" reply
+  // to "What industry sector does the business operate in?" never gets bound
+  // to the `industry` field and the agent loops on the same question forever.
+  const cleanedShort = text.trim().replace(/^[\s\p{P}]+|[\s\p{P}]+$/gu, "");
+  const wordCount = cleanedShort ? cleanedShort.split(/\s+/).length : 0;
+  const isShortFreeText =
+    cleanedShort.length > 0 &&
+    cleanedShort.length <= 80 &&
+    wordCount <= 6 &&
+    !isShortYes &&
+    !isShortNo &&
+    !/[:\-]/.test(cleanedShort) &&
+    !/@/.test(cleanedShort) &&
+    !/\d{3,}/.test(cleanedShort);
+
+  if (isShortFreeText && lastAssistantMessage) {
+    const lastQ = lastAssistantMessage.toLowerCase();
+    // Order matters — most specific phrases first.
+    if (/\bindustry\b/.test(lastQ)) {
+      extracted.industry = cleanedShort;
+    } else if (/\b(?:business|company|registered) name\b/.test(lastQ)) {
+      extracted.businessName = cleanedShort;
+    } else if (/\bfirst name\b/.test(lastQ)) {
+      extracted.contactFirstName = cleanedShort;
+    } else if (/\b(?:surname|last name)\b/.test(lastQ)) {
+      extracted.contactSurname = cleanedShort;
+    } else if (/\b(?:position|role|job title|title in (?:the )?company)\b/.test(lastQ)) {
+      extracted.contactPosition = cleanedShort;
+    } else if (/\bprovince\b/.test(lastQ)) {
+      extracted.province = cleanedShort;
+    } else if (/\bcity\b/.test(lastQ)) {
+      extracted.city = cleanedShort;
+    } else if (/\b(?:physical address|street address|address)\b/.test(lastQ) && wordCount >= 2) {
+      extracted.physicalAddress = cleanedShort;
+    }
+  }
+
   const businessName = captureLabelValue(text, ["business name", "registered business name"]);
   if (businessName) extracted.businessName = businessName;
 
