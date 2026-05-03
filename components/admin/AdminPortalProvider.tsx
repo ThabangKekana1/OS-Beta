@@ -361,36 +361,24 @@ export function AdminPortalProvider({
 
         const snapshot = normalizeAdminStateSnapshot(payload.snapshot);
         if (!cancelled && snapshot) {
-          // Server is the source of truth: take its records, then keep any
-          // strictly local-only items (created on this client before sync).
-          const serverLeadIds = new Set(snapshot.leads.map((lead) => lead.id));
-          const serverSalesIds = new Set(
-            snapshot.salesLeads.map((lead) => lead.id),
-          );
-
-          setLeads((current) => {
-            const localOnly = current.filter(
-              (lead) => !serverLeadIds.has(lead.id),
-            );
-            const next = [...localOnly, ...snapshot.leads];
+          // Server is the single source of truth. Replace local state outright
+          // so admin wipes / deletions actually clear the dashboard instead of
+          // resurrecting stale records cached in this browser's localStorage.
+          setLeads(() => {
             latestSnapshotRef.current = {
               ...latestSnapshotRef.current,
-              leads: next,
+              leads: snapshot.leads,
             };
-            return next;
+            return snapshot.leads;
           });
-          setSalesLeads((current) => {
-            const localOnly = current.filter(
-              (lead) => !serverSalesIds.has(lead.id),
-            );
-            const next = [...localOnly, ...snapshot.salesLeads];
+          setSalesLeads(() => {
             latestSnapshotRef.current = {
               ...latestSnapshotRef.current,
-              salesLeads: next,
+              salesLeads: snapshot.salesLeads,
             };
-            return next;
+            return snapshot.salesLeads;
           });
-          setActiveLeadId((current) => current ?? snapshot.activeLeadId);
+          setActiveLeadId(snapshot.activeLeadId);
 
           // Baseline tracks ONLY what the server has confirmed.
           leadsBaselineRef.current = new Map(
@@ -402,6 +390,15 @@ export function AdminPortalProvider({
           setRegistrationDrafts(
             Array.isArray(payload.registrationDrafts) ? payload.registrationDrafts : [],
           );
+
+          // Mirror authoritative server snapshot into the local cache so the
+          // next first-paint isn't seeded from stale data.
+          writeAdminStorageSnapshot({
+            leads: snapshot.leads,
+            salesLeads: snapshot.salesLeads,
+            partnerOrgs: snapshot.partnerOrgs ?? [],
+            activeLeadId: snapshot.activeLeadId,
+          });
         }
 
         if (!cancelled) {
