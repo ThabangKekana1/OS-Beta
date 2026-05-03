@@ -359,9 +359,11 @@ Rules:
 - Numbers are plain numbers, not strings (e.g. "R12,500/month" -> 12500; "about R28,500" -> 28500).
 - Use ONLY the user's statements as facts. You may use assistant questions only to resolve short replies like "yes", "no", "I do", or "same address".
 - Booleans ONLY when the user explicitly states the fact about their business. Phrases like "I want to register" or "I'd like to sign up" or "register me" are NOT statements about CIPC registration status — omit isBusinessRegistered in that case.
-- isBusinessRegistered=true ONLY if the user explicitly says the business is registered, or supplies a CIPC number, or affirms "yes" to a direct registration question.
-- isBusinessRegistered=false ONLY if the user explicitly says the business is NOT registered.
-- Same strictness for isBusinessOperational and hasSixMonthUtilityBill — only set them when the user makes a direct statement about the business.
+- isBusinessRegistered=true ONLY if the user explicitly says the business is registered, or supplies a CIPC number, or affirms "yes" / "yeah" / "yep" / "correct" / "we are" to the assistant's most recent direct registration question.
+- isBusinessRegistered=false ONLY if the user explicitly says the business is NOT registered, or replies "no" / "nope" / "not yet" to the assistant's most recent direct registration question.
+- isBusinessOperational=true ONLY if the user explicitly says the business is operational/trading, or affirms "yes" / "yeah" / "yep" / "correct" / "we are" to the assistant's most recent direct operational question. isBusinessOperational=false ONLY if they explicitly say it is not operational, or reply "no" / "not yet" to that question.
+- hasSixMonthUtilityBill=true ONLY if the user says they have at least 6 months of utility bills/prepaid receipts, or affirms "yes" / "yeah" to the assistant's most recent direct question about 6 months of utility bills/prepaid receipts. hasSixMonthUtilityBill=false ONLY if they explicitly say they don't have 6 months, or reply "no" to that question.
+- A short user reply such as "yes", "yeah", "yep", "correct", "we are", "no", "nope", or "not yet" MUST be resolved against the assistant's most recent question in the transcript above and mapped to the corresponding boolean field.
 - "physicalAddress" is the street line only (e.g. "12 Long Street"); "city" and "province" are separate. South African provinces: Gauteng, Western Cape, KwaZulu-Natal, Eastern Cape, Free State, Limpopo, Mpumalanga, North West, Northern Cape.
 - "hasSixMonthUtilityBill" is true if they have 6 OR MORE months of utility bills OR prepaid electricity receipts.
 - Output ONLY the raw JSON object. No markdown fences, no preamble. If nothing can be extracted, return {}.`;
@@ -389,8 +391,31 @@ function captureLabelValue(text: string, labels: string[]) {
   return null;
 }
 
-function extractDeterministicRegistrationFields(text: string): RegistrationFields {
+function extractDeterministicRegistrationFields(
+  text: string,
+  lastAssistantMessage?: string | null,
+): RegistrationFields {
   const extracted: RegistrationFields = {};
+
+  // Resolve short yes/no replies against the assistant's most recent question.
+  // This is critical for booleans like isBusinessOperational, where a bare "yes"
+  // is otherwise ignored by both this regex extractor and (sometimes) the LLM.
+  const trimmed = text.trim().toLowerCase();
+  const yesPattern = /^(?:y|ya|ye|yes|yeah|yep|yup|yess+|sure|correct|affirmative|definitely|absolutely|of course|we are|we do|i am|i do|it is|that'?s right|that is right|right|ok|okay|👍|✅)[!.\s]*$/i;
+  const noPattern = /^(?:n|no|nope|nah|not yet|negative|we are not|we don'?t|i don'?t|it is not|it isn'?t|not really)[!.\s]*$/i;
+  const isShortYes = yesPattern.test(trimmed);
+  const isShortNo = noPattern.test(trimmed);
+  if ((isShortYes || isShortNo) && lastAssistantMessage) {
+    const lastQ = lastAssistantMessage.toLowerCase();
+    const value = isShortYes;
+    if (/\b(cipc|registered with cipc|officially registered|business registered|registration with cipc)\b/.test(lastQ)) {
+      extracted.isBusinessRegistered = value;
+    } else if (/\b(operational|currently trading|trading|in operation|active business)\b/.test(lastQ)) {
+      extracted.isBusinessOperational = value;
+    } else if (/\b(6 months|six months|utility bills?|prepaid (?:electricity )?receipts?|prepaid slips?)\b/.test(lastQ)) {
+      extracted.hasSixMonthUtilityBill = value;
+    }
+  }
 
   const businessName = captureLabelValue(text, ["business name", "registered business name"]);
   if (businessName) extracted.businessName = businessName;
@@ -481,7 +506,8 @@ function extractDeterministicRegistrationFields(text: string): RegistrationField
 async function extractRegistrationFields(
   input: ExtractInput,
 ): Promise<RegistrationFields> {
-  const deterministic = extractDeterministicRegistrationFields(input.latestUser);
+  const lastAssistant = [...input.recentHistory].reverse().find((t) => t.role === "assistant")?.content ?? null;
+  const deterministic = extractDeterministicRegistrationFields(input.latestUser, lastAssistant);
   const transcript = [...input.recentHistory, { role: "user", content: input.latestUser }]
     .slice(-40)
     .map((turn) => `${turn.role === "assistant" ? "Assistant" : "User"}: ${turn.content}`)
