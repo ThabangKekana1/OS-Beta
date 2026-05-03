@@ -40,7 +40,10 @@ export function AdminHeader({
     <div className="flex flex-col gap-4 border-b border-white/8 pb-5 lg:flex-row lg:items-end lg:justify-between">
       <div>
         <p className="line-label">{eyebrow}</p>
-        <h1 className="mt-3 max-w-4xl text-[clamp(1.9rem,4vw,4.2rem)] font-medium tracking-[-0.06em] text-white">
+        <h1
+          className="mt-3 max-w-3xl text-[clamp(1.6rem,2.4vw,2.4rem)] font-medium leading-[1.1] tracking-[-0.03em] text-white"
+          style={{ textWrap: "balance" }}
+        >
           {title}
         </h1>
         <p className="mt-3 max-w-3xl text-base leading-7 text-white/62">{description}</p>

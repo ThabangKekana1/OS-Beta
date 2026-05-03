@@ -82,7 +82,7 @@ export function AdminOverviewRoute({
       <section className="app-surface rounded-[2.2rem] px-5 py-5 lg:px-7 lg:py-6">
         <AdminHeader
           eyebrow="Admin CRM"
-          title="Independent sales command center for 1OS Migrate leads."
+          title="Sales command centre for 1OS Migrate leads."
           description="Track pipeline health, revenue potential, and follow-through quality without touching the client migration workspace."
           actions={
             <div className="flex flex-wrap gap-2">
