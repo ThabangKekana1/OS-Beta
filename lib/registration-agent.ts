@@ -554,6 +554,27 @@ function extractDeterministicRegistrationFields(
     }
   }
 
+  // Resolve a free-text reply to a recent address question. Addresses contain
+  // digits (street numbers, postal codes) so they are deliberately handled
+  // outside the short-free-text guard above.
+  if (!extracted.physicalAddress && lastAssistantMessage) {
+    const lastQ = lastAssistantMessage.toLowerCase();
+    const askedForAddress = /\b(?:physical address|street address|premises address|business address|site address|address)\b/.test(lastQ);
+    const looksLikeAddress =
+      cleanedShort.length >= 5 &&
+      cleanedShort.length <= 200 &&
+      !/@/.test(cleanedShort) &&
+      // Must look like an address: digits + a street word, OR multiple comma-separated parts.
+      (
+        /\b\d+\s+\S+/.test(cleanedShort) ||
+        /\b(?:street|st\.?|road|rd\.?|avenue|ave\.?|drive|dr\.?|lane|ln\.?|way|crescent|cres\.?|close|cl\.?|boulevard|blvd\.?|highway|hwy\.?|park|place|pl\.?)\b/i.test(cleanedShort) ||
+        cleanedShort.split(",").length >= 2
+      );
+    if (askedForAddress && looksLikeAddress) {
+      extracted.physicalAddress = cleanedShort;
+    }
+  }
+
   const businessName = captureLabelValue(text, ["business name", "registered business name"]);
   if (businessName) extracted.businessName = businessName;
 
