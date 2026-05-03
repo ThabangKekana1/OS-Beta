@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { EoiTemplateLead } from "@/lib/eoi-template";
 
 type EoiLeadView = EoiTemplateLead & {
@@ -93,11 +94,30 @@ function EoiDocument({ lead }: { lead: EoiLeadView }) {
 }
 
 export function EoiSigningForm({ token, initialLead }: EoiSigningFormProps) {
+  const router = useRouter();
   const [lead, setLead] = useState(initialLead);
   const [approved, setApproved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [redirectIn, setRedirectIn] = useState<number | null>(null);
   const signedAt = signedAtLabel(lead.eoiSignedAt);
+
+  useEffect(() => {
+    if (!lead.isSigned) return;
+    setRedirectIn(3);
+    const tick = setInterval(() => {
+      setRedirectIn((current) => {
+        if (current === null) return null;
+        if (current <= 1) {
+          clearInterval(tick);
+          router.push("/workspace");
+          return 0;
+        }
+        return current - 1;
+      });
+    }, 1000);
+    return () => clearInterval(tick);
+  }, [lead.isSigned, router]);
 
   const submit = async () => {
     setError(null);
@@ -150,6 +170,18 @@ export function EoiSigningForm({ token, initialLead }: EoiSigningFormProps) {
             Approved by {lead.eoiSignedBy ?? lead.contactName}
             {signedAt ? ` on ${signedAt}` : ""}
           </p>
+          <p className="mt-3 text-sm text-emerald-100/80">
+            {redirectIn !== null && redirectIn > 0
+              ? `Redirecting you to your workspace in ${redirectIn}\u2026`
+              : "Redirecting you to your workspace\u2026"}
+          </p>
+          <button
+            type="button"
+            onClick={() => router.push("/workspace")}
+            className="mt-3 inline-flex items-center justify-center rounded-xl border border-white/18 bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-white/90"
+          >
+            Go to workspace now
+          </button>
         </section>
         <EoiDocument lead={lead} />
       </div>
