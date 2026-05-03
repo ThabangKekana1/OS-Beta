@@ -706,7 +706,7 @@ export async function advanceRegistration(input: {
         status: "disqualified",
         disqualificationReason: prequalCheck.reason,
       },
-      noteForUser: input.prequal.softDisqualifyMessage,
+      noteForUser: `${input.prequal.softDisqualifyMessage}\n\nReason: ${prequalCheck.reason}`,
       disqualified: { reason: prequalCheck.reason },
       extracted,
     };
@@ -837,7 +837,12 @@ export function buildRegistrationReply(input: {
   }
 
   if (draft.status === "disqualified") {
-    return fallbackNote?.trim() || input.prequal.softDisqualifyMessage;
+    const base = fallbackNote?.trim() || input.prequal.softDisqualifyMessage;
+    const reason = draft.disqualificationReason?.trim();
+    if (reason && !base.includes(reason)) {
+      return `${base}\n\nReason: ${reason}`;
+    }
+    return base;
   }
 
   if (draft.status === "submitted") {
