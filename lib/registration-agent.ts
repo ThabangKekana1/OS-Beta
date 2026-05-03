@@ -490,7 +490,182 @@ function captureLabelValue(text: string, labels: string[]) {
   return null;
 }
 
-function extractDeterministicRegistrationFields(
+/**
+ * Detect which single registration field the assistant most recently asked
+ * about, by pattern-matching the assistant's last message. Returns null if
+ * the assistant did not ask about any specific field (or asked about more
+ * than one in a way we cannot disambiguate).
+ *
+ * Order matters: more specific phrases ("CIPC business registration number")
+ * are tested before more generic ones ("business name", "address").
+ */
+export function detectAskedField(
+  lastAssistantMessage: string | null | undefined,
+): keyof RegistrationFields | null {
+  if (!lastAssistantMessage) return null;
+  const q = lastAssistantMessage.toLowerCase();
+  // Booleans
+  if (/\b(cipc|registered with cipc|officially registered|business registered|registration with cipc)\b/.test(q) && /\?|register/.test(q) && !/registration number/.test(q)) {
+    return "isBusinessRegistered";
+  }
+  if (/\b(operational|currently trading|in operation|currently active|active business)\b/.test(q)) {
+    return "isBusinessOperational";
+  }
+  if (/\b(?:6 months|six months|last 6|last six)\b.*\b(?:utility bills?|prepaid|receipts?|slips?|bills?)\b/.test(q)
+      || /\b(?:utility bills?|prepaid (?:electricity )?receipts?|prepaid slips?)\b/.test(q)) {
+    return "hasSixMonthUtilityBill";
+  }
+  // Spend
+  if (/\b(?:monthly )?(?:electricity )?spend\b/.test(q) || /\brand (?:figure|amount)\b/.test(q)) {
+    return "monthlyElectricitySpendEstimateZar";
+  }
+  // Free text fields — most specific first
+  if (/\b(?:cipc|business registration|registration) number\b/.test(q)) return "businessRegistrationNumber";
+  if (/\bindustry\b/.test(q)) return "industry";
+  if (/\bfirst name\b/.test(q)) return "contactFirstName";
+  if (/\b(?:surname|last name)\b/.test(q)) return "contactSurname";
+  if (/\b(?:position|role|job title|title (?:in|at) (?:the )?company)\b/.test(q)) return "contactPosition";
+  if (/\b(?:email|e-?mail)\b/.test(q)) return "contactEmail";
+  if (/\b(?:phone|mobile|cell|contact) (?:number|no\.?)\b|\bcontact (?:number|details)\b/.test(q)) return "contactNumber";
+  if (/\bprovince\b/.test(q)) return "province";
+  if (/\bcity\b/.test(q) && !/\bcity hall\b/.test(q)) return "city";
+  if (/\b(?:physical address|street address|premises address|business address|site address|address)\b/.test(q)) return "physicalAddress";
+  if (/\b(?:business name|company name|registered (?:business |company )?name|name of (?:the |your )?(?:business|company))\b/.test(q)) return "businessName";
+  return null;
+}
+
+/**
+ * Strip common conversational filler so a sentence reply like "we operate in
+ * the mining sector" reduces to "mining". Handles industry / position /
+ * name-style intros.
+ */
+function stripFiller(value: string): string {
+  return value
+    .trim()
+    .replace(/^(?:so|well|umm?|ah|oh|hi|hey)[,!.\s]+/i, "")
+    .replace(/^(?:it'?s|its|that'?s|this is|the|a|an)\s+/i, "")
+    .replace(/[.!,;]+$/g, "")
+    .trim();
+}
+
+/**
+ * Extract a free-text value for a specific field from a conversational reply.
+ * Handles both bare answers ("Mining") and sentence answers ("we operate in
+ * the mining sector"). Returns null if no plausible value can be recovered.
+ */
+function extractValueForField(
+  field: keyof RegistrationFields,
+  text: string,
+): string | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+
+  // Field-specific sentence patterns first.
+  if (field === "industry") {
+    const m =
+      trimmed.match(/\b(?:we (?:are |operate |work )?in(?:to)?|our industry is|industry is|sector is|we'?re a|we are a)\s+(?:the\s+)?([\w &/-]{2,60}?)(?:\s+(?:industry|sector|space|business|company))?\s*[.!]?$/i) ??
+      trimmed.match(/^([\w &/-]{2,60}?)\s+(?:industry|sector|space)\s*[.!]?$/i);
+    if (m?.[1]) return stripFiller(m[1]);
+  }
+  if (field === "contactPosition") {
+    const m =
+      trimmed.match(/\b(?:i(?:'m|\sam)|i work as|my (?:role|position|title) is|i am the|i'?m the)\s+(?:the\s+|a\s+|an\s+)?([\w][\w &'/-]{1,79}?)(?:\s+(?:at|of|for|in|with)\s+(?:the\s+)?(?:company|business|firm|team|organisation|organization)\b.*)?[.!?]*$/i) ??
+      trimmed.match(/\b(?:position|role|title)\s*(?:is|:)\s*([\w][\w &'/-]{1,79})/i);
+    if (m?.[1]) return stripFiller(m[1]);
+  }
+  if (field === "contactFirstName" || field === "contactSurname") {
+    const m =
+      trimmed.match(/\b(?:my (?:first |last |sur)?name is|i'?m|i am|it'?s|call me)\s+([A-Za-z][A-Za-z'\-]{1,40})\b/i);
+    if (m?.[1]) return stripFiller(m[1]);
+  }
+  if (field === "businessName") {
+    const m =
+      trimmed.match(/\b(?:business|company|it|the (?:business|company))\s+(?:is|name is|is called)\s+(.{2,80}?)\s*[.!?]*$/i) ??
+      trimmed.match(/\b(?:we'?re|we are)\s+([\w '&.,()/-]{2,80})/i);
+    if (m?.[1]) return stripFiller(m[1]);
+  }
+  if (field === "city") {
+    const m = trimmed.match(/\b(?:in|based in|located in|city is)\s+([A-Za-z][A-Za-z '\-]{2,40})/i);
+    if (m?.[1]) return stripFiller(m[1]);
+  }
+  if (field === "province") {
+    const provinces = [
+      "Gauteng", "Western Cape", "KwaZulu-Natal", "Eastern Cape", "Free State",
+      "Limpopo", "Mpumalanga", "North West", "Northern Cape",
+    ];
+    const lower = trimmed.toLowerCase();
+    for (const p of provinces) {
+      if (lower.includes(p.toLowerCase())) return p;
+    }
+  }
+  if (field === "contactEmail") {
+    const m = trimmed.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+    if (m?.[0]) return m[0].toLowerCase();
+  }
+  if (field === "contactNumber") {
+    // Accept South African mobile/landline formats. No \b before \+ (word boundary doesn't match before non-word char).
+    const m =
+      trimmed.match(/(?:\+|00)?\s*27\s*\d(?:[\d\s().-]{7,}\d)/) ??
+      trimmed.match(/\b0\d(?:[\d\s().-]{7,}\d)/) ??
+      trimmed.match(/\b\d{10}\b/);
+    if (m?.[0]) {
+      const raw = m[0].trim();
+      const hasPlusPrefix = /\+\s*27/.test(trimmed) || /^\+/.test(raw);
+      const digitsOnly = raw.replace(/[^\d]/g, "");
+      if (digitsOnly.length >= 9) {
+        if (hasPlusPrefix && digitsOnly.startsWith("27")) return `+${digitsOnly}`;
+        if (digitsOnly.startsWith("0027")) return `+${digitsOnly.slice(2)}`;
+        return digitsOnly;
+      }
+    }
+  }
+  if (field === "businessRegistrationNumber") {
+    const m = trimmed.match(/\b\d{4}\/\d{6}\/\d{2}\b/);
+    if (m?.[0]) return m[0];
+  }
+  if (field === "physicalAddress") {
+    if (
+      trimmed.length >= 5 &&
+      trimmed.length <= 200 &&
+      !/@/.test(trimmed) &&
+      (
+        /\b\d+\s+\S+/.test(trimmed) ||
+        /\b(?:street|st\.?|road|rd\.?|avenue|ave\.?|drive|dr\.?|lane|ln\.?|way|crescent|cres\.?|close|cl\.?|boulevard|blvd\.?|highway|hwy\.?|park|place|pl\.?)\b/i.test(trimmed) ||
+        trimmed.split(",").length >= 2
+      )
+    ) {
+      return stripFiller(trimmed.replace(/^my address is\s+/i, "").replace(/^the address is\s+/i, ""));
+    }
+  }
+
+  // Bare-token fallback for short replies (1-6 words). Used for industry,
+  // names, position, city, etc. when the user just answers with the value.
+  const stripped = stripFiller(trimmed);
+  const wordCount = stripped.split(/\s+/).filter(Boolean).length;
+  if (
+    stripped.length >= 1 &&
+    stripped.length <= 80 &&
+    wordCount <= 6 &&
+    !/[:@]/.test(stripped) &&
+    !/^\d+$/.test(stripped)
+  ) {
+    if (
+      field === "industry" ||
+      field === "businessName" ||
+      field === "contactFirstName" ||
+      field === "contactSurname" ||
+      field === "contactPosition" ||
+      field === "province" ||
+      field === "city"
+    ) {
+      return stripped;
+    }
+  }
+
+  return null;
+}
+
+export function extractDeterministicRegistrationFields(
   text: string,
   lastAssistantMessage?: string | null,
 ): RegistrationFields {
@@ -500,78 +675,51 @@ function extractDeterministicRegistrationFields(
   // This is critical for booleans like isBusinessOperational, where a bare "yes"
   // is otherwise ignored by both this regex extractor and (sometimes) the LLM.
   const trimmed = text.trim().toLowerCase();
-  const yesPattern = /^(?:y|ya|ye|yes|yeah|yep|yup|yess+|sure|correct|affirmative|definitely|absolutely|of course|we are|we do|i am|i do|it is|that'?s right|that is right|right|ok|okay|👍|✅)[!.\s]*$/i;
-  const noPattern = /^(?:n|no|nope|nah|not yet|negative|we are not|we don'?t|i don'?t|it is not|it isn'?t|not really)[!.\s]*$/i;
+  const yesPattern = /^(?:y|ya|ye|yes|yeah|yep|yup|yess+|sure|correct|affirmative|definitely|absolutely|of course|we are|we do|i am|i do|it is|that'?s right|that is right|right|ok|okay|👍|✅)(?:[\s,]+(?:we (?:are|do)|i (?:am|do)|it is|that'?s right|right|sure|of course|definitely|absolutely))?[!.\s]*$/i;
+  const noPattern = /^(?:n|no|nope|nah|not yet|negative|we are not|we don'?t|i don'?t|it is not|it isn'?t|not really)(?:[\s,]+(?:we (?:are not|aren'?t|don'?t)|i (?:am not|don'?t)|it is not|it isn'?t|not really|not yet))?[!.\s]*$/i;
   const isShortYes = yesPattern.test(trimmed);
   const isShortNo = noPattern.test(trimmed);
-  if ((isShortYes || isShortNo) && lastAssistantMessage) {
-    const lastQ = lastAssistantMessage.toLowerCase();
+
+  const askedField = detectAskedField(lastAssistantMessage);
+
+  if (isShortYes || isShortNo) {
     const value = isShortYes;
-    if (/\b(cipc|registered with cipc|officially registered|business registered|registration with cipc)\b/.test(lastQ)) {
-      extracted.isBusinessRegistered = value;
-    } else if (/\b(operational|currently trading|trading|in operation|active business)\b/.test(lastQ)) {
-      extracted.isBusinessOperational = value;
-    } else if (/\b(6 months|six months|utility bills?|prepaid (?:electricity )?receipts?|prepaid slips?)\b/.test(lastQ)) {
-      extracted.hasSixMonthUtilityBill = value;
-    }
+    if (askedField === "isBusinessRegistered") extracted.isBusinessRegistered = value;
+    else if (askedField === "isBusinessOperational") extracted.isBusinessOperational = value;
+    else if (askedField === "hasSixMonthUtilityBill") extracted.hasSixMonthUtilityBill = value;
   }
 
-  // Resolve short free-text replies (1-6 words, no labels) against the
-  // assistant's most recent question. Without this, a bare "Technology!" reply
-  // to "What industry sector does the business operate in?" never gets bound
-  // to the `industry` field and the agent loops on the same question forever.
-  const cleanedShort = text.trim().replace(/^[\s\p{P}]+|[\s\p{P}]+$/gu, "");
-  const wordCount = cleanedShort ? cleanedShort.split(/\s+/).length : 0;
-  const isShortFreeText =
-    cleanedShort.length > 0 &&
-    cleanedShort.length <= 80 &&
-    wordCount <= 6 &&
-    !isShortYes &&
-    !isShortNo &&
-    !/[:\-]/.test(cleanedShort) &&
-    !/@/.test(cleanedShort) &&
-    !/\d{3,}/.test(cleanedShort);
-
-  if (isShortFreeText && lastAssistantMessage) {
-    const lastQ = lastAssistantMessage.toLowerCase();
-    // Order matters — most specific phrases first.
-    if (/\bindustry\b/.test(lastQ)) {
-      extracted.industry = cleanedShort;
-    } else if (/\b(?:business|company|registered) name\b/.test(lastQ)) {
-      extracted.businessName = cleanedShort;
-    } else if (/\bfirst name\b/.test(lastQ)) {
-      extracted.contactFirstName = cleanedShort;
-    } else if (/\b(?:surname|last name)\b/.test(lastQ)) {
-      extracted.contactSurname = cleanedShort;
-    } else if (/\b(?:position|role|job title|title in (?:the )?company)\b/.test(lastQ)) {
-      extracted.contactPosition = cleanedShort;
-    } else if (/\bprovince\b/.test(lastQ)) {
-      extracted.province = cleanedShort;
-    } else if (/\bcity\b/.test(lastQ)) {
-      extracted.city = cleanedShort;
-    } else if (/\b(?:physical address|street address|address)\b/.test(lastQ) && wordCount >= 2) {
-      extracted.physicalAddress = cleanedShort;
-    }
-  }
-
-  // Resolve a free-text reply to a recent address question. Addresses contain
-  // digits (street numbers, postal codes) so they are deliberately handled
-  // outside the short-free-text guard above.
-  if (!extracted.physicalAddress && lastAssistantMessage) {
-    const lastQ = lastAssistantMessage.toLowerCase();
-    const askedForAddress = /\b(?:physical address|street address|premises address|business address|site address|address)\b/.test(lastQ);
-    const looksLikeAddress =
-      cleanedShort.length >= 5 &&
-      cleanedShort.length <= 200 &&
-      !/@/.test(cleanedShort) &&
-      // Must look like an address: digits + a street word, OR multiple comma-separated parts.
-      (
-        /\b\d+\s+\S+/.test(cleanedShort) ||
-        /\b(?:street|st\.?|road|rd\.?|avenue|ave\.?|drive|dr\.?|lane|ln\.?|way|crescent|cres\.?|close|cl\.?|boulevard|blvd\.?|highway|hwy\.?|park|place|pl\.?)\b/i.test(cleanedShort) ||
-        cleanedShort.split(",").length >= 2
-      );
-    if (askedForAddress && looksLikeAddress) {
-      extracted.physicalAddress = cleanedShort;
+  // For non yes/no replies, try to bind the value to the asked field.
+  if (askedField && !isShortYes && !isShortNo) {
+    const value = extractValueForField(askedField, text);
+    if (value !== null) {
+      if (askedField === "monthlyElectricitySpendEstimateZar") {
+        // Handled separately below to apply the suspiciously-low filter.
+      } else if (askedField === "isBusinessRegistered" || askedField === "isBusinessOperational" || askedField === "hasSixMonthUtilityBill") {
+        // Handled by yes/no path above.
+      } else {
+        // Type-safe assignment per field
+        switch (askedField) {
+          case "businessName": extracted.businessName = value; break;
+          case "businessRegistrationNumber": {
+            const norm = normalizeBusinessRegistrationNumber(value);
+            if (norm) {
+              extracted.businessRegistrationNumber = norm;
+              extracted.isBusinessRegistered = true;
+            }
+            break;
+          }
+          case "industry": extracted.industry = value; break;
+          case "contactFirstName": extracted.contactFirstName = value; break;
+          case "contactSurname": extracted.contactSurname = value; break;
+          case "contactPosition": extracted.contactPosition = value; break;
+          case "contactEmail": extracted.contactEmail = value; break;
+          case "contactNumber": extracted.contactNumber = value; break;
+          case "physicalAddress": extracted.physicalAddress = value; break;
+          case "city": extracted.city = value; break;
+          case "province": extracted.province = value; break;
+        }
+      }
     }
   }
 
