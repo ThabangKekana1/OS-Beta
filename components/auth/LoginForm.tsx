@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 type LoginVariant = "admin" | "sales" | "partner" | "client";
@@ -65,11 +65,30 @@ export function LoginForm({
   initialError?: string | null;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(initialError ?? null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const copy = LOGIN_COPY[variant];
+
+  useEffect(() => {
+    const signupFlag = searchParams.get("signup");
+    const signupEmail = searchParams.get("email");
+    if (signupEmail) {
+      setEmail(signupEmail);
+    }
+    if (signupFlag === "check-email") {
+      setNotice(
+        signupEmail
+          ? `Account created. We sent a confirmation link to ${signupEmail}. Confirm it, then sign in here.`
+          : "Account created. Check your inbox for the confirmation link, then sign in here.",
+      );
+    } else if (signupFlag === "success") {
+      setNotice("Account created. You can sign in now.");
+    }
+  }, [searchParams]);
 
   const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -164,6 +183,12 @@ export function LoginForm({
                 required
               />
             </div>
+
+            {notice ? (
+              <p className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
+                {notice}
+              </p>
+            ) : null}
 
             {error ? (
               <p className="rounded-lg border border-rose-500/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">

@@ -1,15 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export function SignupForm() {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [verifyEmail, setVerifyEmail] = useState<string | null>(null);
 
   const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -32,51 +33,23 @@ export function SignupForm() {
 
       if (!response.ok || payload.ok === false) {
         setError(payload.error ?? "Could not create your account. Please try again.");
+        setIsSubmitting(false);
         return;
       }
 
-      setVerifyEmail(payload.email ?? email.trim());
+      // Always send the user to the login page after a successful sign-up.
+      // If email confirmation is required, the login page will explain why
+      // they cannot log in yet via the ?signup=check-email banner.
+      const accountEmail = payload.email ?? email.trim();
+      const params = new URLSearchParams();
+      params.set("signup", payload.requiresConfirmation ? "check-email" : "success");
+      if (accountEmail) params.set("email", accountEmail);
+      router.replace(`/login?${params.toString()}`);
     } catch {
       setError("Unable to reach the sign-up service. Please try again.");
-    } finally {
       setIsSubmitting(false);
     }
   };
-
-  if (verifyEmail) {
-    return (
-      <div className="grid min-h-screen w-full place-items-center bg-[#050505] px-6 py-10">
-        <div className="w-full max-w-[34rem] rounded-[1.6rem] border border-white/12 bg-black/50 p-8 text-white shadow-[0_30px_120px_rgba(0,0,0,0.52)] backdrop-blur-xl">
-          <p className="line-label">Check your inbox</p>
-          <h2 className="mt-3 text-2xl font-medium tracking-[-0.04em]">
-            Confirm your email to finish signing up
-          </h2>
-          <p className="mt-5 text-sm leading-7 text-white/70">
-            We just sent a confirmation link to{" "}
-            <span className="font-medium text-white">{verifyEmail}</span>. Click the link in that
-            email to activate your account, then come back and log in.
-          </p>
-          <p className="mt-3 text-xs text-white/45">
-            The email may take a minute to arrive. If you don&apos;t see it, check your spam folder.
-          </p>
-          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-            <Link
-              href="/login"
-              className="flex-1 rounded-xl border border-white/18 bg-white px-3 py-2.5 text-center text-sm font-medium text-black transition hover:bg-white/90"
-            >
-              Go to log in
-            </Link>
-            <Link
-              href="/"
-              className="flex-1 rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-center text-sm font-medium text-white transition hover:bg-white/10"
-            >
-              Back to 1OS
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="grid min-h-screen w-full overflow-hidden bg-[#050505] lg:grid-cols-[1.15fr_0.85fr]">
