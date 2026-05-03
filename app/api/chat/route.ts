@@ -845,6 +845,7 @@ export async function POST(request: NextRequest) {
       recentHistory: history,
       latestUser: message,
       prequal: agentConfig.prequalification,
+      sessionEmail: session?.email ?? null,
     });
     const fallbackReply = buildRegistrationReply({
       draft: advanced.draft,
@@ -856,7 +857,14 @@ export async function POST(request: NextRequest) {
     });
     let reply = fallbackReply;
 
-    if (advanced.draft?.status === "in_progress") {
+    // When the deterministic flow has produced an authoritative next-step
+    // message (confirmation prompt, submission notice, disqualification
+    // notice, or any noteForUser), use it verbatim. Letting the LLM rewrite
+    // these has caused hallucinated "go sign your EOI in Documents" replies
+    // even when the registration was never actually submitted.
+    const hasAuthoritativeNote = Boolean(advanced.noteForUser?.trim());
+
+    if (advanced.draft?.status === "in_progress" && !hasAuthoritativeNote) {
       const registerSystem = [
         buildPromptContext(
           payload,

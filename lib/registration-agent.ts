@@ -626,6 +626,7 @@ export async function advanceRegistration(input: {
   recentHistory: RegistrationConversationTurn[];
   latestUser: string;
   prequal: Prequalification;
+  sessionEmail?: string | null;
 }): Promise<{
   draft: RegistrationDraft | null;
   noteForUser: string | null;
@@ -749,8 +750,16 @@ export async function advanceRegistration(input: {
   }
 
   // All fields present + passes prequal — submit.
-  const submitted = await submitConversationalRegistration(input.workspaceId, merged);
+  const submitted = await submitConversationalRegistration(input.workspaceId, merged, input.sessionEmail ?? null);
   if (!submitted) {
+    void createNotification({
+      audience: "admin",
+      kind: "system",
+      title: `Registration submit FAILED: ${merged.businessName ?? "unknown business"}`,
+      body: `Conversational registration could not be persisted for ${merged.contactEmail ?? "unknown contact"} (workspace ${input.workspaceId}). Check Vercel logs for [registration-agent] submit failed.\nCollected: ${JSON.stringify(merged)}`,
+      link: "/admin/leads",
+      metadata: { workspaceId: input.workspaceId, fields: merged },
+    });
     return {
       draft: {
         draftKey: buildDraftKey(scope.workspaceId, scope.caseId),
@@ -763,7 +772,7 @@ export async function advanceRegistration(input: {
         updatedAt: new Date().toISOString(),
       },
       noteForUser:
-        "I have all your details, but the registration could not be saved on the server. A specialist will contact you shortly.",
+        "I have all your details, but I could not save the registration on the server. The admin team has been alerted and will follow up shortly. Please do not start over — your information is preserved.",
       extracted,
     };
   }
@@ -893,6 +902,7 @@ export function buildRegistrationReply(input: {
 async function submitConversationalRegistration(
   _workspaceId: string,
   fields: RegistrationFields,
+  sessionEmail: string | null = null,
 ): Promise<{ leadId: string; clientProfileId: string; eoiSigningToken: string | null } | null> {
   try {
     const {
@@ -926,10 +936,9 @@ async function submitConversationalRegistration(
     } as const;
 
     const { snapshot } = await readAdminStateSnapshot();
-    const existingSignupShell = findSignupShellLeadByEmail(
-      snapshot.leads,
-      fields.contactEmail ?? "",
-    );
+    const existingSignupShell =
+      findSignupShellLeadByEmail(snapshot.leads, fields.contactEmail ?? "")
+      ?? (sessionEmail ? findSignupShellLeadByEmail(snapshot.leads, sessionEmail) : null);
 
     const created = existingSignupShell
       ? promoteSignupLeadToClientRegistration(existingSignupShell, registrationInput)
