@@ -801,6 +801,83 @@ export function extractDeterministicRegistrationFields(
     extracted.hasSixMonthUtilityBill = false;
   }
 
+  // ---------------------------------------------------------------------
+  // Correction patterns. Always on, regardless of askedField. Handles
+  // confirmation-stage edits like "the industry is Healthcare", "change
+  // industry to Healthcare", "industry should be Healthcare", "actually
+  // it's Healthcare for industry", etc. Without this, a sentence reply
+  // during confirmation never updates the captured field.
+  // ---------------------------------------------------------------------
+  const corrections: Array<{
+    field: keyof RegistrationFields;
+    aliases: string[];
+  }> = [
+    { field: "industry", aliases: ["industry", "sector"] },
+    { field: "businessName", aliases: ["business name", "company name", "name of the business", "name of the company", "business"] },
+    { field: "contactFirstName", aliases: ["first name", "given name"] },
+    { field: "contactSurname", aliases: ["surname", "last name", "family name"] },
+    { field: "contactPosition", aliases: ["position", "role", "job title", "title"] },
+    { field: "contactEmail", aliases: ["email", "email address", "e-mail"] },
+    { field: "contactNumber", aliases: ["phone", "phone number", "mobile", "mobile number", "cell", "cell number", "contact number"] },
+    { field: "physicalAddress", aliases: ["address", "physical address", "street address", "business address"] },
+    { field: "city", aliases: ["city", "town"] },
+    { field: "province", aliases: ["province"] },
+    { field: "businessRegistrationNumber", aliases: ["cipc number", "registration number", "cipc registration number", "business registration number"] },
+  ];
+  for (const { field, aliases } of corrections) {
+    for (const alias of aliases) {
+      const aliasEsc = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      // Patterns: "the industry is X", "industry should be X", "change industry to X", "make industry X", "set industry to X", "industry = X", "industry: X" (already handled), "actually industry is X", "no, industry is X"
+      const pattern = new RegExp(
+        `(?:^|[\\s,.;!?-])(?:actually\\s+|no[,!]?\\s+|sorry[,!]?\\s+|correction[,!]?\\s+|change\\s+|update\\s+|set\\s+|make\\s+|fix\\s+)?(?:the\\s+|my\\s+|our\\s+)?${aliasEsc}\\s+(?:is|should be|are|=|to)\\s+([^.!?\\n]+?)(?:[.!?\\n]|$)`,
+        "i",
+      );
+      const m = text.match(pattern);
+      if (!m?.[1]) continue;
+      const raw = stripFiller(m[1]).replace(/\s+(?:please|thanks|thank you)\s*$/i, "").trim();
+      if (!raw) continue;
+
+      // Normalise per field type.
+      switch (field) {
+        case "contactEmail": {
+          const em = raw.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+          if (em?.[0]) extracted.contactEmail = em[0].toLowerCase();
+          break;
+        }
+        case "contactNumber": {
+          const digits = raw.replace(/[^\d+]/g, "");
+          if (digits.length >= 9) extracted.contactNumber = digits;
+          break;
+        }
+        case "businessRegistrationNumber": {
+          const norm = normalizeBusinessRegistrationNumber(raw);
+          if (norm) {
+            extracted.businessRegistrationNumber = norm;
+            extracted.isBusinessRegistered = true;
+          }
+          break;
+        }
+        case "province": {
+          const provinces = [
+            "Gauteng", "Western Cape", "KwaZulu-Natal", "Eastern Cape", "Free State",
+            "Limpopo", "Mpumalanga", "North West", "Northern Cape",
+          ];
+          const lower = raw.toLowerCase();
+          const hit = provinces.find((p) => lower.includes(p.toLowerCase()));
+          if (hit) extracted.province = hit;
+          break;
+        }
+        default: {
+          // Free-text fields. Cap length and reject obviously bogus values.
+          if (raw.length >= 1 && raw.length <= 120) {
+            (extracted as Record<string, unknown>)[field] = raw;
+          }
+        }
+      }
+      break; // one match per field is enough
+    }
+  }
+
   return sanitizeExtracted(extracted);
 }
 

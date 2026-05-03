@@ -71,6 +71,22 @@ const cases: Case[] = [
   { ask: "What is the contact's position or role at the business?", reply: "I am the CEO of the company", expect: { contactPosition: "CEO" } },
 
   // Edge: spend (not exhaustively tested here — handled by parseRandAmount tests)
+
+  // Confirmation-stage corrections — askedField is null because the assistant's
+  // last message is a multi-field summary, not a single question.
+  { ask: "Please confirm these details before I submit them into 1OS: industry: Technology", reply: "the industry is Healthcare", expect: { industry: "Healthcare" } },
+  { ask: "Please confirm these details before I submit them into 1OS", reply: "industry should be Healthcare", expect: { industry: "Healthcare" } },
+  { ask: "Please confirm these details before I submit them into 1OS", reply: "change industry to Mining", expect: { industry: "Mining" } },
+  { ask: "Please confirm these details before I submit them into 1OS", reply: "actually the industry is Hospitality", expect: { industry: "Hospitality" } },
+  { ask: "Please confirm these details", reply: "no, the industry is Healthcare", expect: { industry: "Healthcare" } },
+  { ask: "Please confirm these details", reply: "the city is Cape Town", expect: { city: "Cape Town" } },
+  { ask: "Please confirm these details", reply: "the province is Western Cape", expect: { province: "Western Cape" } },
+  { ask: "Please confirm these details", reply: "my position is CFO", expect: { contactPosition: "CFO" } },
+  { ask: "Please confirm these details", reply: "the surname is Kekana", expect: { contactSurname: "Kekana" } },
+  { ask: "Please confirm these details", reply: "the first name is Karman", expect: { contactFirstName: "Karman" } },
+  { ask: "Please confirm these details", reply: "the email is karman@foundation-1.co.za", expect: { contactEmail: "karman@foundation-1.co.za" } },
+  { ask: "Please confirm these details", reply: "the phone number is 0821234567", expect: { contactNumber: "0821234567" } },
+  { ask: "Please confirm these details", reply: "the business name is Metasapien", expect: { businessName: "Metasapien" } },
 ];
 
 let passed = 0;
