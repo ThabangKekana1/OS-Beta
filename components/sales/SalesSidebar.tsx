@@ -7,6 +7,7 @@ import {
   ChartNoAxesColumnIncreasing,
   ClipboardList,
   FolderDown,
+  Mail,
   Settings2,
   UserPlus2,
   Users,
@@ -40,6 +41,12 @@ const navItems = [
     label: "Clients",
     href: "/sales/clients",
     icon: Users,
+  },
+  {
+    id: "inbox",
+    label: "Inbox",
+    href: "/sales/inbox",
+    icon: Mail,
   },
   {
     id: "notifications",
