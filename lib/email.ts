@@ -14,6 +14,11 @@ type SendEmailInput = {
   replyTo?: string | string[];
   headers?: Record<string, string>;
   tags?: Array<{ name: string; value: string }>;
+  attachments?: Array<{
+    filename: string;
+    content: string; // base64
+    contentType?: string;
+  }>;
 };
 
 type SendEmailResult =
@@ -51,6 +56,13 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     if (input.replyTo) body.reply_to = Array.isArray(input.replyTo) ? input.replyTo : [input.replyTo];
     if (input.headers && Object.keys(input.headers).length > 0) body.headers = input.headers;
     if (input.tags && input.tags.length > 0) body.tags = input.tags;
+    if (input.attachments && input.attachments.length > 0) {
+      body.attachments = input.attachments.map((a) => ({
+        filename: a.filename,
+        content: a.content,
+        ...(a.contentType ? { content_type: a.contentType } : {}),
+      }));
+    }
 
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",

@@ -92,6 +92,11 @@ export function SalesInboxRoute({
   const [composeSubject, setComposeSubject] = useState("");
   const [composeBody, setComposeBody] = useState("");
   const [composeLeadId, setComposeLeadId] = useState<string | null>(initialLeadFilter);
+  const [composeAttachments, setComposeAttachments] = useState<
+    Array<{ filename: string; content: string; contentType: string; size: number }>
+  >([]);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const [sending, setSending] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -190,6 +195,7 @@ export function SalesInboxRoute({
     setComposeSubject(/^re:\s/i.test(subject) ? subject : `Re: ${subject}`);
     setComposeBody("");
     setComposeLeadId(activeThread.leadId ?? null);
+    setComposeAttachments([]);
     setComposerOpen(true);
   }, [activeThread, activeMessages]);
 
@@ -200,6 +206,7 @@ export function SalesInboxRoute({
     setComposeSubject("");
     setComposeBody("");
     setComposeLeadId(null);
+    setComposeAttachments([]);
     setComposerOpen(true);
   }, []);
 
@@ -224,6 +231,12 @@ export function SalesInboxRoute({
           leadId: composeLeadId,
           inReplyTo,
           referenceIds,
+          attachments: composeAttachments.map((a) => ({
+            filename: a.filename,
+            content: a.content,
+            contentType: a.contentType,
+            size: a.size,
+          })),
         }),
       });
       const json = (await res.json()) as { ok?: boolean; error?: string; thread?: EmailThread };
@@ -243,7 +256,7 @@ export function SalesInboxRoute({
     } finally {
       setSending(false);
     }
-  }, [activeMessages, activeThread?.id, composeBody, composeCc, composeLeadId, composeMode, composeSubject, composeTo, loadThread, refreshThreads]);
+  }, [activeMessages, activeThread?.id, composeAttachments, composeBody, composeCc, composeLeadId, composeMode, composeSubject, composeTo, loadThread, refreshThreads]);
 
   const leadOptions = useMemo(() => leads.map((lead) => ({ id: lead.id, label: `${lead.company} · ${lead.contactName ?? "no contact"}`, email: lead.userProfile?.email ?? "" })), [leads]);
 
@@ -445,10 +458,97 @@ export function SalesInboxRoute({
               className="mt-1 w-full rounded-xl border border-white/12 bg-black/40 px-3 py-2 text-sm leading-6 text-white"
             />
 
+            <div className="mt-3">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[0.62rem] uppercase tracking-[0.22em] text-white/52">Attachments</span>
+                <button
+                  type="button"
+                  onClick={() => attachmentInputRef.current?.click()}
+                  disabled={attachmentBusy}
+                  className="rounded-lg border border-white/14 px-2.5 py-1 text-[0.66rem] uppercase tracking-[0.18em] text-white/78 transition hover:border-white/28 hover:text-white disabled:opacity-50"
+                >
+                  {attachmentBusy ? "Reading…" : "Add files"}
+                </button>
+              </div>
+              <input
+                ref={attachmentInputRef}
+                type="file"
+                multiple
+                hidden
+                onChange={async (event) => {
+                  const files = Array.from(event.target.files ?? []);
+                  event.target.value = "";
+                  if (files.length === 0) return;
+                  setAttachmentBusy(true);
+                  try {
+                    const encoded = await Promise.all(
+                      files.map(
+                        (file) =>
+                          new Promise<{ filename: string; content: string; contentType: string; size: number }>(
+                            (resolve, reject) => {
+                              const reader = new FileReader();
+                              reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
+                              reader.onload = () => {
+                                const result = reader.result;
+                                if (typeof result !== "string") {
+                                  reject(new Error(`Could not read ${file.name}`));
+                                  return;
+                                }
+                                const base64 = result.includes(",") ? result.split(",")[1] : result;
+                                resolve({
+                                  filename: file.name,
+                                  content: base64,
+                                  contentType: file.type || "application/octet-stream",
+                                  size: file.size,
+                                });
+                              };
+                              reader.readAsDataURL(file);
+                            },
+                          ),
+                      ),
+                    );
+                    setComposeAttachments((prev) => [...prev, ...encoded]);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "Could not read files");
+                  } finally {
+                    setAttachmentBusy(false);
+                  }
+                }}
+              />
+              {composeAttachments.length > 0 ? (
+                <ul className="mt-2 flex flex-wrap gap-2">
+                  {composeAttachments.map((att, index) => (
+                    <li
+                      key={`${att.filename}-${index}`}
+                      className="inline-flex items-center gap-2 rounded-full border border-white/14 bg-white/[0.04] px-2.5 py-1 text-[0.7rem] text-white/78"
+                    >
+                      <span className="max-w-[16rem] truncate">{att.filename}</span>
+                      <span className="text-white/40">{(att.size / 1024).toFixed(0)} KB</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setComposeAttachments((prev) => prev.filter((_, i) => i !== index))
+                        }
+                        className="text-white/50 transition hover:text-white"
+                        aria-label={`Remove ${att.filename}`}
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-[0.7rem] text-white/40">Up to 3 MB total · send larger files via Drive/Dropbox link.</p>
+              )}
+            </div>
+
             <div className="mt-4 flex items-center justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setComposerOpen(false)}
+                onClick={() => {
+                  setComposerOpen(false);
+                  setComposeAttachments([]);
+                }}
                 className="rounded-xl border border-white/12 px-3 py-2 text-sm text-white/74 hover:bg-white/[0.04]"
                 disabled={sending}
               >
