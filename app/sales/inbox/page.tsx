@@ -6,9 +6,20 @@ export const dynamic = "force-dynamic";
 export default async function SalesInboxPage({
   searchParams,
 }: {
-  searchParams: Promise<{ thread?: string; lead?: string }>;
+  searchParams: Promise<{ thread?: string; lead?: string; to?: string; subject?: string; body?: string }>;
 }) {
   await requireServerAuthSession("sales");
   const params = await searchParams;
-  return <SalesInboxRoute initialThreadId={params.thread ?? null} initialLeadFilter={params.lead ?? null} />;
+  return (
+    <SalesInboxRoute
+      initialThreadId={params.thread ?? null}
+      initialLeadFilter={params.lead ?? null}
+      initialCompose={{
+        to: params.to ?? null,
+        subject: params.subject ?? null,
+        body: params.body ?? null,
+        leadId: params.lead ?? null,
+      }}
+    />
+  );
 }

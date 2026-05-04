@@ -14,6 +14,7 @@ import {
   Handshake,
   Inbox,
   Kanban,
+  Mail,
   MessagesSquare,
   Settings2,
   ShieldCheck,
@@ -96,7 +97,7 @@ const navItems = [
     id: "inbox",
     label: "Inbox",
     href: "/admin/inbox",
-    icon: Inbox,
+    icon: Mail,
   },
   {
     id: "notifications",

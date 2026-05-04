@@ -613,6 +613,14 @@ export function AdminLeadProfileRoute({
             <AdminBadge label={lead.stage} />
             <AdminBadge label={lead.priority} tone={lead.priority === "Standard" ? "muted" : "neutral"} />
             {lead.disqualification ? <AdminBadge label="Disqualified" tone="bright" /> : null}
+            {lead.userProfile.email ? (
+              <Link
+                href={`/${actorRole}/inbox?lead=${encodeURIComponent(lead.id)}&to=${encodeURIComponent(lead.userProfile.email)}&subject=${encodeURIComponent(`Foundation-1 — ${lead.company}`)}`}
+                className="rounded-[0.7rem] border border-white/16 px-2.5 py-1.5 text-[0.64rem] uppercase tracking-[0.2em] text-white/82 transition hover:border-white/30 hover:text-white"
+              >
+                Email client
+              </Link>
+            ) : null}
           </div>
         </div>
       </section>

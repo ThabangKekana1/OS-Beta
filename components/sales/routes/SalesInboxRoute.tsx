@@ -60,12 +60,21 @@ function preview(message: { bodyText: string | null; bodyHtml: string | null; su
   return message.subject ?? "(no preview)";
 }
 
+type InitialCompose = {
+  to?: string | null;
+  subject?: string | null;
+  body?: string | null;
+  leadId?: string | null;
+};
+
 export function SalesInboxRoute({
   initialThreadId,
   initialLeadFilter,
+  initialCompose,
 }: {
   initialThreadId: string | null;
   initialLeadFilter: string | null;
+  initialCompose?: InitialCompose | null;
 }) {
   const { leads } = useAdminPortal();
   const [threads, setThreads] = useState<EmailThread[]>([]);
@@ -130,6 +139,27 @@ export function SalesInboxRoute({
   useEffect(() => {
     void refreshThreads();
   }, [refreshThreads]);
+
+  // Pre-open composer if launched from another surface (e.g. lead profile "Email client" button).
+  const composerPrimedRef = useRef(false);
+  useEffect(() => {
+    if (composerPrimedRef.current) return;
+    if (!initialCompose) return;
+    const hasAny =
+      Boolean(initialCompose.to) ||
+      Boolean(initialCompose.subject) ||
+      Boolean(initialCompose.body) ||
+      Boolean(initialCompose.leadId);
+    if (!hasAny) return;
+    composerPrimedRef.current = true;
+    setComposeMode("new");
+    setComposeTo(initialCompose.to ?? "");
+    setComposeCc("");
+    setComposeSubject(initialCompose.subject ?? "");
+    setComposeBody(initialCompose.body ?? "");
+    setComposeLeadId(initialCompose.leadId ?? null);
+    setComposerOpen(true);
+  }, [initialCompose]);
 
   useEffect(() => {
     if (activeThreadId) void loadThread(activeThreadId);
