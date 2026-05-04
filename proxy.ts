@@ -3,8 +3,9 @@ import { createServerClient } from "@supabase/ssr";
 import { resolveDefaultRouteForRole, type UserRole } from "@/lib/auth";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
-// Public mutating endpoints intentionally allowed cross-origin (none today).
-const PUBLIC_MUTATING_PATHS = new Set<string>([]);
+// Public mutating endpoints intentionally allowed cross-origin. These routes
+// must perform their own authentication/signature validation.
+const PUBLIC_MUTATING_PATHS = new Set<string>(["/api/email/inbound"]);
 
 function withNextParam(request: NextRequest) {
   const loginUrl = new URL("/login", request.url);
