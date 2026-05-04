@@ -93,6 +93,12 @@ const navItems = [
     icon: Inbox,
   },
   {
+    id: "inbox",
+    label: "Inbox",
+    href: "/admin/inbox",
+    icon: Inbox,
+  },
+  {
     id: "notifications",
     label: "Notifications",
     href: "/admin/notifications",
