@@ -13,6 +13,11 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const leadId = url.searchParams.get("leadId");
   const search = url.searchParams.get("q");
-  const threads = await listThreads({ leadId, search });
+  const threads = await listThreads({
+    leadId,
+    search,
+    mailboxOwnerUserId: session.role === "sales" ? session.userId : null,
+    mailboxAddress: session.role === "sales" ? session.email : null,
+  });
   return NextResponse.json({ threads });
 }

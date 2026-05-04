@@ -1,7 +1,7 @@
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email";
 
-export type NotificationAudience = "admin" | "customer";
+export type NotificationAudience = "admin" | "sales" | "customer";
 
 export type NotificationKind =
   | "eoi_signed"
@@ -117,7 +117,7 @@ export async function listNotifications(opts: {
     .limit(opts.limit ?? 100);
 
   if (opts.audience) query = query.eq("audience", opts.audience);
-  if (opts.recipientEmail) query = query.eq("recipient_email", opts.recipientEmail);
+  if (opts.recipientEmail) query = query.eq("recipient_email", opts.recipientEmail.trim().toLowerCase());
 
   const { data } = await query;
   return (data ?? []).map(mapRow);
@@ -131,6 +131,28 @@ export async function markNotificationRead(id: string): Promise<void> {
     .update({ read_at: new Date().toISOString() })
     .eq("id", id)
     .is("read_at", null);
+}
+
+export async function markNotificationsRead(
+  ids: string[],
+  opts: { audience?: NotificationAudience; recipientEmail?: string | null } = {},
+): Promise<void> {
+  const client = getSupabaseAdminClient();
+  if (!client || ids.length === 0) return;
+
+  let query = client
+    .from(TABLE)
+    .update({ read_at: new Date().toISOString() })
+    .in("id", ids)
+    .is("read_at", null);
+
+  if (opts.audience) query = query.eq("audience", opts.audience);
+  if (opts.recipientEmail !== undefined) {
+    const email = opts.recipientEmail?.trim().toLowerCase();
+    query = email ? query.eq("recipient_email", email) : query.is("recipient_email", null);
+  }
+
+  await query;
 }
 
 function mapRow(row: Record<string, unknown>): NotificationRecord {

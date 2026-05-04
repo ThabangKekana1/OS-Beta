@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { AdminBadge, AdminHeader } from "@/components/admin/AdminPrimitives";
+import { LiveNotificationsPanel } from "@/components/admin/LiveNotificationsPanel";
 import { useAdminPortal } from "@/components/admin/AdminPortalProvider";
 
 function isDocumentExchangeEvent(title: string) {
@@ -40,6 +41,8 @@ export function SalesNotificationsRoute({ agentId }: { agentId: string | null })
         description="Sales notifications for client document exchanges and submissions."
         actions={<AdminBadge label={`${notifications.length} Notifications`} tone="bright" />}
       />
+
+      <LiveNotificationsPanel />
 
       <section className="rounded-2xl border border-white/12 bg-white/[0.03] p-4">
         <div className="space-y-2">

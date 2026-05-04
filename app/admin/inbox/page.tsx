@@ -8,12 +8,14 @@ export default async function AdminInboxPage({
 }: {
   searchParams: Promise<{ thread?: string; lead?: string; to?: string; subject?: string; body?: string }>;
 }) {
-  await requireServerAuthSession("admin");
+  const session = await requireServerAuthSession("admin");
   const params = await searchParams;
   return (
     <SalesInboxRoute
       initialThreadId={params.thread ?? null}
       initialLeadFilter={params.lead ?? null}
+      viewerRole="admin"
+      viewerAgentId={session.agentId}
       initialCompose={{
         to: params.to ?? null,
         subject: params.subject ?? null,

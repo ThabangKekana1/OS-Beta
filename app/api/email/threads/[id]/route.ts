@@ -12,6 +12,15 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   const { id } = await context.params;
   const thread = await getThread(id);
   if (!thread) return NextResponse.json({ error: "Thread not found" }, { status: 404 });
+
+  if (session.role === "sales") {
+    const ownsThread =
+      (thread.mailboxOwnerUserId && session.userId && thread.mailboxOwnerUserId === session.userId) ||
+      (!thread.mailboxOwnerUserId && thread.mailboxAddress === session.email);
+
+    if (!ownsThread) return NextResponse.json({ error: "Thread not found" }, { status: 404 });
+  }
+
   const messages = await listMessages(id);
   await markThreadRead(id);
   return NextResponse.json({ thread, messages });

@@ -27,7 +27,7 @@ export function LiveNotificationsPanel() {
   const [pending, startTransition] = useTransition();
 
   const refresh = useCallback(async () => {
-    const res = await fetch("/api/admin/notifications", { cache: "no-store" });
+    const res = await fetch("/api/notifications", { cache: "no-store" });
     if (!res.ok) {
       setLoading(false);
       return;
@@ -38,9 +38,12 @@ export function LiveNotificationsPanel() {
   }, []);
 
   useEffect(() => {
-    void refresh();
+    const initial = setTimeout(() => void refresh(), 0);
     const t = setInterval(() => void refresh(), 30_000);
-    return () => clearInterval(t);
+    return () => {
+      clearTimeout(initial);
+      clearInterval(t);
+    };
   }, [refresh]);
 
   const unreadIds = items.filter((n) => !n.readAt).map((n) => n.id);
@@ -49,7 +52,7 @@ export function LiveNotificationsPanel() {
   function markAllRead() {
     if (unreadIds.length === 0) return;
     startTransition(async () => {
-      await fetch("/api/admin/notifications", {
+      await fetch("/api/notifications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids: unreadIds }),

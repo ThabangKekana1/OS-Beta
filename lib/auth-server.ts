@@ -37,6 +37,7 @@ export async function getServerAuthSession(): Promise<AuthSession | null> {
 
     if (profile && profile.isActive) {
       return {
+        userId: profile.id,
         email: profile.email,
         name: profile.name || metaName || email.split("@")[0],
         role: profile.role,
@@ -47,6 +48,7 @@ export async function getServerAuthSession(): Promise<AuthSession | null> {
 
     // No profile row — treat as a client/workspace tenant.
     return {
+      userId: null,
       email,
       name: metaName ?? email.split("@")[0],
       role: "client",

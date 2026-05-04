@@ -13,6 +13,7 @@
 export type UserRole = "admin" | "sales" | "partner" | "client";
 
 export type AuthSession = {
+  userId: string | null;
   email: string;
   name: string;
   role: UserRole;

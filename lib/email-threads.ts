@@ -43,6 +43,9 @@ export type EmailThread = {
   id: string;
   leadId: string | null;
   clientProfileId: string | null;
+  mailboxOwnerUserId: string | null;
+  mailboxAddress: string | null;
+  mailboxRole: "admin" | "sales" | null;
   subject: string | null;
   participants: string[];
   externalThreadId: string | null;
@@ -57,6 +60,9 @@ type DbThreadRow = {
   id: string;
   lead_id: string | null;
   client_profile_id: string | null;
+  mailbox_owner_user_id: string | null;
+  mailbox_address: string | null;
+  mailbox_role: "admin" | "sales" | null;
   subject: string | null;
   participants: string[] | null;
   external_thread_id: string | null;
@@ -103,6 +109,9 @@ function rowToThread(row: DbThreadRow): EmailThread {
     id: row.id,
     leadId: row.lead_id,
     clientProfileId: row.client_profile_id,
+    mailboxOwnerUserId: row.mailbox_owner_user_id,
+    mailboxAddress: row.mailbox_address,
+    mailboxRole: row.mailbox_role,
     subject: row.subject,
     participants: row.participants ?? [],
     externalThreadId: row.external_thread_id,
@@ -161,6 +170,8 @@ function normaliseSubject(subject: string | null | undefined): string {
 
 export type ListThreadsArgs = {
   leadId?: string | null;
+  mailboxOwnerUserId?: string | null;
+  mailboxAddress?: string | null;
   limit?: number;
   search?: string | null;
 };
@@ -176,6 +187,11 @@ export async function listThreads(args: ListThreadsArgs = {}): Promise<EmailThre
     .limit(args.limit ?? 100);
 
   if (args.leadId) query = query.eq("lead_id", args.leadId);
+  if (args.mailboxOwnerUserId) {
+    query = query.eq("mailbox_owner_user_id", args.mailboxOwnerUserId);
+  } else if (args.mailboxAddress) {
+    query = query.eq("mailbox_address", args.mailboxAddress.trim().toLowerCase());
+  }
   if (args.search) query = query.ilike("subject", `%${args.search}%`);
 
   const { data, error } = await query;
@@ -184,6 +200,11 @@ export async function listThreads(args: ListThreadsArgs = {}): Promise<EmailThre
     return [];
   }
   return (data ?? []).map((row) => rowToThread(row as DbThreadRow));
+}
+
+export async function getUnreadThreadCount(args: ListThreadsArgs = {}): Promise<number> {
+  const threads = await listThreads(args);
+  return threads.reduce((total, thread) => total + Math.max(0, thread.unreadCount), 0);
 }
 
 export async function getThread(threadId: string): Promise<EmailThread | null> {
@@ -299,6 +320,9 @@ export type RecordMessageArgs = {
   leadId?: string | null;
   clientProfileId?: string | null;
   direction: EmailDirection;
+  mailboxOwnerUserId?: string | null;
+  mailboxAddress?: string | null;
+  mailboxRole?: "admin" | "sales" | null;
   fromAddress: string;
   fromName?: string | null;
   toAddresses: string[];
@@ -367,6 +391,9 @@ export async function recordMessage(args: RecordMessageArgs): Promise<RecordMess
       .insert({
         lead_id: args.leadId ?? null,
         client_profile_id: args.clientProfileId ?? null,
+        mailbox_owner_user_id: args.mailboxOwnerUserId ?? null,
+        mailbox_address: args.mailboxAddress?.trim().toLowerCase() ?? null,
+        mailbox_role: args.mailboxRole ?? null,
         subject: args.subject ?? null,
         participants,
         external_thread_id: args.externalThreadId ?? null,
@@ -385,10 +412,13 @@ export async function recordMessage(args: RecordMessageArgs): Promise<RecordMess
     // Merge participants + bump metadata.
     const { data: existing } = await supabase
       .from("oneos_email_threads")
-      .select("participants, unread_count, lead_id, client_profile_id")
+      .select("participants, unread_count, lead_id, client_profile_id, mailbox_owner_user_id, mailbox_address, mailbox_role")
       .eq("id", threadId)
       .maybeSingle();
-    const existingRow = existing as Pick<DbThreadRow, "participants" | "unread_count" | "lead_id" | "client_profile_id"> | null;
+    const existingRow = existing as Pick<
+      DbThreadRow,
+      "participants" | "unread_count" | "lead_id" | "client_profile_id" | "mailbox_owner_user_id" | "mailbox_address" | "mailbox_role"
+    > | null;
     const mergedParticipants = dedupe([...(existingRow?.participants ?? []), ...participants]);
     const nextUnread = args.direction === "inbound" ? (existingRow?.unread_count ?? 0) + 1 : (existingRow?.unread_count ?? 0);
     await supabase
@@ -401,6 +431,9 @@ export async function recordMessage(args: RecordMessageArgs): Promise<RecordMess
         updated_at: sentAt,
         lead_id: existingRow?.lead_id ?? args.leadId ?? null,
         client_profile_id: existingRow?.client_profile_id ?? args.clientProfileId ?? null,
+        mailbox_owner_user_id: existingRow?.mailbox_owner_user_id ?? args.mailboxOwnerUserId ?? null,
+        mailbox_address: existingRow?.mailbox_address ?? args.mailboxAddress?.trim().toLowerCase() ?? null,
+        mailbox_role: existingRow?.mailbox_role ?? args.mailboxRole ?? null,
       })
       .eq("id", threadId);
   }

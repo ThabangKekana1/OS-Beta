@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -16,6 +17,11 @@ import { SignOutButton } from "@/components/auth/SignOutButton";
 import { BrandMarkOneOS } from "@/components/sidebar/BrandMarkOneOS";
 import { useAdminPortal } from "@/components/admin/AdminPortalProvider";
 import { cn } from "@/lib/utils";
+
+type NotificationSummary = {
+  unreadInboxCount: number;
+  unreadNotificationCount: number;
+};
 
 const navItems = [
   {
@@ -75,12 +81,44 @@ export function SalesSidebar({
 }) {
   const pathname = usePathname();
   const { leads, salesLeads } = useAdminPortal();
+  const [summary, setSummary] = useState<NotificationSummary>({
+    unreadInboxCount: 0,
+    unreadNotificationCount: 0,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function refreshSummary() {
+      try {
+        const res = await fetch("/api/notifications/summary", { cache: "no-store" });
+        if (!res.ok) return;
+        const json = (await res.json()) as Partial<NotificationSummary>;
+        if (!cancelled) {
+          setSummary({
+            unreadInboxCount: Number(json.unreadInboxCount ?? 0),
+            unreadNotificationCount: Number(json.unreadNotificationCount ?? 0),
+          });
+        }
+      } catch {
+        // Keep sidebar rendering even if notification polling fails.
+      }
+    }
+
+    void refreshSummary();
+    const interval = setInterval(() => void refreshSummary(), 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
   const visibleClients = agentId
     ? leads.filter((lead) => lead.ownerId === agentId)
-    : leads;
+    : [];
   const visibleSalesLeads = agentId
     ? salesLeads.filter((lead) => lead.ownerId === agentId)
-    : salesLeads;
+    : [];
   const openClients = visibleClients.filter(
     (lead) => !["Onboarding Complete", "Disqualified"].includes(lead.stage),
   ).length;
@@ -114,6 +152,9 @@ export function SalesSidebar({
               ? pathname === "/sales"
               : pathname === item.href || pathname.startsWith(`${item.href}/`);
             const Icon = item.icon;
+            const showDot =
+              (item.id === "inbox" && summary.unreadInboxCount > 0) ||
+              (item.id === "notifications" && summary.unreadNotificationCount > 0);
 
             return (
               <Link
@@ -128,13 +169,16 @@ export function SalesSidebar({
               >
                 <span
                   className={cn(
-                    "flex size-8 items-center justify-center rounded-full border transition-colors",
+                    "relative flex size-8 items-center justify-center rounded-full border transition-colors",
                     active
                       ? "border-white/20 bg-white/[0.05]"
                       : "border-white/8 bg-white/[0.02] group-hover:border-white/16",
                   )}
                 >
                   <Icon className="size-4" />
+                  {showDot ? (
+                    <span className="absolute right-0.5 top-0.5 size-2.5 rounded-full border border-black bg-red-500" />
+                  ) : null}
                 </span>
                 <span className="text-sm">{item.label}</span>
               </Link>

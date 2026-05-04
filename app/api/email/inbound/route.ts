@@ -140,6 +140,27 @@ function leadIdFromAddress(email: string): string | null {
   return match ? match[1] : null;
 }
 
+function ownerUserIdFromAddress(email: string): string | null {
+  // Pattern: sales+u-<oneos_users.id>@replies.<host>
+  const localPart = email.split("@")[0] ?? "";
+  const match = localPart.match(/\+u-([0-9a-fA-F-]{36})/);
+  return match ? match[1].toLowerCase() : null;
+}
+
+async function mailboxAddressForOwner(userId: string): Promise<string | null> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from("oneos_users")
+    .select("email, role, is_active")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error || !data) return null;
+  const row = data as { email?: string | null; role?: string | null; is_active?: boolean | null };
+  if (row.role !== "sales" || row.is_active === false || !row.email) return null;
+  return row.email.trim().toLowerCase();
+}
+
 function normalizeEnv(value?: string) {
   if (!value) return "";
   return value.trim().replace(/^["']|["']$/g, "");
@@ -311,10 +332,18 @@ export async function POST(request: Request) {
     .map((entry) => leadIdFromAddress(entry.email))
     .find((id): id is string => Boolean(id))
     ?? null;
+  const mailboxOwnerUserId = toAddresses
+    .map((entry) => ownerUserIdFromAddress(entry.email))
+    .find((id): id is string => Boolean(id))
+    ?? null;
+  const mailboxAddress = mailboxOwnerUserId ? await mailboxAddressForOwner(mailboxOwnerUserId) : null;
 
   const recorded = await recordMessage({
     leadId,
     direction: "inbound",
+    mailboxOwnerUserId,
+    mailboxAddress,
+    mailboxRole: mailboxOwnerUserId ? "sales" : "admin",
     fromAddress: fromAddress.email,
     fromName: fromAddress.name,
     toAddresses: toAddresses.map((entry) => entry.email),
@@ -365,9 +394,21 @@ export async function POST(request: Request) {
       kind: "system",
       title: `New email reply from ${fromAddress.name ?? fromAddress.email}`,
       body: subject,
-      link: `/sales/inbox?thread=${recorded.thread.id}`,
+      link: `/admin/inbox?thread=${recorded.thread.id}`,
       metadata: { threadId: recorded.thread.id, leadId },
     }).catch((err) => console.error("[email/inbound] notification failed", err));
+
+    if (recorded.thread.mailboxRole === "sales" && recorded.thread.mailboxAddress) {
+      void createNotification({
+        audience: "sales",
+        recipientEmail: recorded.thread.mailboxAddress,
+        kind: "system",
+        title: `New email reply from ${fromAddress.name ?? fromAddress.email}`,
+        body: subject,
+        link: `/sales/inbox?thread=${recorded.thread.id}`,
+        metadata: { threadId: recorded.thread.id, leadId },
+      }).catch((err) => console.error("[email/inbound] sales notification failed", err));
+    }
   }
 
   return NextResponse.json({ ok: true, threadId: recorded.thread.id, messageId: recorded.message.id });

@@ -25,6 +25,28 @@ function generateMessageId(threadId: string | null): string {
   return `<${prefix}@${host}>`;
 }
 
+function formatMailboxAddress(name: string | null | undefined, email: string): string {
+  const trimmedEmail = email.trim().toLowerCase();
+  const trimmedName = name?.trim();
+  if (!trimmedName) return trimmedEmail;
+  return `${trimmedName.replace(/["<>]/g, "")} <${trimmedEmail}>`;
+}
+
+async function salesCanUseLead(leadId: string, agentId: string | null): Promise<boolean> {
+  if (!agentId) return false;
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return false;
+
+  const { data, error } = await supabase
+    .from("oneos_admin_leads")
+    .select("owner_id")
+    .eq("id", leadId)
+    .maybeSingle();
+
+  if (error || !data) return false;
+  return (data as { owner_id?: string | null }).owner_id === agentId;
+}
+
 type SendAttachment = {
   filename: string;
   content: string; // base64 (no data: prefix)
@@ -102,7 +124,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Attachments exceed total 3 MB limit" }, { status: 413 });
   }
 
-  const fromAddress = (process.env.EMAIL_FROM ?? "").trim();
+  if (payload.leadId && session.role === "sales") {
+    const canUseLead = await salesCanUseLead(payload.leadId, session.agentId);
+    if (!canUseLead) {
+      return NextResponse.json({ error: "You can only link emails to your own leads" }, { status: 403 });
+    }
+  }
+
+  const fromAddress = session.role === "sales"
+    ? formatMailboxAddress(session.name, session.email)
+    : (process.env.EMAIL_FROM ?? "").trim();
   if (!fromAddress) {
     return NextResponse.json({ error: "EMAIL_FROM is not configured on the server" }, { status: 500 });
   }
@@ -114,14 +145,18 @@ export async function POST(request: Request) {
 
   // Reply-To routes responses through the inbound webhook subdomain (e.g. replies.1os.co.za)
   const replyDomain = (process.env.EMAIL_REPLY_DOMAIN ?? "").trim();
+  const ownerToken = session.role === "sales" && session.userId ? `+u-${session.userId}` : "";
+  const leadToken = payload.leadId ? `+lead-${payload.leadId}` : "";
   const replyTo =
-    replyDomain && payload.leadId
-      ? `sales+lead-${payload.leadId}@${replyDomain}`
-      : replyDomain
-        ? `sales@${replyDomain}`
-        : undefined;
+    replyDomain
+      ? `sales${ownerToken}${leadToken}@${replyDomain}`
+      : undefined;
+
+  const mailboxOwnerUserId = session.role === "sales" ? session.userId : null;
+  const mailboxAddress = session.role === "sales" ? session.email : null;
 
   const sendResult = await sendEmail({
+    from: fromAddress,
     to: toList,
     cc: ccList.length > 0 ? ccList : undefined,
     subject,
@@ -145,6 +180,9 @@ export async function POST(request: Request) {
     leadId: payload.leadId ?? null,
     clientProfileId: payload.clientProfileId ?? null,
     direction: "outbound",
+    mailboxOwnerUserId,
+    mailboxAddress,
+    mailboxRole: session.role === "sales" ? "sales" : "admin",
     fromAddress,
     fromName: session.name ?? null,
     toAddresses: toList,
@@ -156,6 +194,7 @@ export async function POST(request: Request) {
     inReplyTo: payload.inReplyTo ?? null,
     referenceIds: payload.referenceIds ?? [],
     providerId: sendResult.id,
+    sentByUserId: session.userId ?? null,
   });
 
   if (!recorded) {

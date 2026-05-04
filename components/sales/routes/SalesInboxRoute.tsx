@@ -77,10 +77,14 @@ export function SalesInboxRoute({
   initialThreadId,
   initialLeadFilter,
   initialCompose,
+  viewerRole,
+  viewerAgentId,
 }: {
   initialThreadId: string | null;
   initialLeadFilter: string | null;
   initialCompose?: InitialCompose | null;
+  viewerRole: "admin" | "sales";
+  viewerAgentId: string | null;
 }) {
   const { leads } = useAdminPortal();
   const [threads, setThreads] = useState<EmailThread[]>([]);
@@ -264,7 +268,22 @@ export function SalesInboxRoute({
     }
   }, [activeMessages, activeThread?.id, composeAttachments, composeBody, composeCc, composeLeadId, composeMode, composeSubject, composeTo, loadThread, refreshThreads]);
 
-  const leadOptions = useMemo(() => leads.map((lead) => ({ id: lead.id, label: `${lead.company} · ${lead.contactName ?? "no contact"}`, email: lead.userProfile?.email ?? "" })), [leads]);
+  const visibleLeads = useMemo(
+    () => viewerRole === "sales"
+      ? viewerAgentId
+        ? leads.filter((lead) => lead.ownerId === viewerAgentId)
+        : []
+      : leads,
+    [leads, viewerAgentId, viewerRole],
+  );
+  const leadOptions = useMemo(
+    () => visibleLeads.map((lead) => ({
+      id: lead.id,
+      label: `${lead.company} · ${lead.contactName ?? "no contact"}`,
+      email: lead.userProfile?.email ?? "",
+    })),
+    [visibleLeads],
+  );
 
   return (
     <div className="space-y-5 pb-8">
