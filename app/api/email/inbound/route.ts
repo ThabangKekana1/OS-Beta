@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { recordMessage } from "@/lib/email-threads";
 import { createNotification } from "@/lib/notifications";
+import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,7 +40,9 @@ type Address = { email?: string; address?: string; name?: string | null } | stri
 
 type InboundPayload = {
   type?: string;
+  created_at?: string;
   data?: {
+    email_id?: string;
     from?: Address | Address[];
     to?: Address[] | Address;
     cc?: Address[] | Address;
@@ -47,8 +50,11 @@ type InboundPayload = {
     text?: string;
     html?: string;
     headers?: Record<string, string>;
+    message_id?: string;
     received_at?: string;
+    created_at?: string;
     raw?: string;
+    attachments?: ReceivedAttachment[];
   };
   // SendGrid / Postmark style flat fields
   from?: string;
@@ -59,6 +65,36 @@ type InboundPayload = {
   html?: string;
   headers?: string;
   envelope?: string;
+};
+
+type ReceivedAttachment = {
+  id?: string;
+  filename?: string;
+  size?: number;
+  content_type?: string;
+  content_disposition?: string | null;
+  content_id?: string | null;
+  download_url?: string;
+  expires_at?: string;
+};
+
+type ReceivedEmail = {
+  id?: string;
+  from?: Address | Address[];
+  to?: Address[] | Address;
+  cc?: Address[] | Address;
+  bcc?: Address[] | Address;
+  subject?: string;
+  html?: string | null;
+  text?: string | null;
+  headers?: Record<string, string>;
+  message_id?: string;
+  created_at?: string;
+  attachments?: ReceivedAttachment[];
+};
+
+type AttachmentListResponse = {
+  data?: ReceivedAttachment[];
 };
 
 function asArray<T>(v: T | T[] | undefined | null): T[] {
@@ -104,8 +140,62 @@ function leadIdFromAddress(email: string): string | null {
   return match ? match[1] : null;
 }
 
-function verifySignature(rawBody: string, signature: string | null): boolean {
-  const secret = (process.env.RESEND_INBOUND_SECRET ?? "").trim();
+function normalizeEnv(value?: string) {
+  if (!value) return "";
+  return value.trim().replace(/^["']|["']$/g, "");
+}
+
+function webhookSecret() {
+  return normalizeEnv(process.env.RESEND_INBOUND_SECRET) || normalizeEnv(process.env.RESEND_WEBHOOK_SECRET);
+}
+
+function decodeSvixSecret(secret: string): Buffer {
+  const value = secret.startsWith("whsec_") ? secret.slice("whsec_".length) : secret;
+  try {
+    return Buffer.from(value, "base64");
+  } catch {
+    return Buffer.from(value, "utf8");
+  }
+}
+
+function verifySvixSignature({
+  rawBody,
+  secret,
+  id,
+  timestamp,
+  signature,
+}: {
+  rawBody: string;
+  secret: string;
+  id: string | null;
+  timestamp: string | null;
+  signature: string | null;
+}): boolean {
+  if (!id || !timestamp || !signature) return false;
+
+  const timestampSeconds = Number(timestamp);
+  if (!Number.isFinite(timestampSeconds)) return false;
+  const ageSeconds = Math.abs(Date.now() / 1000 - timestampSeconds);
+  if (ageSeconds > 5 * 60) return false;
+
+  const signedPayload = `${id}.${timestamp}.${rawBody}`;
+  const expected = crypto
+    .createHmac("sha256", decodeSvixSecret(secret))
+    .update(signedPayload, "utf8")
+    .digest("base64");
+
+  return signature
+    .split(" ")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .some((part) => {
+      const candidate = part.includes(",") ? part.split(",")[1] : part;
+      if (!candidate || candidate.length !== expected.length) return false;
+      return crypto.timingSafeEqual(Buffer.from(candidate), Buffer.from(expected));
+    });
+}
+
+function verifyLegacySignature(rawBody: string, signature: string | null, secret: string): boolean {
   if (!secret) {
     // No secret configured — accept (development). In production, set the secret.
     return true;
@@ -122,10 +212,56 @@ function verifySignature(rawBody: string, signature: string | null): boolean {
   }
 }
 
+function verifySignature(rawBody: string, request: Request): boolean {
+  const secret = webhookSecret();
+  if (!secret) return true;
+
+  const svixSignature = request.headers.get("svix-signature");
+  if (svixSignature) {
+    return verifySvixSignature({
+      rawBody,
+      secret,
+      id: request.headers.get("svix-id"),
+      timestamp: request.headers.get("svix-timestamp"),
+      signature: svixSignature,
+    });
+  }
+
+  const legacySignature = request.headers.get("resend-signature") ?? request.headers.get("x-signature");
+  return verifyLegacySignature(rawBody, legacySignature, secret);
+}
+
+async function fetchResendJson<T>(path: string): Promise<T | null> {
+  const apiKey = normalizeEnv(process.env.RESEND_API_KEY);
+  if (!apiKey) return null;
+
+  const response = await fetch(`https://api.resend.com${path}`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    console.error("[email/inbound] Resend fetch failed", response.status, body.slice(0, 200));
+    return null;
+  }
+
+  return (await response.json()) as T;
+}
+
+async function getReceivedEmail(emailId: string): Promise<ReceivedEmail | null> {
+  return fetchResendJson<ReceivedEmail>(`/emails/receiving/${encodeURIComponent(emailId)}`);
+}
+
+async function listReceivedAttachments(emailId: string): Promise<ReceivedAttachment[]> {
+  const payload = await fetchResendJson<AttachmentListResponse>(
+    `/emails/receiving/${encodeURIComponent(emailId)}/attachments`,
+  );
+  return payload?.data ?? [];
+}
+
 export async function POST(request: Request) {
   const rawBody = await request.text();
-  const signature = request.headers.get("resend-signature") ?? request.headers.get("x-signature");
-  if (!verifySignature(rawBody, signature)) {
+  if (!verifySignature(rawBody, request)) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
@@ -136,22 +272,35 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
+  if (parsed.type && parsed.type !== "email.received") {
+    return NextResponse.json({ ok: true, ignored: true });
+  }
+
   const data = parsed.data ?? (parsed as InboundPayload);
-  const fromCandidates = parseAddressList(("from" in data && data.from) || parsed.from);
+  const receivedEmailId = ("email_id" in data && data.email_id ? data.email_id : null) ?? null;
+  const fullEmail = receivedEmailId ? await getReceivedEmail(receivedEmailId) : null;
+  const source = fullEmail ?? data;
+
+  const fromCandidates = parseAddressList(("from" in source && source.from) || parsed.from);
   const fromAddress = fromCandidates[0];
-  const toAddresses = parseAddressList(("to" in data && data.to) || parsed.to);
-  const ccAddresses = parseAddressList(("cc" in data && data.cc) || parsed.cc);
-  const subject = (("subject" in data && data.subject) || parsed.subject || "(no subject)").toString();
-  const bodyText = (("text" in data && data.text) || parsed.text || "").toString();
-  const bodyHtml = (("html" in data && data.html) || parsed.html || "").toString();
-  const headers = ("headers" in data && data.headers && typeof data.headers === "object" ? data.headers : undefined) as
+  const toAddresses = parseAddressList(("to" in source && source.to) || parsed.to);
+  const ccAddresses = parseAddressList(("cc" in source && source.cc) || parsed.cc);
+  const subject = (("subject" in source && source.subject) || parsed.subject || "(no subject)").toString();
+  const bodyText = (("text" in source && source.text) || parsed.text || "").toString();
+  const bodyHtml = (("html" in source && source.html) || parsed.html || "").toString();
+  const headers = ("headers" in source && source.headers && typeof source.headers === "object" ? source.headers : undefined) as
     | Record<string, string>
     | undefined;
-  const messageId = pickHeader(headers, "message-id");
+  const messageId = pickHeader(headers, "message-id") ?? (("message_id" in source && source.message_id) || null);
   const inReplyTo = pickHeader(headers, "in-reply-to");
   const referencesRaw = pickHeader(headers, "references");
   const referenceIds = referencesRaw ? referencesRaw.split(/\s+/).filter(Boolean) : [];
-  const sentAt = (("received_at" in data && data.received_at) || new Date().toISOString()).toString();
+  const sentAt = (
+    ("received_at" in data && data.received_at) ||
+    ("created_at" in source && source.created_at) ||
+    parsed.created_at ||
+    new Date().toISOString()
+  ).toString();
 
   if (!fromAddress) {
     return NextResponse.json({ error: "Missing from address" }, { status: 400 });
@@ -176,11 +325,38 @@ export async function POST(request: Request) {
     messageId,
     inReplyTo,
     referenceIds,
+    providerId: receivedEmailId,
     sentAt,
   });
 
   if (!recorded) {
     return NextResponse.json({ ok: false, error: "Failed to persist inbound email" }, { status: 500 });
+  }
+
+  const attachments = receivedEmailId
+    ? await listReceivedAttachments(receivedEmailId)
+    : "attachments" in source && Array.isArray(source.attachments)
+      ? source.attachments
+      : [];
+  if (attachments.length > 0) {
+    const supabase = getSupabaseAdminClient();
+    if (supabase) {
+      const rows = attachments
+        .filter((attachment) => attachment.filename)
+        .map((attachment) => ({
+          message_id: recorded.message.id,
+          filename: attachment.filename ?? "attachment",
+          mime_type: attachment.content_type ?? "application/octet-stream",
+          size_bytes: attachment.size ?? null,
+          storage_path: receivedEmailId && attachment.id
+            ? `resend-received:${receivedEmailId}:${attachment.id}`
+            : attachment.download_url ?? null,
+        }));
+      if (rows.length > 0) {
+        const { error: attachErr } = await supabase.from("oneos_email_attachments").insert(rows);
+        if (attachErr) console.error("[email/inbound] attachment metadata insert failed", attachErr);
+      }
+    }
   }
 
   void createNotification({

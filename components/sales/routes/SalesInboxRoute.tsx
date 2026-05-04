@@ -38,6 +38,12 @@ type EmailMessage = {
   providerId: string | null;
   isRead: boolean;
   sentAt: string;
+  attachments: Array<{
+    id: string;
+    filename: string;
+    mimeType: string | null;
+    sizeBytes: number | null;
+  }>;
 };
 
 function formatRelative(iso: string): string {
@@ -377,6 +383,23 @@ export function SalesInboxRoute({
                       <div className="mt-3 whitespace-pre-wrap text-sm leading-7 text-white/85">
                         {message.bodyText ?? preview(message)}
                       </div>
+                      {message.attachments?.length > 0 ? (
+                        <ul className="mt-3 flex flex-wrap gap-2">
+                          {message.attachments.map((attachment) => (
+                            <li
+                              key={attachment.id}
+                              className="inline-flex max-w-full items-center gap-2 rounded-full border border-white/14 bg-white/[0.04] px-2.5 py-1 text-[0.7rem] text-white/78"
+                            >
+                              <span className="truncate">{attachment.filename}</span>
+                              {attachment.sizeBytes ? (
+                                <span className="shrink-0 text-white/40">
+                                  {(attachment.sizeBytes / 1024).toFixed(0)} KB
+                                </span>
+                              ) : null}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
                     </article>
                   ))
                 )}

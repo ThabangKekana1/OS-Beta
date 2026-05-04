@@ -26,6 +26,17 @@ export type EmailMessage = {
   isRead: boolean;
   sentAt: string;
   createdAt: string;
+  attachments: EmailAttachment[];
+};
+
+export type EmailAttachment = {
+  id: string;
+  messageId: string;
+  filename: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  storagePath: string | null;
+  createdAt: string;
 };
 
 export type EmailThread = {
@@ -77,6 +88,16 @@ type DbMessageRow = {
   created_at: string;
 };
 
+type DbAttachmentRow = {
+  id: string;
+  message_id: string;
+  filename: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  storage_path: string | null;
+  created_at: string;
+};
+
 function rowToThread(row: DbThreadRow): EmailThread {
   return {
     id: row.id,
@@ -93,7 +114,19 @@ function rowToThread(row: DbThreadRow): EmailThread {
   };
 }
 
-function rowToMessage(row: DbMessageRow): EmailMessage {
+function rowToAttachment(row: DbAttachmentRow): EmailAttachment {
+  return {
+    id: row.id,
+    messageId: row.message_id,
+    filename: row.filename,
+    mimeType: row.mime_type,
+    sizeBytes: row.size_bytes,
+    storagePath: row.storage_path,
+    createdAt: row.created_at,
+  };
+}
+
+function rowToMessage(row: DbMessageRow, attachments: EmailAttachment[] = []): EmailMessage {
   return {
     id: row.id,
     threadId: row.thread_id,
@@ -113,6 +146,7 @@ function rowToMessage(row: DbMessageRow): EmailMessage {
     isRead: row.is_read,
     sentAt: row.sent_at,
     createdAt: row.created_at,
+    attachments,
   };
 }
 
@@ -176,7 +210,27 @@ export async function listMessages(threadId: string): Promise<EmailMessage[]> {
     console.error("[email-threads] listMessages failed", error);
     return [];
   }
-  return (data ?? []).map((row) => rowToMessage(row as DbMessageRow));
+  const rows = (data ?? []) as DbMessageRow[];
+  if (rows.length === 0) return [];
+
+  const messageIds = rows.map((row) => row.id);
+  const { data: attachmentRows, error: attachmentError } = await supabase
+    .from("oneos_email_attachments")
+    .select("*")
+    .in("message_id", messageIds)
+    .order("created_at", { ascending: true });
+  if (attachmentError) {
+    console.error("[email-threads] listAttachments failed", attachmentError);
+  }
+
+  const attachmentsByMessage = new Map<string, EmailAttachment[]>();
+  for (const attachment of (attachmentRows ?? []) as DbAttachmentRow[]) {
+    const next = attachmentsByMessage.get(attachment.message_id) ?? [];
+    next.push(rowToAttachment(attachment));
+    attachmentsByMessage.set(attachment.message_id, next);
+  }
+
+  return rows.map((row) => rowToMessage(row, attachmentsByMessage.get(row.id) ?? []));
 }
 
 export async function markThreadRead(threadId: string): Promise<void> {
