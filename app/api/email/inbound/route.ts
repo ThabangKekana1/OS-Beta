@@ -338,7 +338,7 @@ export async function POST(request: Request) {
     : "attachments" in source && Array.isArray(source.attachments)
       ? source.attachments
       : [];
-  if (attachments.length > 0) {
+  if (recorded.created && attachments.length > 0) {
     const supabase = getSupabaseAdminClient();
     if (supabase) {
       const rows = attachments
@@ -359,14 +359,16 @@ export async function POST(request: Request) {
     }
   }
 
-  void createNotification({
-    audience: "admin",
-    kind: "system",
-    title: `New email reply from ${fromAddress.name ?? fromAddress.email}`,
-    body: subject,
-    link: `/sales/inbox?thread=${recorded.thread.id}`,
-    metadata: { threadId: recorded.thread.id, leadId },
-  }).catch((err) => console.error("[email/inbound] notification failed", err));
+  if (recorded.created) {
+    void createNotification({
+      audience: "admin",
+      kind: "system",
+      title: `New email reply from ${fromAddress.name ?? fromAddress.email}`,
+      body: subject,
+      link: `/sales/inbox?thread=${recorded.thread.id}`,
+      metadata: { threadId: recorded.thread.id, leadId },
+    }).catch((err) => console.error("[email/inbound] notification failed", err));
+  }
 
   return NextResponse.json({ ok: true, threadId: recorded.thread.id, messageId: recorded.message.id });
 }

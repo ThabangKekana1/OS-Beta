@@ -315,9 +315,35 @@ export type RecordMessageArgs = {
   sentAt?: string;
 };
 
-export async function recordMessage(args: RecordMessageArgs): Promise<{ thread: EmailThread; message: EmailMessage } | null> {
+export type RecordMessageResult = { thread: EmailThread; message: EmailMessage; created: boolean };
+
+export async function recordMessage(args: RecordMessageArgs): Promise<RecordMessageResult | null> {
   const supabase = getSupabaseAdminClient();
   if (!supabase) return null;
+
+  const existingCandidates: DbMessageRow[] = [];
+  if (args.providerId) {
+    const { data } = await supabase
+      .from("oneos_email_messages")
+      .select("*")
+      .eq("provider_id", args.providerId)
+      .limit(1);
+    if (data?.[0]) existingCandidates.push(data[0] as DbMessageRow);
+  }
+  if (args.messageId) {
+    const { data } = await supabase
+      .from("oneos_email_messages")
+      .select("*")
+      .eq("message_id", args.messageId)
+      .limit(1);
+    if (data?.[0]) existingCandidates.push(data[0] as DbMessageRow);
+  }
+  const existingMessage = existingCandidates[0];
+  if (existingMessage) {
+    const thread = await getThread(existingMessage.thread_id);
+    if (!thread) return null;
+    return { thread, message: rowToMessage(existingMessage), created: false };
+  }
 
   const sentAt = args.sentAt ?? new Date().toISOString();
   const participants = dedupe([args.fromAddress, ...args.toAddresses, ...(args.ccAddresses ?? [])]);
@@ -408,5 +434,5 @@ export async function recordMessage(args: RecordMessageArgs): Promise<{ thread: 
 
   const thread = await getThread(threadId);
   if (!thread) return null;
-  return { thread, message: rowToMessage(inserted as DbMessageRow) };
+  return { thread, message: rowToMessage(inserted as DbMessageRow), created: true };
 }
