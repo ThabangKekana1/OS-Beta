@@ -96,7 +96,6 @@ export function SalesOverviewRoute({
       visibleClients.reduce((sum, lead) => sum + lead.readinessScore, 0) / visibleClients.length,
     )
     : 0;
-  const valueInFlight = openClients.length * SALES_AGENT_DEAL_VALUE_ZAR;
 
   return (
     <div className="space-y-6 pb-8">
@@ -169,11 +168,6 @@ export function SalesOverviewRoute({
       </section>
 
       <section className="grid gap-4 md:grid-cols-3">
-        <article className="rounded-2xl border border-white/12 bg-white/[0.03] p-4">
-          <p className="line-label">Pipeline value</p>
-          <p className="mt-2 text-3xl font-medium tracking-[-0.04em] text-white">{zar(valueInFlight)}</p>
-          <p className="mt-2 text-sm text-white/56">Calculated at R2,000.00 per active deal.</p>
-        </article>
         <article className="rounded-2xl border border-white/12 bg-white/[0.03] p-4">
           <p className="line-label">Average readiness</p>
           <p className="mt-2 text-3xl font-medium tracking-[-0.04em] text-white">{avgReadiness}</p>
