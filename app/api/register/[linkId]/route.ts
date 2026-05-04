@@ -8,11 +8,82 @@ import {
   promoteSignupLeadToClientRegistration,
 } from "@/lib/client-registration";
 import { registrationLinkIdForProfile } from "@/lib/registration-links";
+import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import type { AdminLeadRegistrationSource } from "@/lib/admin-types";
 
 export const runtime = "nodejs";
 
-function resolveRegistrationSource(linkId: string): AdminLeadRegistrationSource | null {
+type RegistrationUserRow = {
+  id: string;
+  email: string;
+  name: string | null;
+  role: "admin" | "sales";
+  agent_id: string | null;
+};
+
+type RegistrationAgentRow = {
+  id: string;
+  name: string;
+};
+
+function matchesRegistrationLink(user: RegistrationUserRow, linkId: string) {
+  const role = user.role === "sales" ? "sales" : "admin";
+  const candidateAgentIds = [
+    user.agent_id,
+    user.role === "sales" && !user.agent_id ? user.id : null,
+    null,
+  ];
+
+  return candidateAgentIds.some(
+    (agentId) => registrationLinkIdForProfile({ email: user.email, role, agentId }) === linkId,
+  );
+}
+
+async function resolveDatabaseRegistrationSource(linkId: string): Promise<AdminLeadRegistrationSource | null> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return null;
+
+  const { data: users, error } = await supabase
+    .from("oneos_users")
+    .select("id, email, name, role, agent_id")
+    .in("role", ["admin", "sales"])
+    .eq("is_active", true);
+
+  if (error || !users) {
+    if (error) console.error("[register] failed to load registration users", error);
+    return null;
+  }
+
+  const rows = users as RegistrationUserRow[];
+  const matchedUser = rows.find((user) => matchesRegistrationLink(user, linkId));
+  if (!matchedUser) return null;
+
+  const agentIds = Array.from(new Set(rows.map((user) => user.agent_id).filter((id): id is string => Boolean(id))));
+  const agentsById = new Map<string, RegistrationAgentRow>();
+  if (agentIds.length > 0) {
+    const { data: agents, error: agentsError } = await supabase
+      .from("oneos_agents")
+      .select("id, name")
+      .in("id", agentIds)
+      .eq("is_active", true);
+    if (agentsError) console.error("[register] failed to load registration agents", agentsError);
+    for (const agent of (agents ?? []) as RegistrationAgentRow[]) {
+      agentsById.set(agent.id, agent);
+    }
+  }
+
+  const role = matchedUser.role === "sales" ? "sales" : "admin";
+  const agent = matchedUser.agent_id ? agentsById.get(matchedUser.agent_id) : null;
+  return {
+    linkId,
+    profileName: agent?.name ?? matchedUser.name ?? matchedUser.email,
+    profileRole: role,
+    profileAgentId: role === "sales" ? (matchedUser.agent_id ?? matchedUser.id) : matchedUser.agent_id,
+    channel: "public_link",
+  };
+}
+
+function resolveStaticRegistrationSource(linkId: string): AdminLeadRegistrationSource | null {
   const agent = ADMIN_AGENTS.find(
     (entry) => registrationLinkIdForProfile({
       email: `${entry.id}@agent.local`,
@@ -34,12 +105,16 @@ function resolveRegistrationSource(linkId: string): AdminLeadRegistrationSource 
   };
 }
 
+async function resolveRegistrationSource(linkId: string): Promise<AdminLeadRegistrationSource | null> {
+  return (await resolveDatabaseRegistrationSource(linkId)) ?? resolveStaticRegistrationSource(linkId);
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ linkId: string }> },
 ) {
   const { linkId } = await params;
-  const source = resolveRegistrationSource(linkId);
+  const source = await resolveRegistrationSource(linkId);
 
   if (!source) {
     return NextResponse.json({ ok: false, error: "Registration link not found." }, { status: 404 });
@@ -76,7 +151,7 @@ export async function POST(
   }
 
   const { linkId } = await params;
-  const source = resolveRegistrationSource(linkId);
+  const source = await resolveRegistrationSource(linkId);
 
   if (!source) {
     return NextResponse.json({ ok: false, error: "Registration link not found." }, { status: 404 });

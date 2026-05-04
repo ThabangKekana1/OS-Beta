@@ -36,12 +36,14 @@ export async function getServerAuthSession(): Promise<AuthSession | null> {
       null;
 
     if (profile && profile.isActive) {
+      const effectiveAgentId = profile.agentId ?? (profile.role === "sales" ? profile.id : null);
+
       return {
         userId: profile.id,
         email: profile.email,
         name: profile.name || metaName || email.split("@")[0],
         role: profile.role,
-        agentId: profile.agentId,
+        agentId: effectiveAgentId,
         partnerOrgId: profile.partnerOrgId,
       };
     }
