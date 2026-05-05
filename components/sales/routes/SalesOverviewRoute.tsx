@@ -5,6 +5,7 @@ import { useState } from "react";
 import { AdminBadge, AdminHeader } from "@/components/admin/AdminPrimitives";
 import { useAdminPortal } from "@/components/admin/AdminPortalProvider";
 import { RegistrationLinkCard } from "@/components/registration/RegistrationLinkCard";
+import { registrationLinkIdForProfile, registrationLinkPath } from "@/lib/registration-links";
 import {
   getStatisticsPeriods,
   isWithinStatisticsPeriod,
@@ -46,6 +47,9 @@ export function SalesOverviewRoute({
   agentId: string | null;
 }) {
   const { leads } = useAdminPortal();
+  const registrationPath = registrationLinkPath(
+    registrationLinkIdForProfile({ email, role: "sales", agentId }),
+  );
   const visibleClients = agentId
     ? leads.filter((lead) => lead.ownerId === agentId)
     : leads;
@@ -103,7 +107,17 @@ export function SalesOverviewRoute({
         eyebrow="Sales Dashboard"
         title="Sales Dashboard"
         description="This dashboard is isolated to your sales profile so you can focus on your client book and onboarding progress."
-        actions={<AdminBadge label={`${openClients.length} Active Clients`} tone="bright" />}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href={registrationPath}
+              className="rounded-full border border-white/18 bg-white px-3 py-1.5 text-[0.62rem] font-medium uppercase tracking-[0.22em] text-black transition hover:bg-white/88"
+            >
+              Client Registration Link
+            </Link>
+            <AdminBadge label={`${openClients.length} Active Clients`} tone="bright" />
+          </div>
+        }
       />
 
       <RegistrationLinkCard
