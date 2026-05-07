@@ -132,6 +132,7 @@ export interface AdminLeadRegistrationSource {
   profileName: string;
   profileRole: RegistrationSourceRole;
   profileAgentId: string | null;
+  partnerOrgId?: string | null;
   channel: "dashboard" | "public_link";
 }
 

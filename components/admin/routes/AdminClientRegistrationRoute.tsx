@@ -6,15 +6,23 @@ import {
   ClientRegistrationForm,
   type RegistrationFormValues,
 } from "@/components/registration/ClientRegistrationForm";
+import { RegistrationLinkCard } from "@/components/registration/RegistrationLinkCard";
+import type { RegistrationSourceRole } from "@/lib/admin-types";
 
 export function AdminClientRegistrationRoute({
   leadHrefBase = "/admin/leads",
   clientHrefBase,
   defaultOwnerId,
+  registrationLinkProfile,
 }: {
   leadHrefBase?: string;
   clientHrefBase?: string;
   defaultOwnerId?: string | null;
+  registrationLinkProfile?: {
+    email: string;
+    role: RegistrationSourceRole;
+    agentId: string | null;
+  } | null;
 }) {
   const router = useRouter();
   const { agents, actorAgentId, createLead } = useAdminPortal();
@@ -44,11 +52,20 @@ export function AdminClientRegistrationRoute({
   };
 
   return (
-    <ClientRegistrationForm
-      agents={agents}
-      defaultOwnerId={resolvedOwnerId}
-      lockOwner={Boolean(defaultOwnerId)}
-      onSubmit={handleSubmit}
-    />
+    <div className="flex w-full flex-col gap-4 lg:gap-5">
+      {registrationLinkProfile ? (
+        <RegistrationLinkCard
+          email={registrationLinkProfile.email}
+          role={registrationLinkProfile.role}
+          agentId={registrationLinkProfile.agentId}
+        />
+      ) : null}
+      <ClientRegistrationForm
+        agents={agents}
+        defaultOwnerId={resolvedOwnerId}
+        lockOwner={Boolean(defaultOwnerId)}
+        onSubmit={handleSubmit}
+      />
+    </div>
   );
 }

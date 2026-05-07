@@ -17,8 +17,9 @@ type RegistrationUserRow = {
   id: string;
   email: string;
   name: string | null;
-  role: "admin" | "sales";
+  role: "admin" | "sales" | "partner";
   agent_id: string | null;
+  partner_org_id: string | null;
 };
 
 type RegistrationAgentRow = {
@@ -27,7 +28,7 @@ type RegistrationAgentRow = {
 };
 
 function matchesRegistrationLink(user: RegistrationUserRow, linkId: string) {
-  const role = user.role === "sales" ? "sales" : "admin";
+  const role = user.role === "partner" ? "partner" : user.role === "sales" ? "sales" : "admin";
   const candidateAgentIds = [
     user.agent_id,
     user.role === "sales" && !user.agent_id ? user.id : null,
@@ -45,8 +46,8 @@ async function resolveDatabaseRegistrationSource(linkId: string): Promise<AdminL
 
   const { data: users, error } = await supabase
     .from("oneos_users")
-    .select("id, email, name, role, agent_id")
-    .in("role", ["admin", "sales"])
+    .select("id, email, name, role, agent_id, partner_org_id")
+    .in("role", ["admin", "sales", "partner"])
     .eq("is_active", true);
 
   if (error || !users) {
@@ -72,13 +73,14 @@ async function resolveDatabaseRegistrationSource(linkId: string): Promise<AdminL
     }
   }
 
-  const role = matchedUser.role === "sales" ? "sales" : "admin";
+  const role = matchedUser.role === "partner" ? "partner" : matchedUser.role === "sales" ? "sales" : "admin";
   const agent = matchedUser.agent_id ? agentsById.get(matchedUser.agent_id) : null;
   return {
     linkId,
     profileName: agent?.name ?? matchedUser.name ?? matchedUser.email,
     profileRole: role,
     profileAgentId: role === "sales" ? (matchedUser.agent_id ?? matchedUser.id) : matchedUser.agent_id,
+    partnerOrgId: role === "partner" ? matchedUser.partner_org_id : null,
     channel: "public_link",
   };
 }
@@ -207,6 +209,7 @@ export async function POST(
     province: typeof payload.province === "string" ? payload.province : "",
     source: "Migrate Portal",
     origin: "website",
+    partnerOrgId: source.partnerOrgId ?? null,
     ownerId: defaultOwnerIdForRegistration(source),
     registrationSource: source,
   } as const;

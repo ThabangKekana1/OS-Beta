@@ -5,6 +5,7 @@ import {
   ClientRegistrationForm,
   type RegistrationFormValues,
 } from "@/components/registration/ClientRegistrationForm";
+import { RegistrationLinkCard } from "@/components/registration/RegistrationLinkCard";
 
 type RegistrationResponse = {
   ok: boolean;
@@ -13,9 +14,11 @@ type RegistrationResponse = {
 
 export function PartnerRegistrationRoute({
   defaultOwnerId,
+  email,
   partnerOrgName,
 }: {
   defaultOwnerId: string;
+  email: string;
   partnerOrgName: string | null;
 }) {
   const router = useRouter();
@@ -42,18 +45,21 @@ export function PartnerRegistrationRoute({
   }
 
   return (
-    <ClientRegistrationForm
-      defaultOwnerId={defaultOwnerId}
-      lockOwner
-      eyebrow="Partner Registration"
-      title="Register a partner client."
-      description={
-        partnerOrgName
-          ? `Capture a complete registered business profile for ${partnerOrgName}. Registered businesses appear under Clients.`
-          : "Capture a complete registered business profile. Registered businesses appear under Clients."
-      }
-      submitLabel="Register Client"
-      onSubmit={handleSubmit}
-    />
+    <div className="flex w-full flex-col gap-4 lg:gap-5">
+      <RegistrationLinkCard email={email} role="partner" agentId={null} />
+      <ClientRegistrationForm
+        defaultOwnerId={defaultOwnerId}
+        lockOwner
+        eyebrow="Partner Registration"
+        title="Register a partner client."
+        description={
+          partnerOrgName
+            ? `Capture a complete registered business profile for ${partnerOrgName}. Registered businesses appear under Clients.`
+            : "Capture a complete registered business profile. Registered businesses appear under Clients."
+        }
+        submitLabel="Register Client"
+        onSubmit={handleSubmit}
+      />
+    </div>
   );
 }

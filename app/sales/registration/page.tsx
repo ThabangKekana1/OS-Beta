@@ -8,6 +8,11 @@ export default async function SalesRegistrationPage() {
     <AdminClientRegistrationRoute
       defaultOwnerId={session.agentId}
       clientHrefBase="/sales/clients"
+      registrationLinkProfile={{
+        email: session.email,
+        role: "sales",
+        agentId: session.agentId,
+      }}
     />
   );
 }

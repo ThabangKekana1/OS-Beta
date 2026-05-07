@@ -33,6 +33,7 @@ export default async function PartnerRegistrationPage() {
     <div className="mx-auto max-w-6xl py-6">
       <PartnerRegistrationRoute
         defaultOwnerId={ADMIN_AGENTS[0]?.id ?? ""}
+        email={session.email}
         partnerOrgName={partnerOrg?.name ?? null}
       />
     </div>
