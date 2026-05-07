@@ -11,6 +11,7 @@ import type {
   AdminLead,
   AdminLeadDocument,
 } from "@/lib/admin-types";
+import { partnerCanAccessClientLead } from "@/lib/partner-client-access";
 
 export const runtime = "nodejs";
 
@@ -117,7 +118,18 @@ export async function GET(
     return NextResponse.json({ ok: false, error: "Client profile not found." }, { status: 404 });
   }
 
+  if (session.role === "client") {
+    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  }
+
   if (session.role === "sales" && session.agentId !== lead.ownerId) {
+    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  }
+
+  if (
+    session.role === "partner" &&
+    (!session.partnerOrgId || !partnerCanAccessClientLead(snapshot, lead, session.partnerOrgId))
+  ) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
@@ -167,6 +179,11 @@ export async function POST(
   }
 
   const { id } = await params;
+
+  if (session.role !== "admin" && session.role !== "sales") {
+    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  }
+
   const formData = await request.formData();
   const file = formData.get("file");
 
@@ -188,6 +205,15 @@ export async function POST(
   const status = toDocumentStatus(formData.get("status"));
 
   const { snapshot } = await readAdminStateSnapshot();
+  const targetLead = snapshot.leads.find((entry) => entry.id === id || entry.clientProfileId === id);
+  if (!targetLead) {
+    return NextResponse.json({ ok: false, error: "Client profile not found." }, { status: 404 });
+  }
+
+  if (session.role === "sales" && session.agentId !== targetLead.ownerId) {
+    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  }
+
   let nextLead: AdminLead | null = null;
   let storedPath: string | null = null;
 

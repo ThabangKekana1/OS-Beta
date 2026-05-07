@@ -1,11 +1,16 @@
-import { PartnerClientsRoute } from "@/components/partner/PartnerClientsRoute";
+import { notFound } from "next/navigation";
+import { PartnerClientProfileRoute } from "@/components/partner/PartnerClientProfileRoute";
 import { readAdminStateSnapshot } from "@/lib/admin-state-store";
 import { requireServerAuthSession } from "@/lib/auth-server";
-import { getPartnerClientLeads } from "@/lib/partner-client-access";
+import { findPartnerClientLead } from "@/lib/partner-client-access";
 
 export const dynamic = "force-dynamic";
 
-export default async function PartnerClientsPage() {
+export default async function PartnerClientProfilePage({
+  params,
+}: {
+  params: Promise<{ profileId: string }>;
+}) {
   const session = await requireServerAuthSession("partner");
 
   if (!session.partnerOrgId) {
@@ -24,8 +29,13 @@ export default async function PartnerClientsPage() {
     );
   }
 
+  const { profileId } = await params;
   const { snapshot } = await readAdminStateSnapshot();
-  const clients = getPartnerClientLeads(snapshot, session.partnerOrgId);
+  const lead = findPartnerClientLead(snapshot, session.partnerOrgId, profileId);
 
-  return <PartnerClientsRoute clients={clients} />;
+  if (!lead) {
+    notFound();
+  }
+
+  return <PartnerClientProfileRoute lead={lead} />;
 }

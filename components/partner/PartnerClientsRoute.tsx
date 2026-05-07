@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { AdminBadge, AdminHeader } from "@/components/admin/AdminPrimitives";
 import { adminLeadStages, type AdminLead, type AdminLeadStage } from "@/lib/admin-types";
@@ -27,6 +28,7 @@ function stageBadgeClass(stage: AdminLeadStage) {
 }
 
 export function PartnerClientsRoute({ clients }: { clients: AdminLead[] }) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<AdminLeadStage | "All">("All");
 
@@ -99,7 +101,7 @@ export function PartnerClientsRoute({ clients }: { clients: AdminLead[] }) {
       <section className="app-surface rounded-[1.4rem] p-4">
         <p className="line-label">Client Profiles</p>
         <div className="mt-3 overflow-auto rounded-[0.9rem] border border-white/10">
-          <table className="w-full min-w-[1040px] text-left">
+          <table className="w-full min-w-[1140px] text-left">
             <thead className="bg-black/70">
               <tr className="text-[0.64rem] uppercase tracking-[0.18em] text-white/50">
                 <th className="px-3 py-2">Business</th>
@@ -109,13 +111,14 @@ export function PartnerClientsRoute({ clients }: { clients: AdminLead[] }) {
                 <th className="px-3 py-2">Reg Number</th>
                 <th className="px-3 py-2">Client Docs</th>
                 <th className="px-3 py-2">Last Touched</th>
+                <th className="px-3 py-2">Open</th>
                 <th className="px-3 py-2">Contact</th>
               </tr>
             </thead>
             <tbody>
               {filteredClients.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-3 py-6 text-sm text-white/54">
+                  <td colSpan={9} className="px-3 py-6 text-sm text-white/54">
                     {clients.length === 0
                       ? "No registered clients yet. Register a business from the Registration tab."
                       : "No clients match the selected filters."}
@@ -125,9 +128,18 @@ export function PartnerClientsRoute({ clients }: { clients: AdminLead[] }) {
                 filteredClients.map((lead) => (
                   <tr
                     key={lead.id}
+                    onClick={() => router.push(`/partner/clients/${lead.clientProfileId}`)}
                     className="border-t border-white/8 bg-black/35 text-sm hover:bg-white/[0.04]"
                   >
-                    <td className="px-3 py-2 text-white/78">{lead.company}</td>
+                    <td className="px-3 py-2 text-white/78">
+                      <Link
+                        href={`/partner/clients/${lead.clientProfileId}`}
+                        onClick={(event) => event.stopPropagation()}
+                        className="underline-offset-4 hover:underline"
+                      >
+                        {lead.company}
+                      </Link>
+                    </td>
                     <td className="px-3 py-2 text-white/62">{lead.clientProfileId}</td>
                     <td className="px-3 py-2">
                       <span
@@ -148,7 +160,17 @@ export function PartnerClientsRoute({ clients }: { clients: AdminLead[] }) {
                     <td className="px-3 py-2 text-white/52">{lead.lastTouched}</td>
                     <td className="px-3 py-2">
                       <Link
+                        href={`/partner/clients/${lead.clientProfileId}`}
+                        onClick={(event) => event.stopPropagation()}
+                        className="rounded-[0.65rem] border border-white/12 px-2.5 py-1 text-[0.64rem] uppercase tracking-[0.16em] text-white/72 transition hover:border-white/26 hover:text-white"
+                      >
+                        Open Profile
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2">
+                      <Link
                         href={`/partner/inbox?to=${encodeURIComponent(lead.userProfile.email)}`}
+                        onClick={(event) => event.stopPropagation()}
                         className="rounded-[0.65rem] border border-white/12 px-2.5 py-1 text-[0.64rem] uppercase tracking-[0.16em] text-white/72 transition hover:border-white/26 hover:text-white"
                       >
                         Email
