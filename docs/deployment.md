@@ -66,8 +66,7 @@ Production refuses to use the local Ollama loopback. Dawn uses OpenRouter by
 default when configured. Set:
 
 - `OPENROUTER_API_KEY`
-- optional `OPENROUTER_MODEL` (defaults to
-   `nousresearch/hermes-3-llama-3.1-405b:free`)
+- optional `OPENROUTER_MODEL` (defaults to `minimax/minimax-m2.5:free`)
 
 Google remains a fallback if OpenRouter is not configured:
 
@@ -83,7 +82,7 @@ Google remains a fallback if OpenRouter is not configured:
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | from Supabase |
 | `SUPABASE_SERVICE_ROLE_KEY` | from Supabase, **secret** |
 | `OPENROUTER_API_KEY` | Dawn's primary LLM provider, **secret** |
-| `OPENROUTER_MODEL` | optional; defaults to `nousresearch/hermes-3-llama-3.1-405b:free` |
+| `OPENROUTER_MODEL` | optional; defaults to `minimax/minimax-m2.5:free` |
 
 ## 7. Deploy
 

@@ -21,7 +21,7 @@ export type OpenRouterCallFailure = {
   status?: number;
 };
 
-export const DEFAULT_OPENROUTER_MODEL = "nousresearch/hermes-3-llama-3.1-405b:free";
+export const DEFAULT_OPENROUTER_MODEL = "minimax/minimax-m2.5:free";
 
 function normalizeEnv(value?: string) {
   if (!value) return "";
