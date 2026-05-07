@@ -5,26 +5,9 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { AdminBadge, AdminHeader } from "@/components/admin/AdminPrimitives";
 import { adminLeadStages, type AdminLead, type AdminLeadStage } from "@/lib/admin-types";
-import { cn } from "@/lib/utils";
 
 function clientDocCount(documents: AdminLead["documents"]) {
   return documents.filter((doc) => doc.uploadedByType === "Client").length;
-}
-
-function stageBadgeClass(stage: AdminLeadStage) {
-  switch (stage) {
-    case "Onboarding Complete":
-      return "border-emerald-400/40 bg-emerald-400/10 text-emerald-200";
-    case "Disqualified":
-      return "border-rose-400/40 bg-rose-400/10 text-rose-200";
-    case "EOI Signed":
-    case "Utility Bills Uploaded":
-    case "Compliance Pack Uploaded":
-    case "Term Sheet Uploaded":
-      return "border-sky-400/40 bg-sky-400/10 text-sky-200";
-    default:
-      return "border-white/14 bg-white/[0.04] text-white/70";
-  }
 }
 
 export function PartnerClientsRoute({ clients }: { clients: AdminLead[] }) {
@@ -101,7 +84,18 @@ export function PartnerClientsRoute({ clients }: { clients: AdminLead[] }) {
       <section className="app-surface rounded-[1.4rem] p-4">
         <p className="line-label">Client Profiles</p>
         <div className="mt-3 overflow-auto rounded-[0.9rem] border border-white/10">
-          <table className="w-full min-w-[1140px] text-left">
+          <table className="w-full min-w-[1240px] text-left">
+            <colgroup>
+              <col className="w-[17%]" />
+              <col className="w-[13%]" />
+              <col className="w-[13%]" />
+              <col className="w-[18%]" />
+              <col className="w-[13%]" />
+              <col className="w-[7%]" />
+              <col className="w-[10%]" />
+              <col className="w-[9%]" />
+              <col className="w-[7%]" />
+            </colgroup>
             <thead className="bg-black/70">
               <tr className="text-[0.64rem] uppercase tracking-[0.18em] text-white/50">
                 <th className="px-3 py-2">Business</th>
@@ -129,7 +123,7 @@ export function PartnerClientsRoute({ clients }: { clients: AdminLead[] }) {
                   <tr
                     key={lead.id}
                     onClick={() => router.push(`/partner/clients/${lead.clientProfileId}`)}
-                    className="border-t border-white/8 bg-black/35 text-sm hover:bg-white/[0.04]"
+                    className="cursor-pointer border-t border-white/8 bg-black/35 text-sm hover:bg-white/[0.04]"
                   >
                     <td className="px-3 py-2 text-white/78">
                       <Link
@@ -141,16 +135,7 @@ export function PartnerClientsRoute({ clients }: { clients: AdminLead[] }) {
                       </Link>
                     </td>
                     <td className="px-3 py-2 text-white/62">{lead.clientProfileId}</td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={cn(
-                          "rounded-full border px-2.5 py-1 text-[0.6rem] uppercase tracking-[0.2em]",
-                          stageBadgeClass(lead.stage),
-                        )}
-                      >
-                        {lead.stage}
-                      </span>
-                    </td>
+                    <td className="px-3 py-2 text-white/62">{lead.stage}</td>
                     <td className="px-3 py-2 text-white/62">
                       {lead.contactName}
                       <span className="block text-xs text-white/42">{lead.userProfile.email}</span>
@@ -158,20 +143,20 @@ export function PartnerClientsRoute({ clients }: { clients: AdminLead[] }) {
                     <td className="px-3 py-2 text-white/62">{lead.businessRegistrationNumber}</td>
                     <td className="px-3 py-2 text-white/62">{clientDocCount(lead.documents)}</td>
                     <td className="px-3 py-2 text-white/52">{lead.lastTouched}</td>
-                    <td className="px-3 py-2">
+                    <td className="whitespace-nowrap px-3 py-2">
                       <Link
                         href={`/partner/clients/${lead.clientProfileId}`}
                         onClick={(event) => event.stopPropagation()}
-                        className="rounded-[0.65rem] border border-white/12 px-2.5 py-1 text-[0.64rem] uppercase tracking-[0.16em] text-white/72 transition hover:border-white/26 hover:text-white"
+                        className="inline-flex items-center justify-center whitespace-nowrap rounded-[0.65rem] border border-white/12 px-2.5 py-1 text-[0.64rem] uppercase tracking-[0.14em] text-white/72 transition hover:border-white/26 hover:text-white"
                       >
                         Open Profile
                       </Link>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="whitespace-nowrap px-3 py-2">
                       <Link
                         href={`/partner/inbox?to=${encodeURIComponent(lead.userProfile.email)}`}
                         onClick={(event) => event.stopPropagation()}
-                        className="rounded-[0.65rem] border border-white/12 px-2.5 py-1 text-[0.64rem] uppercase tracking-[0.16em] text-white/72 transition hover:border-white/26 hover:text-white"
+                        className="inline-flex items-center justify-center whitespace-nowrap rounded-[0.65rem] border border-white/12 px-2.5 py-1 text-[0.64rem] uppercase tracking-[0.14em] text-white/72 transition hover:border-white/26 hover:text-white"
                       >
                         Email
                       </Link>
