@@ -62,10 +62,17 @@ The migrations create:
 
 ## 5. Configure an LLM provider
 
-Production refuses to use the local Ollama loopback. Set **either**:
+Production refuses to use the local Ollama loopback. Dawn uses OpenRouter by
+default when configured. Set:
 
-- `GOOGLE_API_KEY` (recommended) + `AI_PROVIDER=google`
-- or `OPENAI_API_KEY` + `AI_PROVIDER=openai`
+- `OPENROUTER_API_KEY`
+- optional `OPENROUTER_MODEL` (defaults to
+   `nousresearch/hermes-3-llama-3.1-405b:free`)
+
+Google remains a fallback if OpenRouter is not configured:
+
+- `GOOGLE_API_KEY` + optional `GOOGLE_MODEL`
+- or `OPENAI_API_KEY` for future provider compatibility
 
 ## 6. Set environment variables on your host
 
@@ -75,7 +82,8 @@ Production refuses to use the local Ollama loopback. Set **either**:
 | `NEXT_PUBLIC_SUPABASE_URL` | from Supabase |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | from Supabase |
 | `SUPABASE_SERVICE_ROLE_KEY` | from Supabase, **secret** |
-| `GOOGLE_API_KEY` (or `OPENAI_API_KEY`) | LLM provider |
+| `OPENROUTER_API_KEY` | Dawn's primary LLM provider, **secret** |
+| `OPENROUTER_MODEL` | optional; defaults to `nousresearch/hermes-3-llama-3.1-405b:free` |
 
 ## 7. Deploy
 

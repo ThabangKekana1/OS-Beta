@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FOUNDATION_ASSISTANT_SYSTEM_PROMPT } from "@/lib/assistant/system-prompt";
 import { loadAgentConfig, composeSystemPrompt, type AgentConfig } from "@/lib/assistant/agent-config";
+import {
+  callOpenRouterChat,
+  resolveOpenRouterApiKey,
+  resolveOpenRouterModel,
+  type LlmProvider,
+} from "@/lib/assistant/openrouter";
 import type { AdminLead } from "@/lib/admin-types";
 import { getLatestExtractedText } from "@/lib/case-documents";
 import { resolveClientOnboardingLead } from "@/lib/client-onboarding";
 import { isSignupShellLead } from "@/lib/client-registration";
-import { buildClientEoiSigningPath, buildClientEoiSigningUrl } from "@/lib/eoi-signing";
+import { buildClientEoiSigningPath } from "@/lib/eoi-signing";
 import {
   advanceRegistration,
   buildRegistrationStatePrompt,
@@ -53,6 +59,12 @@ const DEBUG_AGENT_MODE =
   isTruthyEnv(normalizeEnv(process.env.DEBUG_AGENT_MODE)) ||
   isTruthyEnv(normalizeEnv(process.env.ADMIN_AGENT_MODE));
 
+type LlmConfig = {
+  provider: LlmProvider;
+  apiKey: string;
+  model: string;
+};
+
 type ChatPayload = {
   message?: string;
   context?: string;
@@ -75,6 +87,28 @@ type GoogleCallFailure = {
   error: string;
   status?: number;
 };
+
+function resolvePrimaryLlmConfig(): LlmConfig | null {
+  const openRouterApiKey = resolveOpenRouterApiKey();
+  if (openRouterApiKey) {
+    return {
+      provider: "openrouter",
+      apiKey: openRouterApiKey,
+      model: resolveOpenRouterModel(),
+    };
+  }
+
+  const googleApiKey = resolveGoogleApiKey();
+  if (googleApiKey) {
+    return {
+      provider: "google",
+      apiKey: googleApiKey,
+      model: GOOGLE_MODEL,
+    };
+  }
+
+  return null;
+}
 
 function messageMatches(message: string, pattern: RegExp) {
   return pattern.test(message);
@@ -665,6 +699,52 @@ async function continueGoogleReply(
   return callGoogle(system, continuationTurns, apiKey);
 }
 
+async function callLlm(
+  system: string,
+  turns: ChatTurn[],
+  config: LlmConfig,
+): Promise<GoogleCallSuccess | GoogleCallFailure> {
+  if (config.provider === "openrouter") {
+    return callOpenRouterChat({
+      apiKey: config.apiKey,
+      model: config.model,
+      system,
+      turns,
+      maxOutputTokens: 1200,
+      temperature: 0.2,
+    });
+  }
+
+  return callGoogle(system, turns, config.apiKey);
+}
+
+async function continueLlmReply(
+  system: string,
+  turns: ChatTurn[],
+  partialReply: string,
+  config: LlmConfig,
+) {
+  if (config.provider === "google") {
+    return continueGoogleReply(system, turns, partialReply, config.apiKey);
+  }
+
+  const continuationTurns: ChatTurn[] = [
+    ...turns,
+    { role: "assistant", content: partialReply },
+    {
+      role: "user",
+      content:
+        "Continue your previous answer from exactly where you stopped. Do not restart or repeat the opening.",
+    },
+  ];
+
+  return callLlm(system, continuationTurns, config);
+}
+
+function isTokenLimitFinishReason(finishReason: string | null) {
+  return /MAX_TOKENS|length|max_tokens/i.test(finishReason ?? "");
+}
+
 function normalizeReplyText(reply: string) {
   return reply
     .trim()
@@ -727,11 +807,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const googleApiKey = resolveGoogleApiKey();
-  if (!googleApiKey) {
-    console.error("[chat] No Google API key configured (checked GOOGLE_API_KEY, GEMINI_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY)");
+  const llmConfig = resolvePrimaryLlmConfig();
+  if (!llmConfig) {
+    console.error("[chat] No hosted LLM API key configured (checked OPENROUTER_API_KEY, GOOGLE_API_KEY, GEMINI_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY)");
     return NextResponse.json(
-      { error: "Chat unavailable: GOOGLE_API_KEY is not configured." },
+      { error: "Chat unavailable: OPENROUTER_API_KEY is not configured." },
       { status: 503 },
     );
   }
@@ -840,8 +920,9 @@ export async function POST(request: NextRequest) {
     const advanced = await advanceRegistration({
       workspaceId,
       caseId,
-      apiKey: googleApiKey,
-      model: GOOGLE_MODEL,
+      provider: llmConfig.provider,
+      apiKey: llmConfig.apiKey,
+      model: llmConfig.model,
       recentHistory: history,
       latestUser: message,
       prequal: agentConfig.prequalification,
@@ -885,16 +966,16 @@ export async function POST(request: NextRequest) {
       ].join("\n\n");
 
       const registerTurns: ChatTurn[] = [...history, { role: "user", content: message }];
-      const registerResult = await callGoogle(registerSystem, registerTurns, googleApiKey);
+      const registerResult = await callLlm(registerSystem, registerTurns, llmConfig);
 
       if (registerResult.ok) {
         reply = sanitizeReply(registerResult.reply);
-        if (registerResult.finishReason === "MAX_TOKENS" || replyLooksTruncated(reply)) {
-          const continuation = await continueGoogleReply(
+        if (isTokenLimitFinishReason(registerResult.finishReason) || replyLooksTruncated(reply)) {
+          const continuation = await continueLlmReply(
             registerSystem,
             registerTurns,
             reply,
-            googleApiKey,
+            llmConfig,
           );
           if (continuation.ok) {
             reply = sanitizeReply(mergeContinuedReply(reply, continuation.reply));
@@ -930,8 +1011,9 @@ export async function POST(request: NextRequest) {
       workspaceId,
       caseId,
       caseName,
-      googleApiKey,
-      googleModel: GOOGLE_MODEL,
+      provider: llmConfig.provider,
+      apiKey: llmConfig.apiKey,
+      model: llmConfig.model,
       latestUser: message,
       latestAssistant: reply,
     });
@@ -956,12 +1038,12 @@ export async function POST(request: NextRequest) {
   const turns: ChatTurn[] = [...history, { role: "user", content: message }];
 
   const startedAt = Date.now();
-  const result = await callGoogle(system, turns, googleApiKey);
+  const result = await callLlm(system, turns, llmConfig);
 
   if (!result.ok) {
     // Always log the underlying provider error to Vercel logs so it can be
     // diagnosed without poking around the network tab.
-    console.error("[chat] Google API call failed:", result.error);
+    console.error(`[chat] ${llmConfig.provider} API call failed:`, result.error);
     const showDetails = DEBUG_AGENT_MODE || session.role === "admin";
     const detailSuffix = showDetails ? `\n\n(debug: ${result.error})` : "";
     return NextResponse.json({
@@ -974,8 +1056,8 @@ export async function POST(request: NextRequest) {
   }
 
   let reply = sanitizeReply(result.reply);
-  if (result.finishReason === "MAX_TOKENS" || replyLooksTruncated(reply)) {
-    const continuation = await continueGoogleReply(system, turns, reply, googleApiKey);
+  if (isTokenLimitFinishReason(result.finishReason) || replyLooksTruncated(reply)) {
+    const continuation = await continueLlmReply(system, turns, reply, llmConfig);
     if (continuation.ok) {
       reply = sanitizeReply(mergeContinuedReply(reply, continuation.reply));
     }
@@ -990,7 +1072,7 @@ export async function POST(request: NextRequest) {
       mode: conversationMode,
       role: "assistant",
       content: reply,
-      provider: "google",
+      provider: llmConfig.provider,
       latencyMs,
       sessionEmail: session?.email ?? null,
       clientIp,
@@ -1001,12 +1083,13 @@ export async function POST(request: NextRequest) {
       workspaceId,
       caseId,
       caseName,
-      googleApiKey,
-      googleModel: GOOGLE_MODEL,
+      provider: llmConfig.provider,
+      apiKey: llmConfig.apiKey,
+      model: llmConfig.model,
       latestUser: message,
       latestAssistant: reply,
     });
   }
 
-  return NextResponse.json({ reply, source: "google", latencyMs, registration: null });
+  return NextResponse.json({ reply, source: llmConfig.provider, latencyMs, registration: null });
 }

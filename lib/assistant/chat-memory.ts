@@ -1,4 +1,5 @@
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
+import { callOpenRouterText, type LlmProvider } from "@/lib/assistant/openrouter";
 
 type ChatTurn = {
   role: "user" | "assistant";
@@ -165,6 +166,10 @@ type GoogleTextRequest = {
   maxOutputTokens: number;
 };
 
+type ModelTextRequest = GoogleTextRequest & {
+  provider: LlmProvider;
+};
+
 async function callGoogleText({ apiKey, model, prompt, maxOutputTokens }: GoogleTextRequest) {
   try {
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
@@ -195,6 +200,21 @@ async function callGoogleText({ apiKey, model, prompt, maxOutputTokens }: Google
   }
 }
 
+async function callModelText({ provider, apiKey, model, prompt, maxOutputTokens }: ModelTextRequest) {
+  if (provider === "openrouter") {
+    return callOpenRouterText({
+      apiKey,
+      model,
+      prompt,
+      maxOutputTokens,
+      temperature: 0,
+      timeoutMs: 30_000,
+    });
+  }
+
+  return callGoogleText({ apiKey, model, prompt, maxOutputTokens });
+}
+
 async function countTurnsSinceSummary(workspaceId: string): Promise<number> {
   const client = getSupabaseAdminClient();
   if (!client) return 0;
@@ -214,8 +234,9 @@ async function countTurnsSinceSummary(workspaceId: string): Promise<number> {
 async function extractAndStoreFacts(input: {
   workspaceId: string;
   caseName: string | null;
-  googleApiKey: string;
-  googleModel: string;
+  provider: LlmProvider;
+  apiKey: string;
+  model: string;
   latestUser: string;
   latestAssistant: string;
 }) {
@@ -226,9 +247,10 @@ async function extractAndStoreFacts(input: {
     known.length > 0 ? known.map((f) => `- ${f}`).join("\n") : "(none yet)"
   }\n\nLatest exchange${input.caseName ? ` for ${input.caseName}` : ""}:\nUser: ${input.latestUser}\nAssistant: ${input.latestAssistant}\n\nExtract any NEW durable facts worth remembering long-term about this client (preferences, decisions, contact details, constraints, deadlines, named systems, family/staff names, business specifics). Each fact must be:\n- a single short declarative sentence\n- objectively about the client (not the assistant)\n- not already in the known list\n- not transient chit-chat\n\nReturn ONLY a strict JSON array of strings. If there is nothing new, return [].\nDo not wrap in markdown. Example: ["Customer prefers email over phone","Decision maker is Linda Mokoena (CFO)"]`;
 
-  const raw = await callGoogleText({
-    apiKey: input.googleApiKey,
-    model: input.googleModel,
+  const raw = await callModelText({
+    provider: input.provider,
+    apiKey: input.apiKey,
+    model: input.model,
     prompt,
     maxOutputTokens: 300,
   });
@@ -257,8 +279,9 @@ async function extractAndStoreFacts(input: {
 
 async function rollUpSummaryIfDue(input: {
   workspaceId: string;
-  googleApiKey: string;
-  googleModel: string;
+  provider: LlmProvider;
+  apiKey: string;
+  model: string;
 }) {
   const total = await countTurnsSinceSummary(input.workspaceId);
   // Refresh summary every N user-or-assistant turns logged.
@@ -273,9 +296,10 @@ async function rollUpSummaryIfDue(input: {
 
   const prompt = `Summarize the following conversation between a customer and Dawn (the 1OS migration agent) into 4-7 short bullet points capturing: where they are in the migration, key decisions, blockers, commitments made, and open questions. Be specific. Do not invent facts. Output bullets only, no preamble.\n\nTranscript:\n${transcript}`;
 
-  const summary = await callGoogleText({
-    apiKey: input.googleApiKey,
-    model: input.googleModel,
+  const summary = await callModelText({
+    provider: input.provider,
+    apiKey: input.apiKey,
+    model: input.model,
     prompt,
     maxOutputTokens: 400,
   });
@@ -289,27 +313,30 @@ export async function scheduleMemoryMaintenance(input: {
   workspaceId: string;
   caseId: string | null;
   caseName: string | null;
-  googleApiKey: string;
-  googleModel: string;
+  provider: LlmProvider;
+  apiKey: string;
+  model: string;
   latestUser: string;
   latestAssistant: string;
 }): Promise<void> {
-  if (!input.workspaceId || !input.googleApiKey) return;
+  if (!input.workspaceId || !input.apiKey) return;
 
   try {
     await Promise.all([
       extractAndStoreFacts({
         workspaceId: input.workspaceId,
         caseName: input.caseName,
-        googleApiKey: input.googleApiKey,
-        googleModel: input.googleModel,
+        provider: input.provider,
+        apiKey: input.apiKey,
+        model: input.model,
         latestUser: input.latestUser,
         latestAssistant: input.latestAssistant,
       }),
       rollUpSummaryIfDue({
         workspaceId: input.workspaceId,
-        googleApiKey: input.googleApiKey,
-        googleModel: input.googleModel,
+        provider: input.provider,
+        apiKey: input.apiKey,
+        model: input.model,
       }),
     ]);
   } catch {

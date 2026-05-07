@@ -1,4 +1,5 @@
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
+import { callOpenRouterText, type LlmProvider } from "@/lib/assistant/openrouter";
 import { buildClientEoiSigningPath } from "@/lib/eoi-signing";
 import { createNotification } from "@/lib/notifications";
 
@@ -344,6 +345,7 @@ export function buildRegistrationStatePrompt(draft: RegistrationDraft | null): s
 // ---------------------------------------------------------------------------
 
 type ExtractInput = {
+  provider?: LlmProvider;
   apiKey: string;
   model: string;
   currentFields: RegistrationFields;
@@ -893,6 +895,22 @@ async function extractRegistrationFields(
   const prompt = `${EXTRACT_SYSTEM}\n\ncurrentFields: ${JSON.stringify(input.currentFields)}\n\nConversation transcript:\n${transcript}\n\nReturn the extracted JSON object.`;
 
   try {
+    if (input.provider === "openrouter") {
+      const text = await callOpenRouterText({
+        apiKey: input.apiKey,
+        model: input.model,
+        prompt,
+        maxOutputTokens: 800,
+        temperature: 0,
+        timeoutMs: 25_000,
+      });
+      if (!text) return deterministic;
+      const cleaned = text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+      const parsed = JSON.parse(cleaned) as RegistrationFields;
+      const llmExtracted = sanitizeExtracted(parsed);
+      return mergeFields(llmExtracted, deterministic);
+    }
+
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${input.model}:generateContent?key=${input.apiKey}`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 25_000);
@@ -1005,6 +1023,7 @@ function evaluatePrequalification(
 export async function advanceRegistration(input: {
   workspaceId: string;
   caseId?: string | null;
+  provider?: LlmProvider;
   apiKey: string;
   model: string;
   recentHistory: RegistrationConversationTurn[];
@@ -1053,6 +1072,7 @@ export async function advanceRegistration(input: {
   let workingDraft = existing;
   if (workingDraft && workingDraft.status === "disqualified") {
     const recheckExtracted = await extractRegistrationFields({
+      provider: input.provider,
       apiKey: input.apiKey,
       model: input.model,
       currentFields: workingDraft.fields,
@@ -1076,6 +1096,7 @@ export async function advanceRegistration(input: {
 
   const currentFields = workingDraft?.fields ?? {};
   const extracted = await extractRegistrationFields({
+    provider: input.provider,
     apiKey: input.apiKey,
     model: input.model,
     currentFields,

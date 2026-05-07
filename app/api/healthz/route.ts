@@ -38,9 +38,10 @@ function checkAuthConfig(): HealthCheck {
 
 function checkLlm(): HealthCheck {
   if (process.env.NODE_ENV !== "production") return { ok: true };
+  const hasOpenRouter = Boolean((process.env.OPENROUTER_API_KEY ?? "").trim());
   const hasGoogle = Boolean((process.env.GOOGLE_API_KEY ?? "").trim());
   const hasOpenAi = Boolean((process.env.OPENAI_API_KEY ?? "").trim());
-  if (!hasGoogle && !hasOpenAi) {
+  if (!hasOpenRouter && !hasGoogle && !hasOpenAi) {
     return { ok: false, error: "No hosted LLM provider configured" };
   }
   return { ok: true };
