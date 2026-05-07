@@ -70,7 +70,7 @@ export type AdminDocumentStatus =
   | "issued"
   | "signed";
 export type AdminDocumentUploaderType = "Client" | "Sales Team" | "Admin Team";
-export type RegistrationSourceRole = "admin" | "sales";
+export type RegistrationSourceRole = "admin" | "sales" | "partner";
 
 export interface AdminAgent {
   id: string;

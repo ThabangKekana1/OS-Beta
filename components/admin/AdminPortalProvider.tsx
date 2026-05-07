@@ -70,6 +70,7 @@ type CreateLeadInput = {
   source: AdminLead["source"];
   origin?: AdminLeadOrigin;
   partner?: AdminLeadPartner | null;
+  partnerOrgId?: string | null;
   ownerId: string;
 };
 
@@ -1254,6 +1255,7 @@ export function AdminPortalProvider({
       city: input.city,
       province: input.province,
       source: input.source,
+      partnerOrgId: salesLead.partnerOrgId ?? null,
       ownerId: salesLead.ownerId,
     });
 
@@ -1865,4 +1867,8 @@ export function useAdminPortal() {
   }
 
   return context;
+}
+
+export function useOptionalAdminPortal() {
+  return useContext(AdminPortalContext);
 }

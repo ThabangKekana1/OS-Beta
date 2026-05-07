@@ -18,6 +18,7 @@ type SendEmailInput = {
     filename: string;
     content: string; // base64
     contentType?: string;
+    contentId?: string;
   }>;
 };
 
@@ -61,6 +62,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
         filename: a.filename,
         content: a.content,
         ...(a.contentType ? { content_type: a.contentType } : {}),
+        ...(a.contentId ? { content_id: a.contentId } : {}),
       }));
     }
 

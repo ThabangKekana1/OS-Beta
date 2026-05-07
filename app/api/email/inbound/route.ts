@@ -141,13 +141,13 @@ function leadIdFromAddress(email: string): string | null {
 }
 
 function ownerUserIdFromAddress(email: string): string | null {
-  // Pattern: sales+u-<oneos_users.id>@replies.<host>
+  // Pattern: sales+u-<oneos_users.id>@replies.<host> or partner+u-...
   const localPart = email.split("@")[0] ?? "";
   const match = localPart.match(/\+u-([0-9a-fA-F-]{36})/);
   return match ? match[1].toLowerCase() : null;
 }
 
-async function mailboxAddressForOwner(userId: string): Promise<string | null> {
+async function mailboxForOwner(userId: string): Promise<{ email: string; role: "sales" | "partner" } | null> {
   const supabase = getSupabaseAdminClient();
   if (!supabase) return null;
   const { data, error } = await supabase
@@ -157,8 +157,8 @@ async function mailboxAddressForOwner(userId: string): Promise<string | null> {
     .maybeSingle();
   if (error || !data) return null;
   const row = data as { email?: string | null; role?: string | null; is_active?: boolean | null };
-  if (row.role !== "sales" || row.is_active === false || !row.email) return null;
-  return row.email.trim().toLowerCase();
+  if ((row.role !== "sales" && row.role !== "partner") || row.is_active === false || !row.email) return null;
+  return { email: row.email.trim().toLowerCase(), role: row.role };
 }
 
 function normalizeEnv(value?: string) {
@@ -336,14 +336,14 @@ export async function POST(request: Request) {
     .map((entry) => ownerUserIdFromAddress(entry.email))
     .find((id): id is string => Boolean(id))
     ?? null;
-  const mailboxAddress = mailboxOwnerUserId ? await mailboxAddressForOwner(mailboxOwnerUserId) : null;
+  const mailboxOwner = mailboxOwnerUserId ? await mailboxForOwner(mailboxOwnerUserId) : null;
 
   const recorded = await recordMessage({
     leadId,
     direction: "inbound",
-    mailboxOwnerUserId,
-    mailboxAddress,
-    mailboxRole: mailboxOwnerUserId ? "sales" : "admin",
+    mailboxOwnerUserId: mailboxOwner ? mailboxOwnerUserId : null,
+    mailboxAddress: mailboxOwner?.email ?? null,
+    mailboxRole: mailboxOwner?.role ?? "admin",
     fromAddress: fromAddress.email,
     fromName: fromAddress.name,
     toAddresses: toAddresses.map((entry) => entry.email),

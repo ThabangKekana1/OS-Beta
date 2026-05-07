@@ -45,7 +45,7 @@ export type EmailThread = {
   clientProfileId: string | null;
   mailboxOwnerUserId: string | null;
   mailboxAddress: string | null;
-  mailboxRole: "admin" | "sales" | null;
+  mailboxRole: "admin" | "sales" | "partner" | null;
   subject: string | null;
   participants: string[];
   externalThreadId: string | null;
@@ -62,7 +62,7 @@ type DbThreadRow = {
   client_profile_id: string | null;
   mailbox_owner_user_id: string | null;
   mailbox_address: string | null;
-  mailbox_role: "admin" | "sales" | null;
+  mailbox_role: "admin" | "sales" | "partner" | null;
   subject: string | null;
   participants: string[] | null;
   external_thread_id: string | null;
@@ -322,7 +322,7 @@ export type RecordMessageArgs = {
   direction: EmailDirection;
   mailboxOwnerUserId?: string | null;
   mailboxAddress?: string | null;
-  mailboxRole?: "admin" | "sales" | null;
+  mailboxRole?: "admin" | "sales" | "partner" | null;
   fromAddress: string;
   fromName?: string | null;
   toAddresses: string[];

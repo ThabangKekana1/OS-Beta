@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { getServerAuthSession } from "@/lib/auth-server";
 import { sendEmail } from "@/lib/email";
+import {
+  appendSignatureToText,
+  buildEmailHtmlWithSignature,
+  getEmailSignature,
+} from "@/lib/email-signatures";
 import { recordMessage } from "@/lib/email-threads";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 
@@ -47,10 +52,31 @@ async function salesCanUseLead(leadId: string, agentId: string | null): Promise<
   return (data as { owner_id?: string | null }).owner_id === agentId;
 }
 
+async function partnerLeadAccess(
+  leadId: string,
+  partnerOrgId: string | null | undefined,
+): Promise<{ ok: true; linkedAdminLeadId: string | null } | { ok: false }> {
+  if (!partnerOrgId) return { ok: false };
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return { ok: false };
+
+  const { data, error } = await supabase
+    .from("oneos_sales_leads")
+    .select("payload")
+    .eq("id", leadId)
+    .maybeSingle();
+
+  if (error || !data) return { ok: false };
+  const payload = (data as { payload?: { partnerOrgId?: string | null; linkedAdminLeadId?: string | null } | null }).payload;
+  if (payload?.partnerOrgId !== partnerOrgId) return { ok: false };
+  return { ok: true, linkedAdminLeadId: payload.linkedAdminLeadId ?? null };
+}
+
 type SendAttachment = {
   filename: string;
   content: string; // base64 (no data: prefix)
   contentType?: string;
+  contentId?: string;
   size?: number;
 };
 
@@ -76,7 +102,7 @@ const MAX_ATTACHMENT_BYTES_TOTAL = 3 * 1024 * 1024;
 
 export async function POST(request: Request) {
   const session = await getServerAuthSession();
-  if (!session || (session.role !== "sales" && session.role !== "admin")) {
+  if (!session || (session.role !== "sales" && session.role !== "admin" && session.role !== "partner")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -124,6 +150,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Attachments exceed total 3 MB limit" }, { status: 413 });
   }
 
+  let recordLeadId = payload.leadId ?? null;
+
   if (payload.leadId && session.role === "sales") {
     const canUseLead = await salesCanUseLead(payload.leadId, session.agentId);
     if (!canUseLead) {
@@ -131,7 +159,15 @@ export async function POST(request: Request) {
     }
   }
 
-  const fromAddress = session.role === "sales"
+  if (payload.leadId && session.role === "partner") {
+    const access = await partnerLeadAccess(payload.leadId, session.partnerOrgId);
+    if (!access.ok) {
+      return NextResponse.json({ error: "You can only link emails to your partner leads" }, { status: 403 });
+    }
+    recordLeadId = access.linkedAdminLeadId;
+  }
+
+  const fromAddress = session.role === "sales" || session.role === "partner"
     ? formatMailboxAddress(session.name, session.email)
     : (process.env.EMAIL_FROM ?? "").trim();
   if (!fromAddress) {
@@ -145,28 +181,60 @@ export async function POST(request: Request) {
 
   // Reply-To routes responses through the inbound webhook subdomain (e.g. replies.1os.co.za)
   const replyDomain = (process.env.EMAIL_REPLY_DOMAIN ?? "").trim();
-  const ownerToken = session.role === "sales" && session.userId ? `+u-${session.userId}` : "";
-  const leadToken = payload.leadId ? `+lead-${payload.leadId}` : "";
+  const personalMailbox = session.role === "sales" || session.role === "partner";
+  const ownerToken = personalMailbox && session.userId ? `+u-${session.userId}` : "";
+  const leadToken = recordLeadId ? `+lead-${recordLeadId}` : "";
+  const replyMailbox = session.role === "partner" ? "partner" : "sales";
   const replyTo =
     replyDomain
-      ? `sales${ownerToken}${leadToken}@${replyDomain}`
+      ? `${replyMailbox}${ownerToken}${leadToken}@${replyDomain}`
       : undefined;
 
-  const mailboxOwnerUserId = session.role === "sales" ? session.userId : null;
-  const mailboxAddress = session.role === "sales" ? session.email : null;
+  const mailboxOwnerUserId = personalMailbox ? session.userId : null;
+  const mailboxAddress = personalMailbox ? session.email : null;
+  const savedSignature = session.userId ? await getEmailSignature(session.userId) : null;
+  const signatureFooterImage = savedSignature?.footerImage ?? null;
+  const signatureFooterContentId = signatureFooterImage ? "oneos-signature-footer" : null;
+  const finalBodyText = appendSignatureToText(body, savedSignature);
+  const finalBodyHtml = buildEmailHtmlWithSignature({
+    bodyText: body,
+    bodyHtml: payload.html,
+    signature: savedSignature,
+    footerImageContentId: signatureFooterContentId,
+  });
+  const resendAttachments: SendAttachment[] = attachments.map((a) => ({
+    filename: a.filename,
+    content: a.content,
+    contentType: a.contentType,
+    size: a.size,
+  }));
+  if (signatureFooterImage && signatureFooterContentId) {
+    resendAttachments.push({
+      filename: signatureFooterImage.filename,
+      content: signatureFooterImage.base64,
+      contentType: signatureFooterImage.mimeType,
+      contentId: signatureFooterContentId,
+      size: signatureFooterImage.sizeBytes,
+    });
+  }
 
   const sendResult = await sendEmail({
     from: fromAddress,
     to: toList,
     cc: ccList.length > 0 ? ccList : undefined,
     subject,
-    text: body,
-    html: payload.html,
+    text: finalBodyText,
+    html: finalBodyHtml ?? undefined,
     replyTo,
     headers,
-    tags: payload.leadId ? [{ name: "lead_id", value: payload.leadId }] : undefined,
-    attachments: attachments.length > 0
-      ? attachments.map((a) => ({ filename: a.filename, content: a.content, contentType: a.contentType }))
+    tags: recordLeadId ? [{ name: "lead_id", value: recordLeadId }] : undefined,
+    attachments: resendAttachments.length > 0
+      ? resendAttachments.map((a) => ({
+          filename: a.filename,
+          content: a.content,
+          contentType: a.contentType,
+          contentId: a.contentId,
+        }))
       : undefined,
   });
 
@@ -177,19 +245,19 @@ export async function POST(request: Request) {
 
   const recorded = await recordMessage({
     threadId: payload.threadId ?? null,
-    leadId: payload.leadId ?? null,
+    leadId: recordLeadId,
     clientProfileId: payload.clientProfileId ?? null,
     direction: "outbound",
     mailboxOwnerUserId,
     mailboxAddress,
-    mailboxRole: session.role === "sales" ? "sales" : "admin",
+    mailboxRole: session.role === "sales" || session.role === "partner" ? session.role : "admin",
     fromAddress,
     fromName: session.name ?? null,
     toAddresses: toList,
     ccAddresses: ccList,
     subject,
-    bodyText: body,
-    bodyHtml: payload.html ?? null,
+    bodyText: finalBodyText,
+    bodyHtml: finalBodyHtml,
     messageId,
     inReplyTo: payload.inReplyTo ?? null,
     referenceIds: payload.referenceIds ?? [],

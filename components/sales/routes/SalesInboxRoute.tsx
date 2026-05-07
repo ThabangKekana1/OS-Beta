@@ -1,8 +1,10 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element -- Signature previews use user-selected data URLs. */
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AdminBadge, AdminHeader } from "@/components/admin/AdminPrimitives";
-import { useAdminPortal } from "@/components/admin/AdminPortalProvider";
+import { useOptionalAdminPortal } from "@/components/admin/AdminPortalProvider";
 import { cn } from "@/lib/utils";
 
 type EmailDirection = "inbound" | "outbound";
@@ -19,6 +21,12 @@ type EmailThread = {
   unreadCount: number;
   createdAt: string;
   updatedAt: string;
+};
+
+export type InboxLeadOption = {
+  id: string;
+  label: string;
+  email: string;
 };
 
 type EmailMessage = {
@@ -46,6 +54,47 @@ type EmailMessage = {
   }>;
 };
 
+type EmailSignatureFooterImage = {
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  dataUrl: string;
+};
+
+type EmailSignaturePayload = {
+  signatureText: string;
+  footerImage: EmailSignatureFooterImage | null;
+};
+
+type EmailSignatureResponse = {
+  signature?: EmailSignaturePayload;
+  error?: string;
+};
+
+const SIGNATURE_TEXT_MAX_LENGTH = 4000;
+const SIGNATURE_IMAGE_MAX_BYTES = 512 * 1024;
+const SIGNATURE_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        reject(new Error(`Could not read ${file.name}`));
+        return;
+      }
+      resolve(reader.result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
 function formatRelative(iso: string): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "";
@@ -79,14 +128,17 @@ export function SalesInboxRoute({
   initialCompose,
   viewerRole,
   viewerAgentId,
+  initialLeadOptions,
 }: {
   initialThreadId: string | null;
   initialLeadFilter: string | null;
   initialCompose?: InitialCompose | null;
-  viewerRole: "admin" | "sales";
+  viewerRole: "admin" | "sales" | "partner";
   viewerAgentId: string | null;
+  initialLeadOptions?: InboxLeadOption[];
 }) {
-  const { leads } = useAdminPortal();
+  const adminPortal = useOptionalAdminPortal();
+  const portalLeads = adminPortal?.leads;
   const [threads, setThreads] = useState<EmailThread[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(initialThreadId);
   const [activeMessages, setActiveMessages] = useState<EmailMessage[]>([]);
@@ -108,6 +160,15 @@ export function SalesInboxRoute({
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const [sending, setSending] = useState(false);
+
+  const [signatureText, setSignatureText] = useState("");
+  const [signatureFooterImage, setSignatureFooterImage] = useState<EmailSignatureFooterImage | null>(null);
+  const [signatureLoading, setSignatureLoading] = useState(true);
+  const [signatureSaving, setSignatureSaving] = useState(false);
+  const [signatureDirty, setSignatureDirty] = useState(false);
+  const [signatureStatus, setSignatureStatus] = useState<string | null>(null);
+  const [signatureError, setSignatureError] = useState<string | null>(null);
+  const signatureImageInputRef = useRef<HTMLInputElement | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -154,6 +215,91 @@ export function SalesInboxRoute({
   useEffect(() => {
     void refreshThreads();
   }, [refreshThreads]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSignature() {
+      setSignatureLoading(true);
+      setSignatureError(null);
+      try {
+        const res = await fetch("/api/email/signature", { cache: "no-store" });
+        const json = (await res.json()) as EmailSignatureResponse;
+        if (cancelled) return;
+        if (!res.ok || !json.signature) {
+          setSignatureError(json.error ?? "Could not load email signature");
+          return;
+        }
+        setSignatureText(json.signature.signatureText ?? "");
+        setSignatureFooterImage(json.signature.footerImage ?? null);
+        setSignatureDirty(false);
+      } catch {
+        if (!cancelled) setSignatureError("Could not load email signature");
+      } finally {
+        if (!cancelled) setSignatureLoading(false);
+      }
+    }
+
+    void loadSignature();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const saveSignature = useCallback(async () => {
+    setSignatureSaving(true);
+    setSignatureError(null);
+    setSignatureStatus(null);
+    try {
+      const res = await fetch("/api/email/signature", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          signatureText,
+          footerImage: signatureFooterImage,
+        }),
+      });
+      const json = (await res.json()) as EmailSignatureResponse;
+      if (!res.ok || !json.signature) {
+        setSignatureError(json.error ?? "Could not save email signature");
+        return;
+      }
+      setSignatureText(json.signature.signatureText ?? "");
+      setSignatureFooterImage(json.signature.footerImage ?? null);
+      setSignatureDirty(false);
+      setSignatureStatus("Signature saved");
+    } catch {
+      setSignatureError("Could not save email signature");
+    } finally {
+      setSignatureSaving(false);
+    }
+  }, [signatureFooterImage, signatureText]);
+
+  const handleSignatureImageFile = useCallback(async (file: File) => {
+    setSignatureError(null);
+    setSignatureStatus(null);
+    if (!SIGNATURE_IMAGE_MIME_TYPES.has(file.type)) {
+      setSignatureError("Footer image must be PNG, JPG, WEBP, or GIF");
+      return;
+    }
+    if (file.size > SIGNATURE_IMAGE_MAX_BYTES) {
+      setSignatureError("Footer image must be 512 KB or smaller");
+      return;
+    }
+
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      setSignatureFooterImage({
+        filename: file.name,
+        mimeType: file.type,
+        sizeBytes: file.size,
+        dataUrl,
+      });
+      setSignatureDirty(true);
+    } catch (err) {
+      setSignatureError(err instanceof Error ? err.message : "Could not read footer image");
+    }
+  }, []);
 
   // Pre-open composer if launched from another surface (e.g. lead profile "Email client" button).
   const composerPrimedRef = useRef(false);
@@ -268,29 +414,34 @@ export function SalesInboxRoute({
     }
   }, [activeMessages, activeThread?.id, composeAttachments, composeBody, composeCc, composeLeadId, composeMode, composeSubject, composeTo, loadThread, refreshThreads]);
 
-  const visibleLeads = useMemo(
-    () => viewerRole === "sales"
+  const leadOptions = useMemo(() => {
+    if (viewerRole === "partner") return initialLeadOptions ?? [];
+    const leads = portalLeads ?? [];
+    const visibleLeads = viewerRole === "sales"
       ? viewerAgentId
         ? leads.filter((lead) => lead.ownerId === viewerAgentId)
         : []
-      : leads,
-    [leads, viewerAgentId, viewerRole],
-  );
-  const leadOptions = useMemo(
-    () => visibleLeads.map((lead) => ({
+      : leads;
+    return visibleLeads.map((lead) => ({
       id: lead.id,
       label: `${lead.company} · ${lead.contactName ?? "no contact"}`,
       email: lead.userProfile?.email ?? "",
-    })),
-    [visibleLeads],
-  );
+    }));
+  }, [initialLeadOptions, portalLeads, viewerAgentId, viewerRole]);
+
+  const inboxDescription = viewerRole === "partner"
+    ? "Send and receive emails directly from 1OS. Replies are automatically threaded to your referred lead."
+    : "Send and receive emails directly from 1OS. Replies are automatically threaded to the right lead.";
+  const inboxTitle = viewerRole === "partner"
+    ? "Email conversations with referred leads."
+    : "Email conversations with clients.";
 
   return (
     <div className="space-y-5 pb-8">
       <AdminHeader
         eyebrow="Inbox"
-        title="Email conversations with clients."
-        description="Send and receive emails directly from 1OS. Replies are automatically threaded to the right lead."
+        title={inboxTitle}
+        description={inboxDescription}
         actions={
           <button
             type="button"
@@ -305,6 +456,140 @@ export function SalesInboxRoute({
       {error ? (
         <div className="rounded-xl border border-rose-400/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{error}</div>
       ) : null}
+
+      <section className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,340px)]">
+          <div>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-[0.62rem] uppercase tracking-[0.26em] text-white/52">Email signature</p>
+                <h2 className="mt-1 text-base font-medium text-white">Signature and footer image</h2>
+                <p className="mt-1 text-sm leading-6 text-white/52">
+                  This signature is appended to every email you send from this inbox. Add an optional footer image for banners, logos, or compliance artwork.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={saveSignature}
+                disabled={signatureLoading || signatureSaving || !signatureDirty}
+                className="rounded-xl border border-white/18 bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {signatureSaving ? "Saving…" : signatureDirty ? "Save signature" : "Saved"}
+              </button>
+            </div>
+
+            <label className="mt-4 block text-[0.62rem] uppercase tracking-[0.22em] text-white/52">Signature text</label>
+            <textarea
+              value={signatureText}
+              onChange={(event) => {
+                setSignatureText(event.target.value);
+                setSignatureDirty(true);
+                setSignatureStatus(null);
+                setSignatureError(null);
+              }}
+              maxLength={SIGNATURE_TEXT_MAX_LENGTH}
+              rows={4}
+              disabled={signatureLoading}
+              placeholder={signatureLoading ? "Loading signature…" : "Name, title, contact details, disclaimer…"}
+              className="mt-1 w-full rounded-xl border border-white/12 bg-black/40 px-3 py-2 text-sm leading-6 text-white placeholder:text-white/30 disabled:opacity-60"
+            />
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[0.7rem] text-white/40">
+              <span>{signatureText.length}/{SIGNATURE_TEXT_MAX_LENGTH} characters</span>
+              <span>Footer images are embedded inline with sent emails.</span>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-white/8 bg-black/20 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-[0.62rem] uppercase tracking-[0.22em] text-white/52">Footer image</p>
+                  <p className="mt-1 text-xs text-white/45">PNG, JPG, WEBP, or GIF · max {formatFileSize(SIGNATURE_IMAGE_MAX_BYTES)}</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {signatureFooterImage ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSignatureFooterImage(null);
+                        setSignatureDirty(true);
+                        setSignatureStatus(null);
+                        setSignatureError(null);
+                      }}
+                      className="rounded-lg border border-white/12 px-2.5 py-1 text-[0.66rem] uppercase tracking-[0.18em] text-white/70 transition hover:bg-white/[0.05] hover:text-white"
+                    >
+                      Remove
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => signatureImageInputRef.current?.click()}
+                    disabled={signatureLoading}
+                    className="rounded-lg border border-white/14 px-2.5 py-1 text-[0.66rem] uppercase tracking-[0.18em] text-white/78 transition hover:border-white/28 hover:text-white disabled:opacity-50"
+                  >
+                    Upload image
+                  </button>
+                </div>
+              </div>
+              <input
+                ref={signatureImageInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                hidden
+                onChange={async (event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (!file) return;
+                  await handleSignatureImageFile(file);
+                }}
+              />
+              {signatureFooterImage ? (
+                <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                  <img
+                    src={signatureFooterImage.dataUrl}
+                    alt="Email footer preview"
+                    className="max-h-36 max-w-full rounded-lg object-contain"
+                  />
+                  <p className="mt-2 truncate text-xs text-white/50">
+                    {signatureFooterImage.filename} · {formatFileSize(signatureFooterImage.sizeBytes)}
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-3 rounded-xl border border-dashed border-white/12 px-3 py-4 text-sm text-white/42">
+                  No footer image uploaded.
+                </p>
+              )}
+            </div>
+
+            {signatureError ? (
+              <p className="mt-3 text-sm text-rose-200">{signatureError}</p>
+            ) : signatureStatus ? (
+              <p className="mt-3 text-sm text-emerald-200">{signatureStatus}</p>
+            ) : null}
+          </div>
+
+          <aside className="rounded-2xl border border-white/8 bg-black/25 p-4">
+            <p className="text-[0.62rem] uppercase tracking-[0.26em] text-white/52">Preview</p>
+            <div className="mt-3 rounded-xl border border-white/10 bg-white px-4 py-4 text-sm leading-6 text-zinc-900">
+              <p>Message body appears here.</p>
+              {(signatureText.trim() || signatureFooterImage) ? (
+                <div className="mt-5 border-t border-zinc-200 pt-4">
+                  {signatureText.trim() ? (
+                    <p className="whitespace-pre-wrap">{signatureText.trim()}</p>
+                  ) : null}
+                  {signatureFooterImage ? (
+                    <img
+                      src={signatureFooterImage.dataUrl}
+                      alt="Email footer preview"
+                      className="mt-3 max-h-28 max-w-full object-contain"
+                    />
+                  ) : null}
+                </div>
+              ) : (
+                <p className="mt-5 border-t border-zinc-200 pt-4 text-zinc-400">No saved signature yet.</p>
+              )}
+            </div>
+          </aside>
+        </div>
+      </section>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(280px,360px)_1fr]">
         <aside className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
@@ -499,6 +784,9 @@ export function SalesInboxRoute({
               rows={8}
               className="mt-1 w-full rounded-xl border border-white/12 bg-black/40 px-3 py-2 text-sm leading-6 text-white"
             />
+            <p className="mt-1 text-[0.7rem] text-white/40">
+              Your saved email signature and footer image are appended automatically when you send.
+            </p>
 
             <div className="mt-3">
               <div className="flex items-center justify-between gap-3">

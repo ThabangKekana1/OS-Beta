@@ -30,6 +30,7 @@ export type ClientRegistrationInput = {
   source: AdminLead["source"];
   origin?: AdminLeadOrigin;
   partner?: AdminLeadPartner | null;
+  partnerOrgId?: string | null;
   ownerId: string;
   registrationSource: AdminLeadRegistrationSource | null;
 };
@@ -108,9 +109,15 @@ function mergeLeadTasks(
 function buildRegistrationEventDetail(
   registrationSource: AdminLeadRegistrationSource | null,
 ) {
-  return registrationSource
-    ? `Registered through ${registrationSource.profileName}'s unique ${registrationSource.profileRole} link.`
-    : "Business registered in dashboard onboarding profile.";
+  if (!registrationSource) {
+    return "Business registered in dashboard onboarding profile.";
+  }
+
+  if (registrationSource.channel === "dashboard") {
+    return `Registered by ${registrationSource.profileName} in the ${registrationSource.profileRole} dashboard.`;
+  }
+
+  return `Registered through ${registrationSource.profileName}'s unique ${registrationSource.profileRole} link.`;
 }
 
 export function splitContactName(contactName: string) {
@@ -198,6 +205,7 @@ export function buildAdminLeadFromClientRegistration(
     source: input.source,
     origin: input.origin ?? "created",
     partner: input.partner ?? null,
+    partnerOrgId: input.partnerOrgId ?? null,
     stage: "EOI Generated",
     contactStatus: "Not Contacted",
     priority: "Standard",
@@ -432,7 +440,7 @@ export function promoteSignupLeadToClientRegistration(
     clientProfileId: existingLead.clientProfileId,
     ownerId: existingLead.ownerId || created.lead.ownerId,
     linkedSalesLeadId: existingLead.linkedSalesLeadId,
-    partnerOrgId: existingLead.partnerOrgId ?? null,
+    partnerOrgId: existingLead.partnerOrgId ?? created.lead.partnerOrgId ?? null,
     contactStatus: existingLead.contactStatus,
     priority: existingLead.priority,
     lastTouched: "Just now",

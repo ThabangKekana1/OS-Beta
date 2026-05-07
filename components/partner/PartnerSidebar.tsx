@@ -7,8 +7,10 @@ import {
   ChartNoAxesColumnIncreasing,
   ClipboardList,
   Coins,
+  Inbox,
   Settings2,
   UserPlus2,
+  Users,
 } from "lucide-react";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { BrandMarkOneOS } from "@/components/sidebar/BrandMarkOneOS";
@@ -26,6 +28,24 @@ const navItems = [
     label: "My Leads",
     href: "/partner/leads",
     icon: ClipboardList,
+  },
+  {
+    id: "registration",
+    label: "Register Client",
+    href: "/partner/registration",
+    icon: UserPlus2,
+  },
+  {
+    id: "clients",
+    label: "Clients",
+    href: "/partner/clients",
+    icon: Users,
+  },
+  {
+    id: "inbox",
+    label: "Inbox",
+    href: "/partner/inbox",
+    icon: Inbox,
   },
   {
     id: "submit",
