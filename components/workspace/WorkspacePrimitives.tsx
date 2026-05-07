@@ -1,7 +1,8 @@
 "use client";
 
 import type { TextareaHTMLAttributes } from "react";
-import { Bot, Info, Paperclip, Send, Sparkles } from "lucide-react";
+import { Info, Paperclip, Send, Sparkles } from "lucide-react";
+import { DawnAvatar } from "./DawnAvatar";
 import { cn } from "@/lib/utils";
 
 type AttachmentButtonProps = {
@@ -91,9 +92,7 @@ export function SystemMessage({
   variant = "system",
 }: SystemMessageProps) {
   const icon =
-    variant === "assistant" ? (
-      <Bot className="size-4" />
-    ) : variant === "internal" ? (
+    variant === "internal" ? (
       <Sparkles className="size-4" />
     ) : (
       <Info className="size-4" />
@@ -109,10 +108,14 @@ export function SystemMessage({
       )}
     >
       <div className="flex items-center gap-3 text-[0.66rem] uppercase tracking-[0.26em] text-white/46">
-        <span className="flex size-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/68">
-          {icon}
-        </span>
-        <span>{title ?? (variant === "assistant" ? "1OS" : "System event")}</span>
+        {variant === "assistant" ? (
+          <DawnAvatar />
+        ) : (
+          <span className="flex size-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/68">
+            {icon}
+          </span>
+        )}
+        <span>{title ?? (variant === "assistant" ? "Dawn" : "System event")}</span>
         <span className="ml-auto text-white/32">{timestamp}</span>
       </div>
       <div className="mt-3 whitespace-pre-wrap text-sm leading-7 text-white/72">{content}</div>

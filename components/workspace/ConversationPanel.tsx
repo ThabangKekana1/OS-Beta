@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AnimatePresence, m } from "framer-motion";
-import { Bot, UploadCloud } from "lucide-react";
+import { UploadCloud } from "lucide-react";
+import { DawnAvatar } from "./DawnAvatar";
 import {
   AttachmentButton,
   ComposerInput,
@@ -14,10 +15,9 @@ import {
   workspaceUploadCategories,
   type WorkspaceUploadCategory,
 } from "@/components/providers/WorkspaceProvider";
-import { type ConversationMode, type MigrationCase } from "@/lib/types";
+import { type MigrationCase } from "@/lib/types";
 
 const DEFAULT_PLACEHOLDER = "Ask anything about your migration, Foundation-1, Generocity, or Lumen-1...";
-const DEFAULT_CONVERSATION_MODE: ConversationMode = "Onboarding";
 
 type ConversationPanelProps = {
   activeCase: MigrationCase | null;
@@ -90,12 +90,11 @@ function TypingIndicator() {
   return (
     <div className="max-w-[42rem] rounded-[1.4rem] border border-white/10 bg-white/[0.04] px-5 py-4">
       <div className="flex items-center gap-3 text-[0.66rem] uppercase tracking-[0.26em] text-white/46">
-        <span className="flex size-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/68">
-          <Bot className="size-4" />
-        </span>
-        <span>1OS</span>
+        <DawnAvatar />
+        <span>Dawn</span>
       </div>
-      <div className="mt-3 flex items-center gap-1.5">
+      <div className="mt-3 flex items-center gap-2 text-sm font-medium text-white/72" aria-live="polite">
+        <span>Thinking</span>
         <span className="inline-block size-2 animate-pulse rounded-full bg-white/40" style={{ animationDelay: "0ms" }} />
         <span className="inline-block size-2 animate-pulse rounded-full bg-white/40" style={{ animationDelay: "200ms" }} />
         <span className="inline-block size-2 animate-pulse rounded-full bg-white/40" style={{ animationDelay: "400ms" }} />
