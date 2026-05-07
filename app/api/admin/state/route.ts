@@ -9,6 +9,7 @@ import {
   type AdminStateBackend,
 } from "@/lib/admin-state-store";
 import { getServerAuthSession } from "@/lib/auth-server";
+import { getPartnerClientLeads } from "@/lib/partner-client-access";
 import { listRegistrationDrafts, type RegistrationDraft } from "@/lib/registration-agent";
 
 export const runtime = "nodejs";
@@ -42,12 +43,34 @@ export async function GET() {
       readAdminStateSnapshot(),
       listRegistrationDrafts("in_progress"),
     ]);
+    const snapshot =
+      session.role === "partner"
+        ? session.partnerOrgId
+          ? {
+              ...result.snapshot,
+              leads: getPartnerClientLeads(result.snapshot, session.partnerOrgId),
+              salesLeads: result.snapshot.salesLeads.filter(
+                (lead) => lead.partnerOrgId === session.partnerOrgId,
+              ),
+              partnerOrgs: (result.snapshot.partnerOrgs ?? []).filter(
+                (org) => org.id === session.partnerOrgId,
+              ),
+              activeLeadId: null,
+            }
+          : {
+              ...result.snapshot,
+              leads: [],
+              salesLeads: [],
+              partnerOrgs: [],
+              activeLeadId: null,
+            }
+        : result.snapshot;
 
     return NextResponse.json<StateResponseBody>({
       ok: true,
       backend: result.backend,
-      snapshot: result.snapshot,
-      registrationDrafts,
+      snapshot,
+      registrationDrafts: session.role === "partner" ? [] : registrationDrafts,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown Supabase error";
@@ -68,6 +91,10 @@ export async function PUT(request: NextRequest) {
 
   if (!session) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (session.role === "partner" || session.role === "client") {
+    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
   let payload: { snapshot?: unknown };

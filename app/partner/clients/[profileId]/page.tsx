@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { PartnerClientProfileRoute } from "@/components/partner/PartnerClientProfileRoute";
+import { AdminLeadProfileRoute } from "@/components/admin/routes/AdminLeadProfileRoute";
 import { readAdminStateSnapshot } from "@/lib/admin-state-store";
 import { requireServerAuthSession } from "@/lib/auth-server";
 import { findPartnerClientLead } from "@/lib/partner-client-access";
@@ -37,5 +37,12 @@ export default async function PartnerClientProfilePage({
     notFound();
   }
 
-  return <PartnerClientProfileRoute lead={lead} />;
+  return (
+    <AdminLeadProfileRoute
+      leadId={profileId}
+      backHref="/partner/clients"
+      backLabel="Back to Clients"
+      actorRole="partner"
+    />
+  );
 }

@@ -75,38 +75,16 @@ function toCurrency(value: number) {
   }).format(value);
 }
 
-function hasEoiGenerated(lead: AdminLead) {
-  return lead.documents.some(
-    (doc) =>
-      /expression of interest/i.test(doc.title) && !/signed/i.test(doc.title),
-  );
-}
-
 function hasEoiSigned(lead: AdminLead) {
   return lead.documents.some((doc) => /signed expression of interest|signed eoi/i.test(doc.title));
-}
-
-function hasUtilityBillPack(lead: AdminLead) {
-  return lead.documents.some(
-    (doc) =>
-      /6-month utility bill pack|utility bills|utility history|interval data/i.test(doc.title),
-  );
 }
 
 function hasProposalIssued(lead: AdminLead) {
   return lead.documents.some((doc) => /proposal \(admin issued\)/i.test(doc.title));
 }
 
-function hasProposalSubmitted(lead: AdminLead) {
-  return lead.documents.some((doc) => /signed proposal/i.test(doc.title));
-}
-
 function hasTermSheetIssued(lead: AdminLead) {
   return lead.documents.some((doc) => /term sheet \(admin issued\)/i.test(doc.title));
-}
-
-function hasTermSheetSubmitted(lead: AdminLead) {
-  return lead.documents.some((doc) => /signed term sheet/i.test(doc.title));
 }
 
 function documentDownloadFilename(lead: AdminLead, title: string) {
@@ -173,7 +151,7 @@ export function AdminLeadProfileRoute({
   leadId: string;
   backHref?: string;
   backLabel?: string;
-  actorRole?: "admin" | "sales";
+  actorRole?: "admin" | "sales" | "partner";
 }) {
   const {
     leads,
@@ -189,12 +167,8 @@ export function AdminLeadProfileRoute({
     toggleLeadTask,
     disqualifyLead,
     generateLeadEoi,
-    recordLeadEoiSignature,
-    uploadLeadUtilityBills,
     issueLeadProposal,
-    submitLeadProposal,
     issueLeadTermSheet,
-    submitLeadTermSheet,
     recordLeadDocumentDownload,
     uploadLeadDocument,
     completeLeadOnboarding,
@@ -229,6 +203,8 @@ export function AdminLeadProfileRoute({
   const eoiSigningUrl = eoiSigningPath ? `${appOrigin}${eoiSigningPath}` : null;
   const isAdminActor = actorRole === "admin";
   const isSalesActor = actorRole === "sales";
+  const isPartnerActor = actorRole === "partner";
+  const isSalesLikeActor = isSalesActor || isPartnerActor;
 
   const handleDownloadSingleDocument = async (documentId: string) => {
     if (!lead) {
@@ -442,22 +418,6 @@ export function AdminLeadProfileRoute({
     }
   };
 
-  const handleSubmitSalesEoi = async () => {
-    if (!lead) {
-      return;
-    }
-
-    if (!hasEoiGenerated(lead)) {
-      const uploaded = await uploadGeneratedEoiDocument();
-      if (!uploaded) {
-        return;
-      }
-    }
-
-    recordLeadEoiSignature(lead.id);
-    setWorkflowNotice("EOI submitted for this client.");
-  };
-
   const uploadWorkflowDocument = async ({
     key,
     title,
@@ -666,7 +626,7 @@ export function AdminLeadProfileRoute({
           </p>
         </div>
         <div className="mt-3 grid gap-2 md:grid-cols-2">
-          {isSalesActor ? (
+          {isSalesLikeActor ? (
             <div className="md:col-span-2 rounded-[0.9rem] border border-white/10 bg-black/30 p-3">
               <p className="text-xs uppercase tracking-[0.2em] text-white/45">
                 Document Vault
@@ -778,7 +738,7 @@ export function AdminLeadProfileRoute({
             </>
           ) : null}
         </div>
-        {!hasEoiSigned(lead) && isSalesActor ? (
+        {!hasEoiSigned(lead) && isSalesLikeActor ? (
           <p className="mt-2 text-xs text-white/48">
             Utility bill submission is unlocked once EOI is submitted.
           </p>

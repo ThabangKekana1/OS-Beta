@@ -11,7 +11,7 @@ import type {
   AdminLead,
   AdminLeadDocument,
 } from "@/lib/admin-types";
-import { partnerCanAccessClientLead } from "@/lib/partner-client-access";
+import { getPartnerClientLeads, partnerCanAccessClientLead } from "@/lib/partner-client-access";
 
 export const runtime = "nodejs";
 
@@ -180,7 +180,7 @@ export async function POST(
 
   const { id } = await params;
 
-  if (session.role !== "admin" && session.role !== "sales") {
+  if (session.role !== "admin" && session.role !== "sales" && session.role !== "partner") {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
@@ -214,6 +214,13 @@ export async function POST(
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
+  if (
+    session.role === "partner" &&
+    (!session.partnerOrgId || !partnerCanAccessClientLead(snapshot, targetLead, session.partnerOrgId))
+  ) {
+    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  }
+
   let nextLead: AdminLead | null = null;
   let storedPath: string | null = null;
 
@@ -236,10 +243,12 @@ export async function POST(
         status,
         uploadedAt: timelineLabel(),
         uploadedBy: session.name,
-        uploadedByType: session.role === "sales" ? "Sales Team" : "Admin Team",
+        uploadedByType: session.role === "sales" || session.role === "partner" ? "Sales Team" : "Admin Team",
         sourceAccount: lead.migrateAccountId,
         sourceWorkspace:
-          session.role === "sales"
+          session.role === "partner"
+            ? `1OS Partner / ${lead.company}`
+            : session.role === "sales"
             ? `1OS Sales / ${lead.company}`
             : `1OS Admin / ${lead.company}`,
         storagePath: storedPath,
@@ -280,11 +289,25 @@ export async function POST(
     activeLeadId: uploadedLead.id,
   };
   const backend = await writeAdminStateSnapshot(nextSnapshot, session.email);
+  const responseSnapshot =
+    session.role === "partner" && session.partnerOrgId
+      ? {
+          ...nextSnapshot,
+          leads: getPartnerClientLeads(nextSnapshot, session.partnerOrgId),
+          salesLeads: nextSnapshot.salesLeads.filter(
+            (lead) => lead.partnerOrgId === session.partnerOrgId,
+          ),
+          partnerOrgs: (nextSnapshot.partnerOrgs ?? []).filter(
+            (org) => org.id === session.partnerOrgId,
+          ),
+          activeLeadId: uploadedLead.id,
+        }
+      : nextSnapshot;
 
   return NextResponse.json({
     ok: true,
     backend,
-    snapshot: nextSnapshot,
+    snapshot: responseSnapshot,
     document: uploadedLead.documents[0],
   });
 }

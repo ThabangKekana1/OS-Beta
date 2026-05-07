@@ -9,6 +9,7 @@ import {
   normalizeSalesLead,
 } from "@/lib/admin-storage";
 import { buildAdminLeadStubFromSalesLead } from "@/lib/client-registration";
+import { getPartnerClientLeads, partnerCanAccessClientLead } from "@/lib/partner-client-access";
 import type { AdminLead, SalesLead } from "@/lib/admin-types";
 
 export const runtime = "nodejs";
@@ -66,6 +67,29 @@ export async function POST(request: NextRequest) {
   const salesLeadDeletes = new Set(asStringArray(payload.salesLeadDeletes));
 
   const { snapshot } = await readAdminStateSnapshot();
+
+  if (session.role === "client") {
+    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  }
+
+  if (session.role === "partner") {
+    if (!session.partnerOrgId) {
+      return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+    }
+
+    if (leadDeletes.size > 0 || salesLeadDeletes.size > 0 || salesLeadUpserts.length > 0) {
+      return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+    }
+
+    const hasForbiddenLead = leadUpserts.some((lead) => {
+      const currentLead = snapshot.leads.find((entry) => entry.id === lead.id);
+      return !currentLead || !partnerCanAccessClientLead(snapshot, currentLead, session.partnerOrgId!);
+    });
+
+    if (hasForbiddenLead) {
+      return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+    }
+  }
 
   const leadUpsertById = new Map(leadUpserts.map((lead) => [lead.id, lead]));
   const salesUpsertById = new Map(salesLeadUpserts.map((lead) => [lead.id, lead]));
@@ -162,7 +186,22 @@ export async function POST(request: NextRequest) {
 
   try {
     const backend = await writeAdminStateSnapshot(nextSnapshot, session.email);
-    return NextResponse.json({ ok: true, backend, snapshot: nextSnapshot });
+    const responseSnapshot =
+      session.role === "partner" && session.partnerOrgId
+        ? {
+            ...nextSnapshot,
+            leads: getPartnerClientLeads(nextSnapshot, session.partnerOrgId),
+            salesLeads: nextSnapshot.salesLeads.filter(
+              (lead) => lead.partnerOrgId === session.partnerOrgId,
+            ),
+            partnerOrgs: (nextSnapshot.partnerOrgs ?? []).filter(
+              (org) => org.id === session.partnerOrgId,
+            ),
+            activeLeadId: null,
+          }
+        : nextSnapshot;
+
+    return NextResponse.json({ ok: true, backend, snapshot: responseSnapshot });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(

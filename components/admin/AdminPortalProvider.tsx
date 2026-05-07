@@ -290,7 +290,7 @@ export function AdminPortalProvider({
   actorAgentId = null,
 }: {
   children: ReactNode;
-  actorRole?: "admin" | "sales" | null;
+  actorRole?: "admin" | "sales" | "partner" | null;
   actorEmail?: string | null;
   actorName?: string | null;
   actorAgentId?: string | null;
