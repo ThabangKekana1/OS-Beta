@@ -22,6 +22,7 @@ import {
   downloadTextFile,
   sanitizeFileSegment,
 } from "@/lib/download-utils";
+import { buildUtilityBillUploadPath } from "@/lib/utility-bill-upload";
 
 const priorities: AdminLeadPriority[] = ["Standard", "Priority", "Executive"];
 const taskOwners: AdminTaskOwner[] = ["Agent", "Client", "Ops", "Legal"];
@@ -189,6 +190,7 @@ export function AdminLeadProfileRoute({
   const [taskOwnerDraft, setTaskOwnerDraft] = useState<AdminTaskOwner>("Agent");
   const [disqualifyReason, setDisqualifyReason] = useState("");
   const [copiedSigningLink, setCopiedSigningLink] = useState(false);
+  const [copiedUtilityBillLink, setCopiedUtilityBillLink] = useState(false);
   const [workflowNotice, setWorkflowNotice] = useState<string | null>(null);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadCategory, setUploadCategory] = useState<DocumentCategoryOption>("EOI");
@@ -201,6 +203,23 @@ export function AdminLeadProfileRoute({
   const [appOrigin, setAppOrigin] = useState("");
   const eoiSigningPath = lead?.eoiSigningToken ? `/eoi/${lead.eoiSigningToken}` : null;
   const eoiSigningUrl = eoiSigningPath ? `${appOrigin}${eoiSigningPath}` : null;
+  const utilityBillUploadPath = buildUtilityBillUploadPath(lead?.eoiSigningToken);
+  const utilityBillUploadUrl = utilityBillUploadPath ? `${appOrigin}${utilityBillUploadPath}` : null;
+  const utilityBillUploadUnlocked = Boolean(lead?.eoiSignedAt && utilityBillUploadUrl);
+  const utilityBillEmailBody = utilityBillUploadUrl && lead
+    ? [
+        `Hi ${lead.contactFirstName || lead.contactName},`,
+        "",
+        "Thank you for approving the Expression of Interest.",
+        "",
+        "Please upload the last 6 months of utility bills or prepaid electricity receipts using this secure 1OS link:",
+        utilityBillUploadUrl,
+        "",
+        "One document per month is ideal. PDF, image, DOCX, XLSX, and TXT files are supported.",
+        "",
+        "Kind regards,",
+      ].join("\n")
+    : "";
   const isAdminActor = actorRole === "admin";
   const isSalesActor = actorRole === "sales";
   const isPartnerActor = actorRole === "partner";
@@ -478,6 +497,20 @@ export function AdminLeadProfileRoute({
     }
   };
 
+  const handleCopyUtilityBillLink = async () => {
+    if (!utilityBillUploadUnlocked || !utilityBillUploadUrl || typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(utilityBillUploadUrl);
+      setCopiedUtilityBillLink(true);
+      window.setTimeout(() => setCopiedUtilityBillLink(false), 2000);
+    } catch {
+      setCopiedUtilityBillLink(false);
+    }
+  };
+
   useEffect(() => {
     setAppOrigin(window.location.origin);
   }, []);
@@ -588,7 +621,7 @@ export function AdminLeadProfileRoute({
       <section className="app-surface rounded-[1.4rem] p-4">
         <p className="line-label">Onboarding Workflow</p>
         <p className="mt-2 text-sm text-white/60">
-          Sequence: Client signs EOI via signing link → Admin uploads proposal → Admin uploads term sheet → Mark onboarding complete.
+          Sequence: Client signs EOI via signing link → Client uploads 6-month utility bills → Admin uploads proposal → Admin uploads term sheet → Mark onboarding complete.
         </p>
         {workflowNotice ? (
           <p className="mt-2 text-sm text-white/72">{workflowNotice}</p>
@@ -623,6 +656,46 @@ export function AdminLeadProfileRoute({
             {lead.eoiSignedAt
               ? `Signed by ${lead.eoiSignedBy ?? "Client"} • Terms accepted • ${new Date(lead.eoiSignedAt).toLocaleString("en-ZA")}`
               : "Awaiting client digital signature and terms acceptance."}
+          </p>
+        </div>
+        <div className="mt-3 rounded-[0.9rem] border border-white/10 bg-black/35 p-3">
+          <p className="text-xs uppercase tracking-[0.2em] text-white/45">
+            Client Utility Bills Upload Link
+          </p>
+          <p className="mt-2 break-all text-sm text-white/70">
+            {utilityBillUploadUrl ?? "Generate the EOI first to create this client-specific upload link."}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {utilityBillUploadUrl ? (
+              <Link
+                href={utilityBillUploadUrl}
+                target="_blank"
+                className="rounded-[0.7rem] border border-white/14 px-2.5 py-1.5 text-[0.64rem] uppercase tracking-[0.18em] text-white/76 transition hover:border-white/26 hover:text-white"
+              >
+                Open Upload Page
+              </Link>
+            ) : null}
+            <button
+              type="button"
+              onClick={handleCopyUtilityBillLink}
+              disabled={!utilityBillUploadUnlocked}
+              className="rounded-[0.7rem] border border-white/14 px-2.5 py-1.5 text-[0.64rem] uppercase tracking-[0.18em] text-white/76 transition hover:border-white/26 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {copiedUtilityBillLink ? "Copied" : "Copy Link"}
+            </button>
+            {lead.userProfile.email && utilityBillUploadUnlocked ? (
+              <Link
+                href={`/${actorRole}/inbox?lead=${encodeURIComponent(lead.id)}&to=${encodeURIComponent(lead.userProfile.email)}&subject=${encodeURIComponent(`Upload utility bills — ${lead.company}`)}&body=${encodeURIComponent(utilityBillEmailBody)}`}
+                className="rounded-[0.7rem] border border-white/14 px-2.5 py-1.5 text-[0.64rem] uppercase tracking-[0.18em] text-white/76 transition hover:border-white/26 hover:text-white"
+              >
+                Email Upload Link
+              </Link>
+            ) : null}
+          </div>
+          <p className="mt-2 text-xs text-white/48">
+            {lead.eoiSignedAt
+              ? "Unlocked. Send this secure profile-specific link so the client can upload the last 6 months of utility bills."
+              : "Locked until the client approves the EOI."}
           </p>
         </div>
         <div className="mt-3 grid gap-2 md:grid-cols-2">
