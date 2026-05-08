@@ -127,6 +127,7 @@ type ClientOnboardingLead = {
   eoiSigningToken: string | null;
   eoiSigningPath: string | null;
   eoiSigningUrl: string | null;
+  eoiSignatureId: string | null;
   eoiSignedBy: string | null;
   eoiSignedAt: string | null;
   documents: ClientLeadDocument[];
@@ -329,7 +330,16 @@ export function DocumentsView() {
           status={eoiSigned ? "Signed" : "Awaiting your signature"}
           body={
             eoiSigned
-              ? "Thanks — we have your signed EOI on file. You can download it below and continue with Dawn."
+              ? (
+                  <>
+                    Thanks — we have your signed EOI on file. You can download it below and continue with Dawn.
+                    {clientLead?.eoiSignatureId ? (
+                      <span className="mt-2 block break-all text-white/52">
+                        Signature ID: {clientLead.eoiSignatureId}
+                      </span>
+                    ) : null}
+                  </>
+                )
               : clientLead?.eoiSigningPath
                 ? "Your EOI is ready. Sign it now, then come back here so Dawn can continue with qualification."
                 : "Your EOI link is not ready yet. Finish registration with Dawn first, then return here."

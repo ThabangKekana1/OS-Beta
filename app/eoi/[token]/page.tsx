@@ -54,6 +54,7 @@ export default async function EoiSigningPage({
             role: lead.userProfile.role,
           },
           stage: lead.stage,
+          eoiSignatureId: lead.eoiSignatureId,
           eoiSignedBy: lead.eoiSignedBy,
           eoiSignedAt: lead.eoiSignedAt,
           isSigned: Boolean(lead.eoiSignedAt),

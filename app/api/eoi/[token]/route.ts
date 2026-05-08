@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { readAdminStateSnapshot, writeAdminStateSnapshot } from "@/lib/admin-state-store";
 import {
   buildEoiTemplatePdf,
@@ -26,6 +27,7 @@ function toPublicEoiLead(lead: AdminLead) {
       role: lead.userProfile.role,
     },
     stage: lead.stage,
+    eoiSignatureId: lead.eoiSignatureId,
     eoiSignedBy: lead.eoiSignedBy,
     eoiSignedAt: lead.eoiSignedAt,
     isSigned: Boolean(lead.eoiSignedAt),
@@ -60,7 +62,8 @@ async function signLeadEoi(lead: AdminLead, signedBy: string) {
     return lead;
   }
 
-  const signedAtIso = new Date().toISOString();
+  const signedAtIso = lead.eoiSignedAt ?? new Date().toISOString();
+  const signatureId = lead.eoiSignatureId?.trim() || randomUUID();
   const signerName = signedBy.trim() || lead.contactName;
   const nextStage =
     lead.stage === "Client Registered" || lead.stage === "EOI Generated"
@@ -70,6 +73,7 @@ async function signLeadEoi(lead: AdminLead, signedBy: string) {
   const nextLead: AdminLead = {
     ...lead,
     stage: nextStage,
+    eoiSignatureId: signatureId,
     eoiSignedBy: signerName,
     eoiSignedAt: signedAtIso,
     eoiAcceptedTermsAt: signedAtIso,
@@ -88,7 +92,7 @@ async function signLeadEoi(lead: AdminLead, signedBy: string) {
       {
         id: makeId("event"),
         title: "EOI digitally signed",
-        detail: "Client completed digital signature and accepted the EOI terms.",
+        detail: `Client completed digital signature ${signatureId} and accepted the EOI terms at ${signedAtIso}.`,
         createdAt: timelineLabel(),
         tone: "client",
       },
@@ -104,6 +108,7 @@ async function signLeadEoi(lead: AdminLead, signedBy: string) {
   const pdfBytes = await buildEoiTemplatePdf(nextLead, {
     signedBy: signerName,
     signedAt: signedAtIso,
+    signatureId,
   });
   const signedFile = new File([pdfBytes as BlobPart], signedFilename, {
     type: "application/pdf",
@@ -209,11 +214,12 @@ export async function POST(
     audience: "admin",
     kind: "eoi_signed",
     title: `EOI signed by ${signedLead.contactName}`,
-    body: `${signedLead.company} accepted the Expression of Interest. Stage is now "${signedLead.stage}". Signed by ${signedLead.eoiSignedBy ?? signedLead.contactName} at ${signedLead.eoiSignedAt ?? "just now"}.`,
+    body: `${signedLead.company} accepted the Expression of Interest. Stage is now "${signedLead.stage}". Signed by ${signedLead.eoiSignedBy ?? signedLead.contactName} at ${signedLead.eoiSignedAt ?? "just now"}. Signature ID: ${signedLead.eoiSignatureId ?? "not recorded"}.`,
     link: `/admin/leads/${signedLead.id}`,
     metadata: {
       leadId: signedLead.id,
       company: signedLead.company,
+      eoiSignatureId: signedLead.eoiSignatureId,
       contactEmail: signedLead.userProfile.email,
     },
   });

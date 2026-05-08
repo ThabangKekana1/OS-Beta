@@ -653,9 +653,15 @@ export function AdminLeadProfileRoute({
             </button>
           </div>
           <p className="mt-2 text-xs text-white/48">
-            {lead.eoiSignedAt
-              ? `Signed by ${lead.eoiSignedBy ?? "Client"} • Terms accepted • ${new Date(lead.eoiSignedAt).toLocaleString("en-ZA")}`
-              : "Awaiting client digital signature and terms acceptance."}
+            {lead.eoiSignedAt ? (
+              <>
+                Signed by {lead.eoiSignedBy ?? "Client"} • Terms accepted • {new Date(lead.eoiSignedAt).toLocaleString("en-ZA")}
+                <br />
+                Signature ID: {lead.eoiSignatureId ?? "Not recorded"}
+              </>
+            ) : (
+              "Awaiting client digital signature and terms acceptance."
+            )}
           </p>
         </div>
         <div className="mt-3 rounded-[0.9rem] border border-white/10 bg-black/35 p-3">

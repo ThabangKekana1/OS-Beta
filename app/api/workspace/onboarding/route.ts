@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
       eoiSigningToken: lead.eoiSigningToken,
       eoiSigningPath: buildClientEoiSigningPath(lead.eoiSigningToken),
       eoiSigningUrl: buildClientEoiSigningUrl(lead.eoiSigningToken),
+      eoiSignatureId: lead.eoiSignatureId,
       eoiSignedBy: lead.eoiSignedBy,
       eoiSignedAt: lead.eoiSignedAt,
       documents: lead.documents.map((document) => ({

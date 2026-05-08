@@ -97,6 +97,7 @@ export function normalizeAdminLead(lead: AdminLead): AdminLead {
       role: lead.userProfile.role || contactPosition,
     },
     eoiSigningToken: lead.eoiSigningToken ?? null,
+    eoiSignatureId: lead.eoiSignatureId ?? null,
     eoiSignedBy: lead.eoiSignedBy ?? null,
     eoiSignedAt: lead.eoiSignedAt ?? null,
     eoiAcceptedTermsAt: lead.eoiAcceptedTermsAt ?? null,

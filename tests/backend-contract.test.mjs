@@ -139,6 +139,8 @@ test("public EOI signing page uses A4 profile-number document without exposing e
   assert.match(eoiForm, /aspect-\[210\/297\]/);
   assert.doesNotMatch(eoiForm, /Client email:/);
   assert.match(eoiForm, /1OS Profile Number:/);
+  assert.match(eoiForm, /Signature ID:/);
+  assert.match(eoiRoute, /randomUUID/);
   assert.match(leadProfileRoute, /Open Client Signing Page/);
   assert.match(leadProfileRoute, /Profile No:/);
 });

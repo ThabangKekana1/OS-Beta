@@ -16,11 +16,12 @@ export type EoiTemplateLead = {
 type BuildEoiTemplateOptions = {
   signedBy?: string | null;
   signedAt?: string | null;
+  signatureId?: string | null;
 };
 
 export const EOI_TEMPLATE_TITLE = "Expression of Interest";
 
-function formatSignedDate(value: string | null | undefined) {
+function formatSignedTimestamp(value: string | null | undefined) {
   if (!value) {
     return "";
   }
@@ -31,9 +32,9 @@ function formatSignedDate(value: string | null | undefined) {
   }
 
   return new Intl.DateTimeFormat("en-ZA", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
+    dateStyle: "medium",
+    timeStyle: "medium",
+    timeZoneName: "short",
   }).format(parsed);
 }
 
@@ -42,7 +43,8 @@ export function buildEoiTemplateText(
   options: BuildEoiTemplateOptions = {},
 ) {
   const signedBy = options.signedBy?.trim() ?? "";
-  const signedAt = formatSignedDate(options.signedAt);
+  const signedAt = formatSignedTimestamp(options.signedAt);
+  const signatureId = options.signatureId?.trim() ?? "";
   const clientName = signedBy || lead.contactName;
 
   return [
@@ -66,7 +68,9 @@ export function buildEoiTemplateText(
     lead.businessRegistrationNumber,
     `1OS Profile Number: ${lead.clientProfileId}`,
     "",
-    signedAt ? `Digitally approved on ${signedAt}` : "Awaiting digital approval",
+    signedAt ? `Digitally approved by ${clientName}` : "Awaiting digital approval",
+    signedAt ? `Digital signature ID: ${signatureId || "Not recorded"}` : "Digital signature ID: assigned on approval",
+    signedAt ? `Timestamp: ${signedAt}` : "Timestamp: assigned on approval",
   ].join("\n");
 }
 
@@ -142,7 +146,8 @@ export async function buildEoiTemplatePdf(
   };
 
   const signedBy = options.signedBy?.trim() ?? "";
-  const signedAt = formatSignedDate(options.signedAt);
+  const signedAt = formatSignedTimestamp(options.signedAt);
+  const signatureId = options.signatureId?.trim() ?? "";
   const clientName = signedBy || lead.contactName;
 
   writeBlock("EXPRESSION OF INTEREST: RENEWABLE ENERGY SUPPLY", {
@@ -175,10 +180,15 @@ export async function buildEoiTemplatePdf(
   writeBlock(lead.businessRegistrationNumber);
   writeBlock(`1OS Profile Number: ${lead.clientProfileId}`, { gap: 14 });
 
+  writeBlock(signedAt ? `Digitally approved by ${clientName}` : "Awaiting digital approval", {
+    bold: true,
+  });
   writeBlock(
-    signedAt ? `Digitally approved on ${signedAt}` : "Awaiting digital approval",
-    { bold: true },
+    signedAt
+      ? `Digital signature ID: ${signatureId || "Not recorded"}`
+      : "Digital signature ID: assigned on approval",
   );
+  writeBlock(signedAt ? `Timestamp: ${signedAt}` : "Timestamp: assigned on approval");
 
   return await pdf.save();
 }

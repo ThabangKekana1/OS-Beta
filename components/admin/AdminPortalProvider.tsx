@@ -1387,6 +1387,7 @@ export function AdminPortalProvider({
         }
 
         const signedAtIso = new Date().toISOString();
+        const signatureId = lead.eoiSignatureId?.trim() || crypto.randomUUID();
         const signerName = signedBy?.trim() || lead.contactName;
         const nextStage =
           lead.stage === "Client Registered" || lead.stage === "EOI Generated"
@@ -1395,6 +1396,7 @@ export function AdminPortalProvider({
         const nextLead = {
           ...lead,
           stage: nextStage,
+          eoiSignatureId: signatureId,
           eoiSignedBy: signerName,
           eoiSignedAt: signedAtIso,
           eoiAcceptedTermsAt: signedAtIso,
@@ -1421,7 +1423,7 @@ export function AdminPortalProvider({
             {
               id: makeId("event"),
               title: "EOI digitally signed",
-              detail: "Client completed digital signature and signed EOI was captured.",
+              detail: `Client completed digital signature ${signatureId} and signed EOI was captured at ${signedAtIso}.`,
               createdAt: timelineLabel(),
               tone: "client",
             },

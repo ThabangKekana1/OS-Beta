@@ -6,6 +6,7 @@ import type { EoiTemplateLead } from "@/lib/eoi-template";
 
 type EoiLeadView = EoiTemplateLead & {
   stage: string;
+  eoiSignatureId: string | null;
   eoiSignedBy: string | null;
   eoiSignedAt: string | null;
   isSigned: boolean;
@@ -35,6 +36,7 @@ function signedAtLabel(value: string | null) {
 function EoiDocument({ lead }: { lead: EoiLeadView }) {
   const signer = lead.eoiSignedBy ?? lead.contactName;
   const approvedAt = signedAtLabel(lead.eoiSignedAt);
+  const signatureId = lead.eoiSignatureId?.trim() || null;
 
   return (
     <article className="mx-auto aspect-[210/297] w-full max-w-[210mm] overflow-hidden bg-white px-7 py-10 text-black shadow-[0_30px_120px_rgba(0,0,0,0.48)] sm:px-[24mm] sm:py-[24mm]">
@@ -86,6 +88,14 @@ function EoiDocument({ lead }: { lead: EoiLeadView }) {
           <p>
             <strong>Digital approval:</strong>{" "}
             {lead.isSigned ? `Approved by ${signer}${approvedAt ? ` on ${approvedAt}` : ""}.` : "Pending client approval."}
+          </p>
+          <p>
+            <strong>Signature ID:</strong>{" "}
+            {lead.isSigned ? signatureId ?? "Not recorded" : "Assigned when you approve"}
+          </p>
+          <p>
+            <strong>Timestamp:</strong>{" "}
+            {lead.isSigned ? approvedAt ?? lead.eoiSignedAt ?? "Not recorded" : "Assigned when you approve"}
           </p>
         </div>
       </div>
@@ -170,6 +180,9 @@ export function EoiSigningForm({ token, initialLead }: EoiSigningFormProps) {
             Approved by {lead.eoiSignedBy ?? lead.contactName}
             {signedAt ? ` on ${signedAt}` : ""}
           </p>
+          <p className="mt-2 break-all text-xs text-emerald-100/70">
+            Signature ID: {lead.eoiSignatureId ?? "Not recorded"}
+          </p>
           <p className="mt-3 text-sm text-emerald-100/80">
             {redirectIn !== null && redirectIn > 0
               ? `Redirecting you to your workspace in ${redirectIn}\u2026`
@@ -205,7 +218,9 @@ export function EoiSigningForm({ token, initialLead }: EoiSigningFormProps) {
               onChange={(event) => setApproved(event.target.checked)}
               className="mt-1"
             />
-            <span>Approve Expression of Interest</span>
+            <span>
+              Approve Expression of Interest and attach a digital approval UUID with a timestamp.
+            </span>
           </label>
 
           {error ? (

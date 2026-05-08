@@ -196,6 +196,7 @@ export interface AdminLead {
   migrateAccountId: string;
   userProfile: OneOSUserProfile;
   eoiSigningToken: string | null;
+  eoiSignatureId: string | null;
   eoiSignedBy: string | null;
   eoiSignedAt: string | null;
   eoiAcceptedTermsAt: string | null;
