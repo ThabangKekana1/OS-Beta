@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerAuthSession } from "@/lib/auth-server";
 import { resolveClientOnboardingLead } from "@/lib/client-onboarding";
+import { sendEmail } from "@/lib/email";
 import { makeId, timelineLabel } from "@/lib/formatting";
 import { createNotification } from "@/lib/notifications";
 import {
@@ -10,7 +11,7 @@ import {
 
 export const runtime = "nodejs";
 
-const SUPPORT_NOTIFY_EMAIL = "support@foundation-1.co.za";
+const SUPPORT_NOTIFY_EMAIL = "support@1os.co.za";
 
 type SupportRequestPayload = {
   workspaceId?: string | null;
@@ -137,12 +138,48 @@ export async function POST(request: NextRequest) {
     session.email,
   );
 
+  const supportEmailBody = [
+    `Client support request for ${lead.company}`,
+    "",
+    `Requested by: ${lead.userProfile.fullName} <${session.email}>`,
+    requestType ? `Support type: ${requestType}` : null,
+    preferredContactMethod
+      ? `Preferred contact: ${preferredContactMethod}${preferredContactValue ? ` (${preferredContactValue})` : ""}`
+      : null,
+    `Client profile: /sales/clients/${lead.clientProfileId}`,
+    "",
+    "Message:",
+    message,
+  ]
+    .filter((line): line is string => line !== null)
+    .join("\n");
+
+  const supportEmailResult = await sendEmail({
+    to: SUPPORT_NOTIFY_EMAIL,
+    subject: `[1OS] Client support requested: ${lead.company}`,
+    text: supportEmailBody,
+    replyTo: session.email,
+  });
+
+  if (!supportEmailResult.ok) {
+    console.warn("[workspace/support] Support email failed", supportEmailResult);
+    if (process.env.NODE_ENV === "production") {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Your support request was logged, but the email to support@1os.co.za could not be sent. Please try again shortly.",
+        },
+        { status: 502 },
+      );
+    }
+  }
+
   await createNotification({
     audience: "admin",
     recipientEmail: SUPPORT_NOTIFY_EMAIL,
     kind: "system",
     title: `Client support requested: ${lead.company}`,
-    body: `${lead.userProfile.fullName} requested sales support. ${message}`,
+    body: `${lead.userProfile.fullName} requested support. ${message}`,
     link: `/sales/clients/${lead.clientProfileId}`,
     metadata: {
       leadId: lead.id,
@@ -152,6 +189,7 @@ export async function POST(request: NextRequest) {
       preferredContactValue: preferredContactValue || null,
       requestedBy: session.email,
     },
+    email: false,
   });
 
   return NextResponse.json({ ok: true });

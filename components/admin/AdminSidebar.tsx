@@ -18,6 +18,7 @@ import {
   Mail,
   MessagesSquare,
   Settings2,
+  Send,
   ShieldCheck,
   UserPlus2,
   Users,
@@ -44,6 +45,12 @@ const navItems = [
     label: "My Leads",
     href: "/admin/leads",
     icon: ClipboardList,
+  },
+  {
+    id: "sequences",
+    label: "Sequences",
+    href: "/admin/sequences",
+    icon: Send,
   },
   {
     id: "repository",

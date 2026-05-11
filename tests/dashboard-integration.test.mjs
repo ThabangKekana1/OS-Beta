@@ -107,3 +107,33 @@ test("convertSalesLeadToClient deletes the original stub admin lead", () => {
   const src = read("components/admin/AdminPortalProvider.tsx");
   assert.match(src, /oldStubId.*current\.filter/s);
 });
+
+test("lead sequences reuse inbox threads and update CRM status from email activity", () => {
+  assert.ok(
+    existsSync(join(root, "app/api/email/lead-engagement/route.ts")),
+    "lead engagement route missing",
+  );
+  assert.ok(
+    existsSync(join(root, "lib/lead-email-activity.ts")),
+    "lead email activity helper missing",
+  );
+
+  assert.match(read("app/api/email/send/route.ts"), /recordLeadEmailSent/);
+  assert.match(read("app/api/email/inbound/route.ts"), /recordLeadEmailReply/);
+  assert.match(read("components/sales/routes/SalesLeadsRoute.tsx"), /Sequence view/);
+  assert.match(read("components/sales/routes/SalesLeadsRoute.tsx"), /awaiting_reply/);
+});
+
+test("dashboard email senders use the verified Resend reply domain", () => {
+  const addressing = read("lib/email-addressing.ts");
+  const adminMailboxes = read("lib/admin-mailboxes.ts");
+  const sendRoute = read("app/api/email/send/route.ts");
+  const envExample = read(".env.example");
+
+  assert.match(addressing, /DEFAULT_OUTBOUND_EMAIL_DOMAIN = "replies\.1os\.co\.za"/);
+  assert.match(adminMailboxes, /sales@replies\.1os\.co\.za/);
+  assert.match(adminMailboxes, /karman@replies\.1os\.co\.za/);
+  assert.match(sendRoute, /emailOnOutboundDomain\(session\.email\)/);
+  assert.match(envExample, /EMAIL_OUTBOUND_DOMAIN=replies\.1os\.co\.za/);
+  assert.doesNotMatch(adminMailboxes, /@foundation-1\.co\.za/);
+});

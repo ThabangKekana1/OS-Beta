@@ -9,6 +9,7 @@ import {
   ClipboardList,
   FolderDown,
   Mail,
+  Send,
   Settings2,
   UserPlus2,
   Users,
@@ -35,6 +36,12 @@ const navItems = [
     label: "My Leads",
     href: "/sales/leads",
     icon: ClipboardList,
+  },
+  {
+    id: "sequences",
+    label: "Sequences",
+    href: "/sales/sequences",
+    icon: Send,
   },
   {
     id: "registration",

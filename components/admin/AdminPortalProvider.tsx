@@ -315,6 +315,7 @@ export function AdminPortalProvider({
   const salesLeadsBaselineRef = useRef<Map<string, SalesLead>>(new Map());
   // Coalesce rapid mutations.
   const pendingPersistRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveStatusIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inflightRef = useRef(false);
   const dirtyRef = useRef(false);
   const latestSnapshotRef = useRef<{
@@ -323,6 +324,30 @@ export function AdminPortalProvider({
   }>({ leads: initialSnapshot.leads, salesLeads: initialSnapshot.salesLeads });
 
   const activeLead = leads.find((lead) => lead.id === activeLeadId) ?? null;
+
+  const clearSaveStatusIdleTimer = () => {
+    if (saveStatusIdleTimerRef.current) {
+      clearTimeout(saveStatusIdleTimerRef.current);
+      saveStatusIdleTimerRef.current = null;
+    }
+  };
+
+  const setSaveStatusWithAutoIdle = (status: SaveStatus) => {
+    clearSaveStatusIdleTimer();
+    setSaveStatus(status);
+    if (status === "saved") {
+      saveStatusIdleTimerRef.current = setTimeout(() => {
+        saveStatusIdleTimerRef.current = null;
+        setSaveStatus("idle");
+      }, 1800);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      clearSaveStatusIdleTimer();
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -465,7 +490,7 @@ export function AdminPortalProvider({
 
     inflightRef.current = true;
     dirtyRef.current = false;
-    setSaveStatus("saving");
+    setSaveStatusWithAutoIdle("saving");
 
     try {
       const response = await fetch("/api/admin/state/mutate", {
@@ -485,7 +510,7 @@ export function AdminPortalProvider({
           "[AdminPortal] mutate endpoint failed",
           response.status,
         );
-        setSaveStatus("error");
+        setSaveStatusWithAutoIdle("error");
         setSyncBackend("local");
         return;
       }
@@ -506,10 +531,10 @@ export function AdminPortalProvider({
         );
       }
 
-      setSaveStatus("saved");
+      setSaveStatusWithAutoIdle("saved");
     } catch (error) {
       console.error("[AdminPortal] mutate endpoint threw", error);
-      setSaveStatus("error");
+      setSaveStatusWithAutoIdle("error");
       setSyncBackend("local");
     } finally {
       inflightRef.current = false;

@@ -1,18 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useAdminPortal } from "@/components/admin/AdminPortalProvider";
 
 export function SaveStatusBanner() {
   const { saveStatus, syncBackend, retrySave } = useAdminPortal();
-  const [showSaved, setShowSaved] = useState(false);
-
-  useEffect(() => {
-    if (saveStatus !== "saved") return;
-    setShowSaved(true);
-    const timer = setTimeout(() => setShowSaved(false), 1800);
-    return () => clearTimeout(timer);
-  }, [saveStatus]);
 
   // Nothing to show in the happy idle state.
   if (
@@ -20,9 +11,6 @@ export function SaveStatusBanner() {
     syncBackend !== "local" &&
     syncBackend !== "loading"
   ) {
-    return null;
-  }
-  if (saveStatus === "saved" && !showSaved) {
     return null;
   }
 
@@ -33,7 +21,7 @@ export function SaveStatusBanner() {
   if (saveStatus === "saving") {
     label = "Saving…";
     tone = "border-white/30 bg-black/90 text-white";
-  } else if (saveStatus === "saved" && showSaved) {
+  } else if (saveStatus === "saved") {
     label = "All changes saved";
     tone = "border-emerald-400/50 bg-emerald-950/80 text-emerald-100";
   } else if (saveStatus === "error") {

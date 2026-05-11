@@ -3,7 +3,7 @@ import nextTypescript from "eslint-config-next/typescript";
 
 const eslintConfig = [
   {
-    ignores: [".next/**", "node_modules/**", "out/**", "coverage/**"],
+    ignores: [".next/**", ".vercel/**", "node_modules/**", "out/**", "coverage/**"],
   },
   ...coreWebVitals,
   ...nextTypescript,

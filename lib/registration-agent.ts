@@ -302,8 +302,8 @@ export function buildRegistrationStatePrompt(draft: RegistrationDraft | null): s
     "Follow the six-step onboarding sequence in this exact order. Do not skip ahead.",
     "  Step 1 — INTRODUCE Foundation-1's zero-capex solar solution, name BOTH products (Generocity and Lumen-1), state that solutions are 100% financed by Nedbank, and mention Lumen-1 is backed by the Green Share VPP 56 MW Solar Farm in the Free State province. Only do this on the very first message of a new session.",
     "  Step 2 — EXPLAIN THE PROCESS: registration → EOI signature in the Documents tab → upload 6 months of utility bills → proposal showing savings and site infrastructure. Do this on the first message too if you have not already.",
-    "  Step 3 — PRE-QUALIFY: confirm (1) company is CIPC-registered, (2) currently operational, (3) average monthly electricity spend ≥ R10,000, (4) has access to last 6 months of utility bills or prepaid receipts. The business qualifies only if all four are yes.",
-    "  Step 4 — REGISTER: collect the full business profile, then direct the user to sign the auto-generated EOI in the Documents tab. The EOI is NOT emailed; it is generated and stored in the Documents section of their workspace.",
+    "  Step 3 — PRE-QUALIFY: confirm ONE item at a time, in order: (1) company is CIPC-registered, (2) currently operational, (3) average monthly electricity spend ≥ R10,000, (4) has access to last 6 months of utility bills or prepaid receipts. The business qualifies only if all four are yes.",
+    "  Step 4 — REGISTER: collect the full business profile ONE field at a time, then direct the user to sign the auto-generated EOI in the Documents tab. The EOI is NOT emailed; it is generated and stored in the Documents section of their workspace.",
     "  Step 5 — UTILITY BILLS: once EOI is signed, ask for the last 6 months of utility bills/prepaid receipts uploaded in the Documents tab so Nedbank can prepare the Generocity proposal.",
     "  Step 6 — KYC HANDOVER: once all 6 utility bills are uploaded, explain that the KYC documentation pack will be handled with their allocated Foundation-1 sales account manager who will reach out to them directly. Do not start collecting KYC docs yourself.",
     "Stay focused on the current step. Do not advance until the current step is complete.",
@@ -319,7 +319,7 @@ export function buildRegistrationStatePrompt(draft: RegistrationDraft | null): s
     "Rules:",
     "- On the very first turn of a new session (no fields collected yet, no draft history), open with Step 1 + Step 2 in a single concise greeting before asking the first pre-qualification question.",
     "- Always complete the pre-qualification questions before moving on to the rest of the registration details.",
-    "- Ask for ONE missing field per message, in a natural, friendly way.",
+    "- Ask for ONE missing field per message, in a natural, friendly way. Do not bundle several registration questions together.",
     "- Acknowledge what they just told you before asking the next question.",
     "- If they provide multiple things in one message, that's fine — extraction handles it.",
     "- Never invent or assume values.",
@@ -886,6 +886,7 @@ export function extractDeterministicRegistrationFields(
 async function extractRegistrationFields(
   input: ExtractInput,
 ): Promise<RegistrationFields> {
+  void input.provider;
   const lastAssistant = [...input.recentHistory].reverse().find((t) => t.role === "assistant")?.content ?? null;
   const deterministic = extractDeterministicRegistrationFields(input.latestUser, lastAssistant);
   const transcript = [...input.recentHistory, { role: "user", content: input.latestUser }]
@@ -895,44 +896,14 @@ async function extractRegistrationFields(
   const prompt = `${EXTRACT_SYSTEM}\n\ncurrentFields: ${JSON.stringify(input.currentFields)}\n\nConversation transcript:\n${transcript}\n\nReturn the extracted JSON object.`;
 
   try {
-    if (input.provider === "openrouter") {
-      const text = await callOpenRouterText({
-        apiKey: input.apiKey,
-        model: input.model,
-        prompt,
-        maxOutputTokens: 800,
-        temperature: 0,
-        timeoutMs: 25_000,
-      });
-      if (!text) return deterministic;
-      const cleaned = text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
-      const parsed = JSON.parse(cleaned) as RegistrationFields;
-      const llmExtracted = sanitizeExtracted(parsed);
-      return mergeFields(llmExtracted, deterministic);
-    }
-
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${input.model}:generateContent?key=${input.apiKey}`;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 25_000);
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      signal: controller.signal,
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0,
-          maxOutputTokens: 800,
-          responseMimeType: "application/json",
-        },
-      }),
-    }).finally(() => clearTimeout(timer));
-
-    if (!response.ok) return deterministic;
-    const json = (await response.json()) as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-    };
-    const text = json?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    const text = await callOpenRouterText({
+      apiKey: input.apiKey,
+      model: input.model,
+      prompt,
+      maxOutputTokens: 800,
+      temperature: 0,
+      timeoutMs: 25_000,
+    });
     if (!text) return deterministic;
     const cleaned = text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
     const parsed = JSON.parse(cleaned) as RegistrationFields;
@@ -1265,6 +1236,30 @@ function formatMissingFieldSummary(fields: RegistrationFields) {
   return pendingFields.map((field) => `- ${FIELD_PROMPTS[field]}`).join("\n");
 }
 
+function buildFieldClarification(field: keyof RegistrationFields, latestUser?: string | null) {
+  const userText = latestUser?.trim() ?? "";
+  if (field === "monthlyElectricitySpendEstimateZar") {
+    const amount = extractMonthlyRandAmount(userText);
+    if (amount !== null && amount < SUSPICIOUSLY_LOW_SPEND_ZAR) {
+      return "Did you mean R10,000 per month? Please confirm the full Rand amount, e.g. 'R10,000' or 'R10k'.";
+    }
+    return "I'm not sure I caught the monthly electricity spend. Please give me the average monthly Rand figure, e.g. 'R15,000 per month' or 'R10k–R20k per month'.";
+  }
+  if (field === "businessRegistrationNumber") {
+    return "I need the CIPC number in the format YYYY/NNNNNN/NN, e.g. 2018/123456/07.";
+  }
+  if (field === "isBusinessRegistered" || field === "isBusinessOperational" || field === "hasSixMonthUtilityBill") {
+    return `Just to confirm — please reply yes or no. ${FIELD_QUESTIONS[field]}`;
+  }
+  if (field === "contactEmail") {
+    return "Please share an email address in the format name@company.co.za.";
+  }
+  if (field === "contactNumber") {
+    return "Please share a South African phone number, e.g. 0821234567 or +27821234567.";
+  }
+  return `I'm not sure I caught that. ${FIELD_QUESTIONS[field]}`;
+}
+
 export function buildRegistrationReply(input: {
   draft: RegistrationDraft | null;
   extracted: RegistrationFields;
@@ -1313,14 +1308,14 @@ export function buildRegistrationReply(input: {
   if (acknowledgedFields.length === 0 && pendingFields.length === REQUIRED_FIELDS.length) {
     return [
       `I can handle the registration here for ${businessNameFromDraft(draft)} and save it directly into 1OS.`,
-      "Before I collect the full registration details, I need to confirm four qualifying points:",
-      "- whether the business is CIPC-registered",
-      "- whether it is currently operational",
-      "- whether it spends at least R10,000 per month on electricity",
-      "- whether you have 6 months of utility bills or prepaid receipts",
+      "I'll collect the details one at a time so it stays quick and easy.",
       "",
-      `First question: ${FIELD_QUESTIONS[nextField]}`,
+      `First question: ${FIELD_QUESTIONS[nextField]} Please reply yes or no.`,
     ].join("\n");
+  }
+
+  if (acknowledgedFields.length === 0) {
+    return buildFieldClarification(nextField, latestUser);
   }
 
   const preface =

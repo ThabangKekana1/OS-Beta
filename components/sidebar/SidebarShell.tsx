@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Menu, PanelLeftClose } from "lucide-react";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { cn } from "@/lib/utils";
@@ -10,9 +10,54 @@ import { SidebarRecentCases } from "./SidebarRecentCases";
 import { SidebarUtilityCard } from "./SidebarUtilityCard";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
+type NotificationSummary = {
+  unreadInboxCount: number;
+  unreadNotificationCount: number;
+};
+
 function SidebarContent() {
+  const [summary, setSummary] = useState<NotificationSummary>({
+    unreadInboxCount: 0,
+    unreadNotificationCount: 0,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function refreshSummary() {
+      try {
+        const res = await fetch("/api/notifications/summary", { cache: "no-store" });
+        if (!res.ok) return;
+        const json = (await res.json()) as Partial<NotificationSummary>;
+        if (!cancelled) {
+          setSummary({
+            unreadInboxCount: Number(json.unreadInboxCount ?? 0),
+            unreadNotificationCount: Number(json.unreadNotificationCount ?? 0),
+          });
+        }
+      } catch {
+        // Keep the sidebar usable even if notification polling fails.
+      }
+    }
+
+    void refreshSummary();
+    const interval = setInterval(() => void refreshSummary(), 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
   const navItems = [
     { id: "home", label: "Home", href: "/workspace", icon: "home" as const },
+    { id: "inbox", label: "Inbox", href: "/inbox", icon: "inbox" as const, unreadCount: summary.unreadInboxCount },
+    {
+      id: "notifications",
+      label: "Notifications",
+      href: "/notifications",
+      icon: "notifications" as const,
+      unreadCount: summary.unreadNotificationCount,
+    },
     { id: "documents", label: "Documents", href: "/documents", icon: "documents" as const },
     { id: "support", label: "Support", href: "/support", icon: "support" as const },
     { id: "profile", label: "Profile", href: "/settings", icon: "profile" as const },

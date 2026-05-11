@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { recordMessage } from "@/lib/email-threads";
+import { recordLeadEmailReply } from "@/lib/lead-email-activity";
 import { createNotification } from "@/lib/notifications";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 
@@ -360,6 +361,12 @@ export async function POST(request: Request) {
 
   if (!recorded) {
     return NextResponse.json({ ok: false, error: "Failed to persist inbound email" }, { status: 500 });
+  }
+
+  if (recorded.created) {
+    await recordLeadEmailReply(leadId, fromAddress.email).catch((error) => {
+      console.error("[email/inbound] lead reply update failed", error);
+    });
   }
 
   const attachments = receivedEmailId

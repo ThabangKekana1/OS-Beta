@@ -62,16 +62,11 @@ The migrations create:
 
 ## 5. Configure an LLM provider
 
-Production refuses to use the local Ollama loopback. Dawn uses OpenRouter by
-default when configured. Set:
+Production refuses to use the local Ollama loopback. Dawn uses OpenRouter only.
+Set:
 
 - `OPENROUTER_API_KEY`
 - optional `OPENROUTER_MODEL` (defaults to `minimax/minimax-m2.5:free`)
-
-Google remains a fallback if OpenRouter is not configured:
-
-- `GOOGLE_API_KEY` + optional `GOOGLE_MODEL`
-- or `OPENAI_API_KEY` for future provider compatibility
 
 ## 6. Set environment variables on your host
 

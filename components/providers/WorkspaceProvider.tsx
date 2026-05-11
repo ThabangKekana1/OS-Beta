@@ -20,7 +20,6 @@ import type {
   ActivityEvent,
   CaseStage,
   ConversationMessage,
-  ConversationMode,
   DocumentCentreEntry,
   DocumentStatus,
   DocumentSubmission,

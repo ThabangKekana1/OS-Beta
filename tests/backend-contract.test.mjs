@@ -197,11 +197,13 @@ test("register mode is handled by the server-backed registration state machine",
 
   assert.match(chatRoute, /source:\s*"registration"/);
   assert.doesNotMatch(chatRoute, /inferConversationMode/);
-  assert.match(chatRoute, /thinkingBudget:\s*0/);
+  assert.match(chatRoute, /callOpenRouterChat/);
+  assert.match(chatRoute, /OPENROUTER_API_KEY/);
+  assert.doesNotMatch(chatRoute, /GEMINI_API_KEY|GOOGLE_API_KEY|thinkingBudget/);
   assert.match(chatRoute, /buildRegistrationReply/);
   assert.match(chatRoute, /buildAuthoritativeClientProfileNote/);
   assert.match(chatRoute, /isSignupShellLead/);
-  assert.match(chatRoute, /four pre-qualification questions/);
+  assert.match(chatRoute, /Start pre-qualification with only the first missing question/);
   assert.match(chatRoute, /Authoritative saved client profile/);
   assert.match(chatRoute, /company registration number:/);
   assert.match(chatRoute, /recentHistory:\s*history/);

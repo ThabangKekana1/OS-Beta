@@ -11,19 +11,22 @@ function notificationScope(session: { role: string; email: string }): {
 } | null {
   if (session.role === "admin") return { audience: "admin" };
   if (session.role === "sales") return { audience: "sales", recipientEmail: session.email };
+  if (session.role === "client") return { audience: "customer", recipientEmail: session.email };
   return null;
 }
 
 export async function GET() {
   const session = await getServerAuthSession();
-  if (!session || (session.role !== "admin" && session.role !== "sales")) {
+  if (!session || (session.role !== "admin" && session.role !== "sales" && session.role !== "client")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const unreadInboxCount = await getUnreadThreadCount({
-    mailboxOwnerUserId: session.role === "sales" ? session.userId : null,
-    mailboxAddress: session.role === "sales" ? session.email : null,
-  });
+  const unreadInboxCount = session.role === "client"
+    ? 0
+    : await getUnreadThreadCount({
+        mailboxOwnerUserId: session.role === "sales" ? session.userId : null,
+        mailboxAddress: session.role === "sales" ? session.email : null,
+      });
 
   const scope = notificationScope(session);
   const notifications = scope

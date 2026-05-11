@@ -159,60 +159,24 @@ async function updateMemorySummary(
 
 const SUMMARY_REFRESH_EVERY_TURNS = 10;
 
-type GoogleTextRequest = {
+type ModelTextRequest = {
   apiKey: string;
   model: string;
   prompt: string;
   maxOutputTokens: number;
-};
-
-type ModelTextRequest = GoogleTextRequest & {
   provider: LlmProvider;
 };
 
-async function callGoogleText({ apiKey, model, prompt, maxOutputTokens }: GoogleTextRequest) {
-  try {
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 30_000);
-
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      signal: controller.signal,
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0, maxOutputTokens },
-      }),
-    }).finally(() => clearTimeout(timer));
-
-    if (!response.ok) return null;
-    const json = (await response.json()) as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-    };
-    const text = json?.candidates?.[0]?.content?.parts
-      ?.map((p) => (typeof p?.text === "string" ? p.text : ""))
-      .join("")
-      .trim();
-    return text || null;
-  } catch {
-    return null;
-  }
-}
-
 async function callModelText({ provider, apiKey, model, prompt, maxOutputTokens }: ModelTextRequest) {
-  if (provider === "openrouter") {
-    return callOpenRouterText({
-      apiKey,
-      model,
-      prompt,
-      maxOutputTokens,
-      temperature: 0,
-      timeoutMs: 30_000,
-    });
-  }
-
-  return callGoogleText({ apiKey, model, prompt, maxOutputTokens });
+  void provider;
+  return callOpenRouterText({
+    apiKey,
+    model,
+    prompt,
+    maxOutputTokens,
+    temperature: 0,
+    timeoutMs: 30_000,
+  });
 }
 
 async function countTurnsSinceSummary(workspaceId: string): Promise<number> {

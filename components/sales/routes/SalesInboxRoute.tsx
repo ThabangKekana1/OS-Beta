@@ -13,6 +13,9 @@ type EmailThread = {
   id: string;
   leadId: string | null;
   clientProfileId: string | null;
+  mailboxOwnerUserId: string | null;
+  mailboxAddress: string | null;
+  mailboxRole: "admin" | "sales" | "partner" | null;
   subject: string | null;
   participants: string[];
   externalThreadId: string | null;
@@ -27,6 +30,12 @@ export type InboxLeadOption = {
   id: string;
   label: string;
   email: string;
+};
+
+export type InboxSenderOption = {
+  label: string;
+  email: string;
+  value: string;
 };
 
 type EmailMessage = {
@@ -129,6 +138,7 @@ export function SalesInboxRoute({
   viewerRole,
   viewerAgentId,
   initialLeadOptions,
+  senderOptions = [],
 }: {
   initialThreadId: string | null;
   initialLeadFilter: string | null;
@@ -136,6 +146,7 @@ export function SalesInboxRoute({
   viewerRole: "admin" | "sales" | "partner";
   viewerAgentId: string | null;
   initialLeadOptions?: InboxLeadOption[];
+  senderOptions?: InboxSenderOption[];
 }) {
   const adminPortal = useOptionalAdminPortal();
   const portalLeads = adminPortal?.leads;
@@ -151,6 +162,7 @@ export function SalesInboxRoute({
 
   const [composeTo, setComposeTo] = useState("");
   const [composeCc, setComposeCc] = useState("");
+  const [composeFrom, setComposeFrom] = useState(senderOptions[0]?.value ?? "");
   const [composeSubject, setComposeSubject] = useState("");
   const [composeBody, setComposeBody] = useState("");
   const [composeLeadId, setComposeLeadId] = useState<string | null>(initialLeadFilter);
@@ -314,13 +326,14 @@ export function SalesInboxRoute({
     if (!hasAny) return;
     composerPrimedRef.current = true;
     setComposeMode("new");
+    setComposeFrom(senderOptions[0]?.value ?? "");
     setComposeTo(initialCompose.to ?? "");
     setComposeCc("");
     setComposeSubject(initialCompose.subject ?? "");
     setComposeBody(initialCompose.body ?? "");
     setComposeLeadId(initialCompose.leadId ?? null);
     setComposerOpen(true);
-  }, [initialCompose]);
+  }, [initialCompose, senderOptions]);
 
   useEffect(() => {
     if (activeThreadId) void loadThread(activeThreadId);
@@ -345,6 +358,10 @@ export function SalesInboxRoute({
     const replyTo =
       last.direction === "inbound" ? last.fromAddress : last.toAddresses[0] ?? "";
     setComposeMode("reply");
+    const threadSender = senderOptions.find(
+      (option) => option.email === activeThread.mailboxAddress,
+    );
+    setComposeFrom(threadSender?.value ?? senderOptions[0]?.value ?? "");
     setComposeTo(replyTo);
     setComposeCc("");
     const subject = activeThread.subject ?? "";
@@ -353,10 +370,11 @@ export function SalesInboxRoute({
     setComposeLeadId(activeThread.leadId ?? null);
     setComposeAttachments([]);
     setComposerOpen(true);
-  }, [activeThread, activeMessages]);
+  }, [activeThread, activeMessages, senderOptions]);
 
   const startNew = useCallback(() => {
     setComposeMode("new");
+    setComposeFrom(senderOptions[0]?.value ?? "");
     setComposeTo("");
     setComposeCc("");
     setComposeSubject("");
@@ -364,7 +382,7 @@ export function SalesInboxRoute({
     setComposeLeadId(null);
     setComposeAttachments([]);
     setComposerOpen(true);
-  }, []);
+  }, [senderOptions]);
 
   const send = useCallback(async () => {
     setSending(true);
@@ -382,6 +400,7 @@ export function SalesInboxRoute({
           to: composeTo,
           cc: composeCc,
           subject: composeSubject,
+          from: senderOptions.length > 0 ? composeFrom : undefined,
           body: composeBody,
           threadId: composeMode === "reply" ? activeThread?.id ?? null : null,
           leadId: composeLeadId,
@@ -412,7 +431,7 @@ export function SalesInboxRoute({
     } finally {
       setSending(false);
     }
-  }, [activeMessages, activeThread?.id, composeAttachments, composeBody, composeCc, composeLeadId, composeMode, composeSubject, composeTo, loadThread, refreshThreads]);
+  }, [activeMessages, activeThread?.id, composeAttachments, composeBody, composeCc, composeFrom, composeLeadId, composeMode, composeSubject, composeTo, loadThread, refreshThreads, senderOptions.length]);
 
   const leadOptions = useMemo(() => {
     if (viewerRole === "partner") return initialLeadOptions ?? [];
@@ -746,6 +765,23 @@ export function SalesInboxRoute({
                   <option value="">— No lead —</option>
                   {leadOptions.map((opt) => (
                     <option key={opt.id} value={opt.id}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+
+            {senderOptions.length > 0 ? (
+              <div className="mb-3">
+                <label className="text-[0.62rem] uppercase tracking-[0.22em] text-white/52">From</label>
+                <select
+                  value={composeFrom}
+                  onChange={(event) => setComposeFrom(event.target.value)}
+                  className="mt-1 w-full rounded-xl border border-white/12 bg-black/40 px-3 py-2 text-sm text-white"
+                >
+                  {senderOptions.map((option) => (
+                    <option key={option.email} value={option.value}>
+                      {option.label} - {option.email}
+                    </option>
                   ))}
                 </select>
               </div>

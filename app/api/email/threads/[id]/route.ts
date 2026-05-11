@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   const session = await getServerAuthSession();
-  if (!session || (session.role !== "sales" && session.role !== "admin" && session.role !== "partner")) {
+  if (!session || (session.role !== "sales" && session.role !== "admin" && session.role !== "partner" && session.role !== "client")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await context.params;
@@ -21,7 +21,18 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     if (!ownsThread) return NextResponse.json({ error: "Thread not found" }, { status: 404 });
   }
 
+  if (session.role === "client") {
+    const email = session.email.trim().toLowerCase();
+    const isParticipant = thread.participants.some(
+      (participant) => participant.trim().toLowerCase() === email,
+    );
+
+    if (!isParticipant) return NextResponse.json({ error: "Thread not found" }, { status: 404 });
+  }
+
   const messages = await listMessages(id);
-  await markThreadRead(id);
+  if (session.role !== "client") {
+    await markThreadRead(id);
+  }
   return NextResponse.json({ thread, messages });
 }

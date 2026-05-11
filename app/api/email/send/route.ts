@@ -7,6 +7,9 @@ import {
   getEmailSignature,
 } from "@/lib/email-signatures";
 import { recordMessage } from "@/lib/email-threads";
+import { recordLeadEmailSent } from "@/lib/lead-email-activity";
+import { resolveAdminSenderOption } from "@/lib/admin-mailboxes";
+import { emailOnOutboundDomain, formatMailboxAddress } from "@/lib/email-addressing";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
@@ -28,13 +31,6 @@ function generateMessageId(threadId: string | null): string {
   const random = `${Date.now().toString(36)}.${Math.random().toString(36).slice(2, 10)}`;
   const prefix = threadId ? `t-${threadId}.${random}` : random;
   return `<${prefix}@${host}>`;
-}
-
-function formatMailboxAddress(name: string | null | undefined, email: string): string {
-  const trimmedEmail = email.trim().toLowerCase();
-  const trimmedName = name?.trim();
-  if (!trimmedName) return trimmedEmail;
-  return `${trimmedName.replace(/["<>]/g, "")} <${trimmedEmail}>`;
 }
 
 async function salesCanUseLead(leadId: string, agentId: string | null): Promise<boolean> {
@@ -83,6 +79,7 @@ type SendAttachment = {
 type SendBody = {
   to?: string | string[];
   cc?: string | string[];
+  from?: string | null;
   subject?: string;
   body?: string;
   html?: string;
@@ -167,9 +164,17 @@ export async function POST(request: Request) {
     recordLeadId = access.linkedAdminLeadId;
   }
 
-  const fromAddress = session.role === "sales" || session.role === "partner"
-    ? formatMailboxAddress(session.name, session.email)
-    : (process.env.EMAIL_FROM ?? "").trim();
+  const adminSender = session.role === "admin" ? resolveAdminSenderOption(payload.from) : null;
+  if (session.role === "admin" && payload.from && !adminSender) {
+    return NextResponse.json({ error: "Selected sender is not available for admin mail" }, { status: 403 });
+  }
+
+  const personalFromEmail = session.role === "sales" || session.role === "partner"
+    ? emailOnOutboundDomain(session.email)
+    : null;
+  const fromAddress = personalFromEmail
+    ? formatMailboxAddress(session.name, personalFromEmail)
+    : adminSender?.value ?? (process.env.EMAIL_FROM ?? "").trim();
   if (!fromAddress) {
     return NextResponse.json({ error: "EMAIL_FROM is not configured on the server" }, { status: 500 });
   }
@@ -184,14 +189,14 @@ export async function POST(request: Request) {
   const personalMailbox = session.role === "sales" || session.role === "partner";
   const ownerToken = personalMailbox && session.userId ? `+u-${session.userId}` : "";
   const leadToken = recordLeadId ? `+lead-${recordLeadId}` : "";
-  const replyMailbox = session.role === "partner" ? "partner" : "sales";
+  const replyMailbox = session.role === "partner" ? "partner" : session.role === "admin" ? "admin" : "sales";
   const replyTo =
     replyDomain
       ? `${replyMailbox}${ownerToken}${leadToken}@${replyDomain}`
       : undefined;
 
   const mailboxOwnerUserId = personalMailbox ? session.userId : null;
-  const mailboxAddress = personalMailbox ? session.email : null;
+  const mailboxAddress = personalMailbox ? session.email : adminSender?.email ?? null;
   const savedSignature = session.userId ? await getEmailSignature(session.userId) : null;
   const signatureFooterImage = savedSignature?.footerImage ?? null;
   const signatureFooterContentId = signatureFooterImage ? "oneos-signature-footer" : null;
@@ -269,6 +274,10 @@ export async function POST(request: Request) {
     // Email went out but we couldn't store it. Return success but flag.
     return NextResponse.json({ ok: true, providerId: sendResult.id, persisted: false });
   }
+
+  await recordLeadEmailSent(recordLeadId, session.email).catch((error) => {
+    console.error("[email/send] lead activity update failed", error);
+  });
 
   // Persist attachment metadata (we don't store the file itself for outbound — Resend
   // already sent it. We only record filename/type/size so the conversation history

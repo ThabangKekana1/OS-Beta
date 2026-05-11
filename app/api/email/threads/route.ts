@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   const session = await getServerAuthSession();
-  if (!session || (session.role !== "sales" && session.role !== "admin" && session.role !== "partner")) {
+  if (!session || (session.role !== "sales" && session.role !== "admin" && session.role !== "partner" && session.role !== "client")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -19,6 +19,7 @@ export async function GET(request: Request) {
     search,
     mailboxOwnerUserId: personalMailbox ? session.userId : null,
     mailboxAddress: personalMailbox ? session.email : null,
+    participantEmail: session.role === "client" ? session.email : null,
   });
   return NextResponse.json({ threads });
 }

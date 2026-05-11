@@ -1,7 +1,7 @@
 import { OpenRouter } from "@openrouter/sdk";
 import type { ChatMessages } from "@openrouter/sdk/models";
 
-export type LlmProvider = "openrouter" | "google";
+export type LlmProvider = "openrouter";
 
 export type ChatTurn = {
   role: "user" | "assistant";

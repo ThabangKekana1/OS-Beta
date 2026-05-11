@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readAdminStateSnapshot, writeAdminStateSnapshot } from "@/lib/admin-state-store";
 import { getServerAuthSession } from "@/lib/auth-server";
+import { buildAdminLeadStubFromSalesLead } from "@/lib/client-registration";
 
 export const runtime = "nodejs";
 
@@ -59,11 +60,54 @@ export async function PATCH(request: NextRequest) {
   }
 
   const timestamp = new Date().toISOString();
+  let linkedAdminLeadId = lead.linkedAdminLeadId;
+  let nextLeads = snapshot.leads;
+
+  if (!linkedAdminLeadId) {
+    const stub = buildAdminLeadStubFromSalesLead({
+      contactName: lead.contactName,
+      company: lead.company,
+      email: lead.email,
+      ownerId,
+    });
+
+    if (stub) {
+      const adminLead = {
+        ...stub.lead,
+        partnerOrgId: lead.partnerOrgId ?? null,
+        linkedSalesLeadId: lead.id,
+        events: [
+          ...stub.lead.events,
+          {
+            id: `${stub.lead.id}-partner-assignment`,
+            title: "Partner lead assigned",
+            detail: "Admin assigned this partner referral for outreach.",
+            createdAt: new Date().toLocaleString(),
+            tone: "system" as const,
+          },
+        ],
+      };
+      linkedAdminLeadId = adminLead.id;
+      nextLeads = [adminLead, ...snapshot.leads];
+    }
+  } else {
+    nextLeads = snapshot.leads.map((entry) =>
+      entry.id === linkedAdminLeadId && entry.ownerId !== ownerId
+        ? {
+            ...entry,
+            ownerId,
+            lastTouched: "Just now",
+          }
+        : entry,
+    );
+  }
+
   const nextSnapshot = {
     ...snapshot,
+    leads: nextLeads,
     salesLeads: snapshot.salesLeads.map((entry) =>
       entry.id === id
-        ? { ...entry, ownerId, lastUpdatedAt: timestamp }
+        ? { ...entry, ownerId, linkedAdminLeadId, lastUpdatedAt: timestamp }
         : entry,
     ),
   };

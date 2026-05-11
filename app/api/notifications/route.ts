@@ -10,12 +10,13 @@ function notificationScope(session: { role: string; email: string }): {
 } | null {
   if (session.role === "admin") return { audience: "admin" };
   if (session.role === "sales") return { audience: "sales", recipientEmail: session.email };
+  if (session.role === "client") return { audience: "customer", recipientEmail: session.email };
   return null;
 }
 
 export async function GET() {
   const session = await getServerAuthSession();
-  if (!session || (session.role !== "admin" && session.role !== "sales")) {
+  if (!session || (session.role !== "admin" && session.role !== "sales" && session.role !== "client")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -32,7 +33,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const session = await getServerAuthSession();
-  if (!session || (session.role !== "admin" && session.role !== "sales")) {
+  if (!session || (session.role !== "admin" && session.role !== "sales" && session.role !== "client")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

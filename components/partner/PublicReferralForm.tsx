@@ -43,7 +43,7 @@ export function PublicReferralForm({ partnerOrgId }: { partnerOrgId: string }) {
   if (done) {
     return (
       <div className="rounded-[1.4rem] border border-emerald-400/30 bg-emerald-400/5 p-6 text-center">
-        <h2 className="text-lg font-medium text-white">Thanks — we'll be in touch.</h2>
+        <h2 className="text-lg font-medium text-white">Thanks — we&apos;ll be in touch.</h2>
         <p className="mt-2 text-sm leading-6 text-white/65">
           The 1OS team will reach out within one business day.
         </p>

@@ -5,7 +5,7 @@ import { CheckCircle2, LifeBuoy, Mail, MessageSquareText, PhoneCall } from "luci
 import { useWorkspace } from "@/components/providers/WorkspaceProvider";
 
 const requestTypes = [
-  "General sales support",
+  "General support",
   "Pricing and commercials",
   "Proposal review",
   "Documents and onboarding",
@@ -21,7 +21,7 @@ type SubmitState = "idle" | "submitting" | "success" | "error";
 
 export function SupportView() {
   const { activeCase, activeWorkspaceId } = useWorkspace();
-  const [requestType, setRequestType] = useState<RequestType>("General sales support");
+  const [requestType, setRequestType] = useState<RequestType>("General support");
   const [contactMethod, setContactMethod] = useState<ContactMethod>("Email");
   const [contactValue, setContactValue] = useState("");
   const [message, setMessage] = useState("");
@@ -31,7 +31,7 @@ export function SupportView() {
   if (!activeCase) {
     return (
       <div className="rounded-[1.5rem] border border-white/10 bg-[rgba(8,8,8,0.78)] p-8 text-center text-white/64">
-        Select a business from the left rail before requesting support from sales.
+        Select a business from the left rail before requesting support from 1OS.
       </div>
     );
   }
@@ -44,7 +44,7 @@ export function SupportView() {
 
     if (trimmedMessage.length < 12) {
       setSubmitState("error");
-      setErrorMessage("Add a short description of what you need from sales.");
+      setErrorMessage("Add a short description of what you need from support.");
       return;
     }
 
@@ -95,12 +95,12 @@ export function SupportView() {
             {activeCase.business.name}
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-white/60">
-            Request help from sales when you need a human follow-up on commercials, documents,
+            Request help from 1OS support when you need a human follow-up on commercials, documents,
             onboarding, or proposal questions.
           </p>
         </div>
         <span className="inline-flex items-center gap-2 rounded-full border border-white/14 bg-white/[0.04] px-3 py-1.5 text-[0.65rem] uppercase tracking-[0.2em] text-white/68">
-          <LifeBuoy className="size-3.5" /> Sales support
+          <LifeBuoy className="size-3.5" /> 1OS support
         </span>
       </header>
 
@@ -165,7 +165,7 @@ export function SupportView() {
               rows={7}
               value={message}
               onChange={(event) => setMessage(event.target.value)}
-              placeholder="Describe what you need from sales. Be specific about the proposal, onboarding step, pricing question, or callback you want."
+              placeholder="Describe what you need from support. Be specific about the proposal, onboarding step, pricing question, or callback you want."
               className="rounded-[1rem] border border-white/12 bg-black/55 px-3 py-3 text-sm text-white outline-none transition placeholder:text-white/32 focus:border-white/28"
             />
           </label>
@@ -174,7 +174,7 @@ export function SupportView() {
             <div className="mt-4 flex items-start gap-3 rounded-[1rem] border border-emerald-400/24 bg-emerald-400/8 p-3 text-sm text-emerald-100">
               <CheckCircle2 className="mt-0.5 size-4 shrink-0" />
               <p>
-                Your request has been logged on this onboarding profile for the sales team to pick
+                Your request has been logged on this onboarding profile for 1OS support to pick
                 up.
               </p>
             </div>
@@ -188,7 +188,7 @@ export function SupportView() {
 
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs text-white/44">
-              Dawn will keep tracking your workflow while sales handles the request.
+              Dawn will keep tracking your workflow while support handles the request.
             </p>
             <button
               type="submit"
@@ -210,7 +210,7 @@ export function SupportView() {
                 Logged against your client profile
               </p>
               <p className="mt-2 text-sm leading-6 text-white/58">
-                The request is attached to {activeCase.business.name} so sales has the exact client
+                The request is attached to {activeCase.business.name} so support has the exact client
                 context when they respond.
               </p>
             </div>
@@ -221,7 +221,7 @@ export function SupportView() {
                 Follow-up task created
               </p>
               <p className="mt-2 text-sm leading-6 text-white/58">
-                A sales-side follow-up task is created immediately so the request does not sit in
+                A support follow-up task is created immediately so the request does not sit in
                 chat without an owner.
               </p>
             </div>

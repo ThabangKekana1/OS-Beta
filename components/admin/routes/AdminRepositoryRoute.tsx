@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Download, Upload, X } from "lucide-react";
 import { AdminBadge, AdminHeader } from "@/components/admin/AdminPrimitives";
 import { useAdminPortal } from "@/components/admin/AdminPortalProvider";
@@ -97,11 +97,6 @@ export function AdminRepositoryRoute() {
     [visibleContacts, currentPage],
   );
 
-  // Reset to first page whenever filters change.
-  useEffect(() => {
-    setPage(1);
-  }, [industryFilter, statusFilter, ownerFilter, originFilter, partnerFilter, search]);
-
   const totals = useMemo(() => {
     const counts: Record<string, number> = { total: leads.length };
     contactStatuses.forEach((status) => {
@@ -184,7 +179,10 @@ export function AdminRepositoryRoute() {
               <input
                 type="search"
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setPage(1);
+                }}
                 placeholder="Company, contact, email…"
                 className="admin-input h-10 rounded-xl px-3 text-sm text-white"
               />
@@ -196,7 +194,10 @@ export function AdminRepositoryRoute() {
               </span>
               <select
                 value={industryFilter}
-                onChange={(event) => setIndustryFilter(event.target.value)}
+                onChange={(event) => {
+                  setIndustryFilter(event.target.value);
+                  setPage(1);
+                }}
                 className="admin-input admin-select h-10 rounded-xl px-3 text-sm font-medium text-white"
               >
                 <option value={ALL} className="bg-zinc-950 text-white">
@@ -216,7 +217,10 @@ export function AdminRepositoryRoute() {
               </span>
               <select
                 value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value)}
+                onChange={(event) => {
+                  setStatusFilter(event.target.value);
+                  setPage(1);
+                }}
                 className="admin-input admin-select h-10 rounded-xl px-3 text-sm font-medium text-white"
               >
                 <option value={ALL} className="bg-zinc-950 text-white">
@@ -236,7 +240,10 @@ export function AdminRepositoryRoute() {
               </span>
               <select
                 value={ownerFilter}
-                onChange={(event) => setOwnerFilter(event.target.value)}
+                onChange={(event) => {
+                  setOwnerFilter(event.target.value);
+                  setPage(1);
+                }}
                 className="admin-input admin-select h-10 rounded-xl px-3 text-sm font-medium text-white"
               >
                 <option value={ALL} className="bg-zinc-950 text-white">
@@ -256,7 +263,10 @@ export function AdminRepositoryRoute() {
               </span>
               <select
                 value={originFilter}
-                onChange={(event) => setOriginFilter(event.target.value)}
+                onChange={(event) => {
+                  setOriginFilter(event.target.value);
+                  setPage(1);
+                }}
                 className="admin-input admin-select h-10 rounded-xl px-3 text-sm font-medium text-white"
               >
                 <option value={ALL} className="bg-zinc-950 text-white">
@@ -276,7 +286,10 @@ export function AdminRepositoryRoute() {
               </span>
               <select
                 value={partnerFilter}
-                onChange={(event) => setPartnerFilter(event.target.value)}
+                onChange={(event) => {
+                  setPartnerFilter(event.target.value);
+                  setPage(1);
+                }}
                 className="admin-input admin-select h-10 rounded-xl px-3 text-sm font-medium text-white"
               >
                 <option value={ALL} className="bg-zinc-950 text-white">

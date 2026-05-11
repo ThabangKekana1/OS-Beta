@@ -6,6 +6,7 @@ export default function AdminLeadsPage() {
       agentId={null}
       registrationHref="/admin/registration"
       clientHrefBase="/admin/clients"
+      inboxHref="/admin/inbox"
       showAssignedTo={false}
       allowDelete
     />

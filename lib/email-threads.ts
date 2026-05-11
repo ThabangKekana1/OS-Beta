@@ -172,6 +172,7 @@ export type ListThreadsArgs = {
   leadId?: string | null;
   mailboxOwnerUserId?: string | null;
   mailboxAddress?: string | null;
+  participantEmail?: string | null;
   limit?: number;
   search?: string | null;
 };
@@ -191,6 +192,9 @@ export async function listThreads(args: ListThreadsArgs = {}): Promise<EmailThre
     query = query.eq("mailbox_owner_user_id", args.mailboxOwnerUserId);
   } else if (args.mailboxAddress) {
     query = query.eq("mailbox_address", args.mailboxAddress.trim().toLowerCase());
+  }
+  if (args.participantEmail) {
+    query = query.contains("participants", [args.participantEmail.trim().toLowerCase()]);
   }
   if (args.search) query = query.ilike("subject", `%${args.search}%`);
 

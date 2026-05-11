@@ -82,7 +82,7 @@ export default async function PartnerNotificationsPage() {
           Notifications
         </h1>
         <p className="mt-2 text-sm leading-6 text-white/58">
-          Status updates on the leads you've referred.
+          Status updates on the leads you&apos;ve referred.
         </p>
       </header>
 

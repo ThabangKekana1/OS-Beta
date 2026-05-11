@@ -50,6 +50,8 @@ export async function PATCH(
   let payload: {
     qualificationStage?: unknown;
     qualificationReason?: unknown;
+    ownerId?: unknown;
+    partnerOrgId?: unknown;
   };
 
   try {
@@ -58,23 +60,47 @@ export async function PATCH(
     return NextResponse.json({ ok: false, error: "Invalid JSON body." }, { status: 400 });
   }
 
-  if (
-    typeof payload.qualificationStage !== "string" ||
-    !qualificationStages.has(payload.qualificationStage as SalesLeadQualificationStage)
-  ) {
+  const hasQualificationUpdate = payload.qualificationStage !== undefined;
+  const nextStage =
+    typeof payload.qualificationStage === "string" &&
+    qualificationStages.has(payload.qualificationStage as SalesLeadQualificationStage)
+      ? (payload.qualificationStage as SalesLeadQualificationStage)
+      : null;
+  const nextOwnerId =
+    typeof payload.ownerId === "string" ? payload.ownerId.trim() : undefined;
+  const hasPartnerOrgId = Object.prototype.hasOwnProperty.call(payload, "partnerOrgId");
+  const nextPartnerOrgId =
+    typeof payload.partnerOrgId === "string" && payload.partnerOrgId.trim().length > 0
+      ? payload.partnerOrgId.trim()
+      : null;
+
+  if (hasQualificationUpdate && !nextStage) {
     return NextResponse.json(
       { ok: false, error: "Valid qualificationStage is required." },
       { status: 400 },
     );
   }
 
-  const nextStage = payload.qualificationStage as SalesLeadQualificationStage;
+  if (!hasQualificationUpdate && nextOwnerId === undefined && !hasPartnerOrgId) {
+    return NextResponse.json(
+      { ok: false, error: "No supported sales lead updates were provided." },
+      { status: 400 },
+    );
+  }
+
+  if (nextOwnerId !== undefined && nextOwnerId.length === 0) {
+    return NextResponse.json(
+      { ok: false, error: "ownerId cannot be empty." },
+      { status: 400 },
+    );
+  }
+
   const reason =
     typeof payload.qualificationReason === "string"
       ? payload.qualificationReason.trim()
       : "";
 
-  if (requiresQualificationReason(nextStage) && !reason) {
+  if (nextStage && requiresQualificationReason(nextStage) && !reason) {
     return NextResponse.json(
       { ok: false, error: "qualificationReason is required for this stage." },
       { status: 400 },
@@ -92,7 +118,23 @@ export async function PATCH(
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
-  if (currentLead.status === "Converted") {
+  if ((nextOwnerId !== undefined || hasPartnerOrgId) && session.role !== "admin") {
+    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  }
+
+  if (nextPartnerOrgId) {
+    const partnerExists = (snapshot.partnerOrgs ?? []).some(
+      (org) => org.id === nextPartnerOrgId,
+    );
+    if (!partnerExists) {
+      return NextResponse.json(
+        { ok: false, error: "Partner org not found." },
+        { status: 404 },
+      );
+    }
+  }
+
+  if (currentLead.status === "Converted" && hasQualificationUpdate) {
     return NextResponse.json(
       { ok: false, error: "Converted leads cannot be requalified." },
       { status: 409 },
@@ -103,33 +145,42 @@ export async function PATCH(
 
   // Auto-handover: when a partner-originated lead reaches "Qualifies",
   // create a stub AdminLead so the Ops team picks it up in the Repository.
+  const resolvedOwnerId = nextOwnerId ?? currentLead.ownerId;
+  const resolvedPartnerOrgId = hasPartnerOrgId ? nextPartnerOrgId : currentLead.partnerOrgId ?? null;
   const shouldHandover =
     nextStage === "Qualifies" &&
     currentLead.createdByRole === "partner" &&
     !currentLead.linkedAdminLeadId &&
-    Boolean(currentLead.ownerId);
+    Boolean(resolvedOwnerId);
+
+  const shouldCreateAssignmentStub =
+    !currentLead.linkedAdminLeadId &&
+    Boolean(resolvedOwnerId) &&
+    (nextOwnerId !== undefined || hasPartnerOrgId);
 
   let createdAdminLeadId: string | null = null;
   let nextLeads = snapshot.leads;
 
-  if (shouldHandover) {
+  if (shouldHandover || shouldCreateAssignmentStub) {
     const stub = buildAdminLeadStubFromSalesLead({
       contactName: currentLead.contactName,
       company: currentLead.company,
       email: currentLead.email,
-      ownerId: currentLead.ownerId,
+      ownerId: resolvedOwnerId,
     });
     if (stub) {
       const stampedLead = {
         ...stub.lead,
-        partnerOrgId: currentLead.partnerOrgId ?? null,
+        partnerOrgId: resolvedPartnerOrgId,
         linkedSalesLeadId: currentLead.id,
         events: [
           ...stub.lead.events,
           {
-            id: `${stub.lead.id}-handover`,
-            title: "Lead qualified by sales",
-            detail: "Auto-created from partner referral on qualification.",
+            id: `${stub.lead.id}-${shouldHandover ? "handover" : "assignment"}`,
+            title: shouldHandover ? "Lead qualified by sales" : "Lead assigned",
+            detail: shouldHandover
+              ? "Auto-created from partner referral on qualification."
+              : "Auto-created for sequence tracking on assignment.",
             createdAt: new Date().toLocaleString(),
             tone: "system" as const,
           },
@@ -138,6 +189,17 @@ export async function PATCH(
       createdAdminLeadId = stampedLead.id;
       nextLeads = [stampedLead, ...snapshot.leads];
     }
+  } else if (currentLead.linkedAdminLeadId && (nextOwnerId !== undefined || hasPartnerOrgId)) {
+    nextLeads = snapshot.leads.map((lead) =>
+      lead.id === currentLead.linkedAdminLeadId
+        ? {
+            ...lead,
+            ownerId: resolvedOwnerId,
+            partnerOrgId: resolvedPartnerOrgId,
+            lastTouched: "Just now",
+          }
+        : lead,
+    );
   }
 
   const nextSnapshot = {
@@ -147,8 +209,14 @@ export async function PATCH(
       lead.id === id
         ? {
             ...lead,
-            qualificationStage: nextStage,
-            qualificationReason: requiresQualificationReason(nextStage) ? reason : null,
+            ownerId: resolvedOwnerId,
+            partnerOrgId: resolvedPartnerOrgId,
+            qualificationStage: nextStage ?? lead.qualificationStage,
+            qualificationReason: nextStage
+              ? requiresQualificationReason(nextStage)
+                ? reason
+                : null
+              : lead.qualificationReason,
             lastUpdatedAt: timestamp,
             linkedAdminLeadId: createdAdminLeadId ?? lead.linkedAdminLeadId,
           }

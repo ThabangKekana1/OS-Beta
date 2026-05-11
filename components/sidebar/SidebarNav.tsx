@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { House, FileText, LifeBuoy, UserCircle } from "lucide-react";
+import { Bell, FileText, House, Inbox, LifeBuoy, UserCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const iconMap = {
   home: House,
+  inbox: Inbox,
+  notifications: Bell,
   documents: FileText,
   support: LifeBuoy,
   profile: UserCircle,
@@ -18,6 +20,7 @@ type SidebarNavProps = {
     label: string;
     href: string;
     icon: keyof typeof iconMap;
+    unreadCount?: number;
   }>;
 };
 
@@ -28,6 +31,7 @@ export function SidebarNav({ items }: SidebarNavProps) {
     <nav className="flex flex-col gap-1.5">
       {items.map((item) => {
         const Icon = iconMap[item.icon];
+        const showUnread = typeof item.unreadCount === "number" && item.unreadCount > 0;
         const active =
           item.href === "/workspace"
             ? pathname === "/" || pathname === "/workspace"
@@ -47,16 +51,24 @@ export function SidebarNav({ items }: SidebarNavProps) {
             <span className="flex items-center gap-3">
               <span
                 className={cn(
-                  "flex size-8 items-center justify-center rounded-full border transition-colors",
+                  "relative flex size-8 items-center justify-center rounded-full border transition-colors",
                   active
                     ? "border-white/20 bg-white/[0.05]"
                     : "border-white/8 bg-white/[0.02] group-hover:border-white/16",
                 )}
               >
                 <Icon className="size-4" />
+                {showUnread ? (
+                  <span className="absolute right-0.5 top-0.5 size-2.5 rounded-full border border-black bg-red-500" />
+                ) : null}
               </span>
               <span className="text-sm">{item.label}</span>
             </span>
+            {showUnread ? (
+              <span className="rounded-full border border-white/12 bg-white/[0.05] px-2 py-0.5 text-[0.62rem] text-white/70">
+                {item.unreadCount && item.unreadCount > 9 ? "9+" : item.unreadCount}
+              </span>
+            ) : null}
           </Link>
         );
       })}
