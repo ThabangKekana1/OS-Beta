@@ -124,16 +124,20 @@ test("lead sequences reuse inbox threads and update CRM status from email activi
   assert.match(read("components/sales/routes/SalesLeadsRoute.tsx"), /awaiting_reply/);
 });
 
-test("dashboard email senders use the verified Resend reply domain", () => {
+test("admin dashboard exposes exactly the approved shared sender addresses", () => {
   const addressing = read("lib/email-addressing.ts");
   const adminMailboxes = read("lib/admin-mailboxes.ts");
   const sendRoute = read("app/api/email/send/route.ts");
   const envExample = read(".env.example");
 
   assert.match(addressing, /DEFAULT_OUTBOUND_EMAIL_DOMAIN = "replies\.1os\.co\.za"/);
-  assert.match(adminMailboxes, /sales@replies\.1os\.co\.za/);
-  assert.match(adminMailboxes, /karman@replies\.1os\.co\.za/);
+  assert.match(adminMailboxes, /karman@foundation-1\.co\.za/);
+  assert.match(adminMailboxes, /sales@1os\.co\.za/);
+  assert.match(adminMailboxes, /support@1os\.co\.za/);
+  assert.doesNotMatch(adminMailboxes, /sales@foundation-1\.co\.za/);
+  assert.doesNotMatch(adminMailboxes, /sales@replies\.1os\.co\.za/);
   assert.match(sendRoute, /emailOnOutboundDomain\(session\.email\)/);
-  assert.match(envExample, /EMAIL_OUTBOUND_DOMAIN=replies\.1os\.co\.za/);
-  assert.doesNotMatch(adminMailboxes, /@foundation-1\.co\.za/);
+  assert.match(envExample, /Karman <karman@foundation-1\.co\.za>/);
+  assert.match(envExample, /Foundation-1 Sales <sales@1os\.co\.za>/);
+  assert.match(envExample, /1OS Support <support@1os\.co\.za>/);
 });
