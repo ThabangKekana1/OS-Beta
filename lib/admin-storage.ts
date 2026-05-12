@@ -253,5 +253,18 @@ export function writeAdminStorageSnapshot(snapshot: AdminStorageSnapshot) {
     return;
   }
 
-  window.localStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify(snapshot));
+  try {
+    window.localStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify(snapshot));
+  } catch (error) {
+    console.warn("[AdminStorage] Unable to persist local admin snapshot.", error);
+    window.localStorage.removeItem(ADMIN_STORAGE_KEY);
+  }
+}
+
+export function clearAdminStorageSnapshot() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(ADMIN_STORAGE_KEY);
 }

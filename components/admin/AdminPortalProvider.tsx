@@ -22,6 +22,7 @@ import { registrationLinkIdForProfile } from "@/lib/registration-links";
 import type { RegistrationDraft } from "@/lib/registration-agent";
 import {
   ADMIN_STORAGE_KEY,
+  clearAdminStorageSnapshot,
   readAdminStorageSnapshot,
   writeAdminStorageSnapshot,
 } from "@/lib/admin-storage";
@@ -352,17 +353,6 @@ export function AdminPortalProvider({
   useEffect(() => {
     let cancelled = false;
 
-    const localSnapshot = readAdminStorageSnapshot();
-    if (localSnapshot) {
-      setLeads(localSnapshot.leads);
-      setSalesLeads(localSnapshot.salesLeads);
-      setActiveLeadId(localSnapshot.activeLeadId);
-      latestSnapshotRef.current = {
-        leads: localSnapshot.leads,
-        salesLeads: localSnapshot.salesLeads,
-      };
-    }
-
     const loadRemoteState = async () => {
       try {
         const response = await fetch("/api/admin/state", {
@@ -385,7 +375,10 @@ export function AdminPortalProvider({
           throw new Error("State load returned non-ok payload.");
         }
 
-        const snapshot = normalizeAdminStateSnapshot(payload.snapshot);
+        const serverSnapshot = normalizeAdminStateSnapshot(payload.snapshot);
+        const backend = payload.backend === "supabase" ? "supabase" : "local";
+        const localSnapshot = backend === "local" ? readAdminStorageSnapshot() : null;
+        const snapshot = localSnapshot ?? serverSnapshot;
         if (!cancelled && snapshot) {
           // Server is the single source of truth. Replace local state outright
           // so admin wipes / deletions actually clear the dashboard instead of
@@ -417,21 +410,33 @@ export function AdminPortalProvider({
             Array.isArray(payload.registrationDrafts) ? payload.registrationDrafts : [],
           );
 
-          // Mirror authoritative server snapshot into the local cache so the
-          // next first-paint isn't seeded from stale data.
-          writeAdminStorageSnapshot({
-            leads: snapshot.leads,
-            salesLeads: snapshot.salesLeads,
-            partnerOrgs: snapshot.partnerOrgs ?? [],
-            activeLeadId: snapshot.activeLeadId,
-          });
+          if (backend === "supabase") {
+            clearAdminStorageSnapshot();
+          } else {
+            writeAdminStorageSnapshot({
+              leads: snapshot.leads,
+              salesLeads: snapshot.salesLeads,
+              partnerOrgs: snapshot.partnerOrgs ?? [],
+              activeLeadId: snapshot.activeLeadId,
+            });
+          }
         }
 
         if (!cancelled) {
-          setSyncBackend(payload.backend === "supabase" ? "supabase" : "local");
+          setSyncBackend(backend);
         }
       } catch {
         if (!cancelled) {
+          const localSnapshot = readAdminStorageSnapshot();
+          if (localSnapshot) {
+            setLeads(localSnapshot.leads);
+            setSalesLeads(localSnapshot.salesLeads);
+            setActiveLeadId(localSnapshot.activeLeadId);
+            latestSnapshotRef.current = {
+              leads: localSnapshot.leads,
+              salesLeads: localSnapshot.salesLeads,
+            };
+          }
           setSyncBackend("local");
         }
       } finally {
@@ -455,6 +460,10 @@ export function AdminPortalProvider({
 
   useEffect(() => {
     if (!isHydrated) {
+      return;
+    }
+
+    if (syncBackend !== "local") {
       return;
     }
 
@@ -561,8 +570,9 @@ export function AdminPortalProvider({
     salesLeads: SalesLead[];
     activeLeadId: string | null;
   }) => {
-    // Local cache (so cross-tab `storage` events still work) + remote delta.
-    writeAdminStorageSnapshot(snapshot);
+    if (syncBackend === "local") {
+      writeAdminStorageSnapshot(snapshot);
+    }
     latestSnapshotRef.current = {
       leads: snapshot.leads,
       salesLeads: snapshot.salesLeads,
@@ -573,6 +583,10 @@ export function AdminPortalProvider({
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
+      if (syncBackend !== "local") {
+        return;
+      }
+
       if (event.key !== ADMIN_STORAGE_KEY) {
         return;
       }
@@ -589,7 +603,7 @@ export function AdminPortalProvider({
 
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  }, [syncBackend]);
 
   useEffect(() => {
     if (!activeLeadId) {
