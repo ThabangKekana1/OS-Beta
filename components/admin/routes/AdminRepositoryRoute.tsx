@@ -28,18 +28,6 @@ function emailSubject(lead: AdminLead) {
   return `Foundation-1 - ${lead.company}`;
 }
 
-function initialEmailBody(lead: AdminLead) {
-  return [
-    `Hi ${firstNameForLead(lead)},`,
-    "",
-    "I wanted to introduce Foundation-1 and understand whether your business is exploring ways to reduce electricity costs and improve energy reliability.",
-    "",
-    "If this is relevant, I can send through the short qualification steps and confirm whether your profile fits the programme.",
-    "",
-    "Kind regards,",
-  ].join("\n");
-}
-
 function followUpEmailBody(lead: AdminLead) {
   return [
     `Hi ${firstNameForLead(lead)},`,
@@ -73,10 +61,13 @@ function buildInboxHref(lead: AdminLead, engagement: LeadEngagement | null) {
   params.set("lead", lead.id);
   params.set("to", lead.userProfile.email);
   params.set("subject", emailSubject(lead));
-  params.set(
-    "body",
-    engagement?.state === "awaiting_reply" ? followUpEmailBody(lead) : initialEmailBody(lead),
-  );
+  params.set("company", lead.company);
+  params.set("name", lead.contactName || lead.contactFirstName || "");
+  if (engagement?.state === "awaiting_reply") {
+    params.set("body", followUpEmailBody(lead));
+  } else {
+    params.set("template", "outreach");
+  }
   return `/admin/inbox?${params.toString()}`;
 }
 

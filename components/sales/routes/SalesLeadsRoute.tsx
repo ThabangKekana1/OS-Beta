@@ -140,19 +140,6 @@ function emailSubject(lead: SalesLead) {
   return `Foundation-1 - ${lead.company}`;
 }
 
-function initialEmailBody(lead: SalesLead) {
-  const firstName = lead.contactName.trim().split(/\s+/)[0] || lead.contactName;
-  return [
-    `Hi ${firstName},`,
-    "",
-    "I wanted to introduce Foundation-1 and understand whether your business is exploring ways to reduce electricity costs and improve energy reliability.",
-    "",
-    "If this is relevant, I can send through the short qualification steps and confirm whether your profile fits the programme.",
-    "",
-    "Kind regards,",
-  ].join("\n");
-}
-
 function followUpEmailBody(lead: SalesLead) {
   const firstName = lead.contactName.trim().split(/\s+/)[0] || lead.contactName;
   return [
@@ -186,12 +173,13 @@ function buildInboxHref({
   if (lead.linkedAdminLeadId) params.set("lead", lead.linkedAdminLeadId);
   params.set("to", lead.email);
   params.set("subject", emailSubject(lead));
-  params.set(
-    "body",
-    state === "awaiting_reply" || state === "contacted"
-      ? followUpEmailBody(lead)
-      : initialEmailBody(lead),
-  );
+  params.set("company", lead.company);
+  params.set("name", lead.contactName);
+  if (state === "awaiting_reply" || state === "contacted") {
+    params.set("body", followUpEmailBody(lead));
+  } else {
+    params.set("template", "outreach");
+  }
   return `${inboxHref}?${params.toString()}`;
 }
 

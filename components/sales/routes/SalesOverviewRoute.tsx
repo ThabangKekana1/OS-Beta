@@ -73,12 +73,12 @@ export function SalesOverviewRoute({
   const [selectedIndustry, setSelectedIndustry] = useState<string>(ALL_INDUSTRIES);
   const selectedPeriod =
     periods.find((period) => period.id === selectedPeriodId) ?? periods[0];
-  const salesLeadIndustry = (leadId: string | null) =>
-    leadId ? leadById.get(leadId)?.industry?.trim() ?? "" : "";
   const industries = useMemo(() => {
     const set = new Set<string>();
     visibleSalesLeads.forEach((lead) => {
-      const industry = salesLeadIndustry(lead.linkedAdminLeadId);
+      const industry = lead.linkedAdminLeadId
+        ? leadById.get(lead.linkedAdminLeadId)?.industry?.trim() ?? ""
+        : "";
       if (industry) set.add(industry);
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b));
@@ -88,7 +88,10 @@ export function SalesOverviewRoute({
       selectedIndustry === ALL_INDUSTRIES
         ? visibleSalesLeads
         : visibleSalesLeads.filter(
-            (lead) => salesLeadIndustry(lead.linkedAdminLeadId) === selectedIndustry,
+            (lead) =>
+              (lead.linkedAdminLeadId
+                ? leadById.get(lead.linkedAdminLeadId)?.industry?.trim() ?? ""
+                : "") === selectedIndustry,
           ),
     [leadById, selectedIndustry, visibleSalesLeads],
   );

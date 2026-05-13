@@ -211,6 +211,7 @@ export async function POST(request: Request) {
     filename: a.filename,
     content: a.content,
     contentType: a.contentType,
+    contentId: a.contentId,
     size: a.size,
   }));
   if (signatureFooterImage && signatureFooterContentId) {
@@ -282,10 +283,11 @@ export async function POST(request: Request) {
   // Persist attachment metadata (we don't store the file itself for outbound — Resend
   // already sent it. We only record filename/type/size so the conversation history
   // can render attachment chips next to the message.)
-  if (attachments.length > 0) {
+  const visibleAttachments = attachments.filter((attachment) => !attachment.contentId);
+  if (visibleAttachments.length > 0) {
     const supabase = getSupabaseAdminClient();
     if (supabase) {
-      const rows = attachments.map((a) => ({
+      const rows = visibleAttachments.map((a) => ({
         message_id: recorded.message.id,
         filename: a.filename,
         mime_type: a.contentType ?? "application/octet-stream",

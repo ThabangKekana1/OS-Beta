@@ -30,6 +30,8 @@ export type InboxLeadOption = {
   id: string;
   label: string;
   email: string;
+  company?: string | null;
+  contactName?: string | null;
 };
 
 export type InboxSenderOption = {
@@ -80,9 +82,30 @@ type EmailSignatureResponse = {
   error?: string;
 };
 
+type ComposeAttachment = {
+  filename: string;
+  content: string;
+  contentType: string;
+  size: number;
+  contentId?: string;
+};
+
+type ComposeLeadDetails = {
+  id: string | null;
+  label?: string | null;
+  email?: string | null;
+  company?: string | null;
+  contactName?: string | null;
+};
+
 const SIGNATURE_TEXT_MAX_LENGTH = 4000;
 const SIGNATURE_IMAGE_MAX_BYTES = 512 * 1024;
 const SIGNATURE_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
+const OUTREACH_BANNER_PATH = "/resources/email-banner-1-3.png";
+const OUTREACH_BANNER_FILENAME = "Email Banner 1-3.png";
+const OUTREACH_BANNER_CONTENT_ID = "foundation1-outreach-banner";
+const OUTREACH_BROCHURE_PATH = "/resources/foundation-1-brochure.pdf";
+const OUTREACH_BROCHURE_FILENAME = "foundation-1 Brochure.pdf";
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -104,6 +127,97 @@ function readFileAsDataUrl(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function textToHtml(value: string): string {
+  return escapeHtml(value).replace(/\n/g, "<br>");
+}
+
+function firstName(value: string | null | undefined): string {
+  return value?.trim().split(/\s+/)[0] ?? "";
+}
+
+function buildOutreachSubject(lead: ComposeLeadDetails | null): string {
+  const company = lead?.company?.trim();
+  return company ? `Foundation-1 - ${company}` : "Foundation-1 energy savings proposal";
+}
+
+function buildOutreachBody(lead: ComposeLeadDetails | null): string {
+  const name = firstName(lead?.contactName) || "[Name]";
+  const company = lead?.company?.trim() || "[Company Name]";
+
+  return [
+    `Good day ${name},`,
+    "",
+    "I hope you are well.",
+    "",
+    "My name is Karman from Foundation-1, an energy-as-a-service company based in Johannesburg.",
+    "",
+    "I am reaching out because we help South African businesses reduce electricity costs through zero-capex energy solutions, fully financed by Nedbank.",
+    "",
+    `For qualifying businesses, our Generocity solar solution can help ${company} save up to 35% on monthly electricity spend. This means there is no upfront payment for the solar panels, installation, maintenance, or insurance. There are also no separate monthly payments for the system. You only pay your new electricity tariff, which is structured to be lower than your current electricity cost.`,
+    "",
+    `The solar infrastructure remains owned by the development financier, Nedbank. In return, ${company} gets access to the system, full maintenance support, insurance cover, and reduced exposure to load shedding without carrying the capital cost of buying the system.`,
+    "",
+    "For larger electricity users, Foundation-1 also offers Lumen, backed by a 56 megawatt solar farm in the Free State. Through Lumen, qualifying businesses can enter into a power purchase agreement and save up to 50% on monthly electricity spend.",
+    "",
+    "To get a savings proposal, we would only need recent 6 month utility bill and a signed Expression of Interest. I have also attached a brochure for your attention below.",
+    "",
+    "Would you be open to a brief discussion?",
+    "",
+    "Regards,",
+    "Karman Kekana",
+    "Founder & Platform Engineer",
+    "Foundation-1",
+    "karman@foundation-1.co.za",
+    "www.foundation-1.co.za",
+    "No 17 Muswell Road, Wedgefield Office Park",
+    "Regus Building Bryanston, Sandton",
+    "Gauteng. 2191",
+    "",
+    "CONFIDENTIAL: This email and any files transmitted with it are confidential and intended solely for the use of the individual or entity to whom they are addressed. If you have received this email in error please notify the system manager. This message contains confidential information and is intended only for the individual named. If you are not the named addressee you should not disseminate, distribute or copy this email. Please notify the sender immediately by email if you have received this email by mistake and delete this email from your system. If you are not the intended recipient you are notified that disclosing, copying, distributing or taking any action in reliance on the contents of this information is strictly prohibited.",
+  ].join("\n");
+}
+
+function buildOutreachHtml(body: string): string {
+  return [
+    '<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#111827;">',
+    `<div style="margin:0 0 18px 0;"><img src="cid:${OUTREACH_BANNER_CONTENT_ID}" alt="Foundation-1" style="display:block;max-width:764px;width:100%;height:auto;border:0;" /></div>`,
+    textToHtml(body),
+    "</div>",
+  ].join("");
+}
+
+async function assetToAttachment(
+  path: string,
+  filename: string,
+  contentType: string,
+  contentId?: string,
+): Promise<ComposeAttachment> {
+  const res = await fetch(path, { cache: "force-cache" });
+  if (!res.ok) throw new Error(`Could not load ${filename}`);
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...Array.from(bytes.subarray(index, index + chunkSize)));
+  }
+  return {
+    filename,
+    content: btoa(binary),
+    contentType,
+    size: bytes.byteLength,
+    contentId,
+  };
+}
+
 function formatRelative(iso: string): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "";
@@ -129,6 +243,9 @@ type InitialCompose = {
   subject?: string | null;
   body?: string | null;
   leadId?: string | null;
+  template?: string | null;
+  company?: string | null;
+  contactName?: string | null;
 };
 
 export function SalesInboxRoute({
@@ -166,9 +283,8 @@ export function SalesInboxRoute({
   const [composeSubject, setComposeSubject] = useState("");
   const [composeBody, setComposeBody] = useState("");
   const [composeLeadId, setComposeLeadId] = useState<string | null>(initialLeadFilter);
-  const [composeAttachments, setComposeAttachments] = useState<
-    Array<{ filename: string; content: string; contentType: string; size: number }>
-  >([]);
+  const [composeAttachments, setComposeAttachments] = useState<ComposeAttachment[]>([]);
+  const [composeOutreachActive, setComposeOutreachActive] = useState(false);
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const [sending, setSending] = useState(false);
@@ -183,6 +299,64 @@ export function SalesInboxRoute({
   const signatureImageInputRef = useRef<HTMLInputElement | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  const leadOptions = useMemo(() => {
+    if (viewerRole === "partner") return initialLeadOptions ?? [];
+    const leads = portalLeads ?? [];
+    const visibleLeads = viewerRole === "sales"
+      ? viewerAgentId
+        ? leads.filter((lead) => lead.ownerId === viewerAgentId)
+        : []
+      : leads;
+    return visibleLeads.map((lead) => ({
+      id: lead.id,
+      label: `${lead.company} · ${lead.contactName ?? "no contact"}`,
+      email: lead.userProfile?.email ?? "",
+      company: lead.company,
+      contactName: lead.contactName,
+    }));
+  }, [initialLeadOptions, portalLeads, viewerAgentId, viewerRole]);
+
+  const selectedComposeLead = useMemo<ComposeLeadDetails | null>(() => {
+    if (composeLeadId) {
+      const portalLead = portalLeads?.find((lead) => lead.id === composeLeadId);
+      if (portalLead) {
+        return {
+          id: portalLead.id,
+          label: `${portalLead.company} · ${portalLead.contactName ?? "no contact"}`,
+          email: portalLead.userProfile?.email ?? "",
+          company: portalLead.company,
+          contactName: portalLead.contactName,
+        };
+      }
+
+      const option = leadOptions.find((lead) => lead.id === composeLeadId);
+      if (option) {
+        return {
+          id: option.id,
+          label: option.label,
+          email: option.email,
+          company: option.company,
+          contactName: option.contactName,
+        };
+      }
+    }
+
+    if (
+      initialCompose &&
+      (!composeLeadId || initialCompose.leadId === composeLeadId) &&
+      (initialCompose.to || initialCompose.company || initialCompose.contactName)
+    ) {
+      return {
+        id: initialCompose.leadId ?? composeLeadId,
+        email: initialCompose.to ?? "",
+        company: initialCompose.company ?? null,
+        contactName: initialCompose.contactName ?? null,
+      };
+    }
+
+    return null;
+  }, [composeLeadId, initialCompose, leadOptions, portalLeads]);
 
   const refreshThreads = useCallback(async () => {
     setLoadingList(true);
@@ -313,6 +487,44 @@ export function SalesInboxRoute({
     }
   }, []);
 
+  const applyOutreachTemplate = useCallback(async () => {
+    setAttachmentBusy(true);
+    setError(null);
+    try {
+      const [bannerAttachment, brochureAttachment] = await Promise.all([
+        assetToAttachment(
+          OUTREACH_BANNER_PATH,
+          OUTREACH_BANNER_FILENAME,
+          "image/png",
+          OUTREACH_BANNER_CONTENT_ID,
+        ),
+        assetToAttachment(
+          OUTREACH_BROCHURE_PATH,
+          OUTREACH_BROCHURE_FILENAME,
+          "application/pdf",
+        ),
+      ]);
+
+      setComposeBody(buildOutreachBody(selectedComposeLead));
+      setComposeOutreachActive(true);
+      if (!composeSubject.trim()) setComposeSubject(buildOutreachSubject(selectedComposeLead));
+      if (!composeTo.trim() && selectedComposeLead?.email) setComposeTo(selectedComposeLead.email);
+      setComposeAttachments((prev) => [
+        ...prev.filter(
+          (attachment) =>
+            attachment.contentId !== OUTREACH_BANNER_CONTENT_ID &&
+            attachment.filename !== OUTREACH_BROCHURE_FILENAME,
+        ),
+        bannerAttachment,
+        brochureAttachment,
+      ]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load outreach template assets");
+    } finally {
+      setAttachmentBusy(false);
+    }
+  }, [composeSubject, composeTo, selectedComposeLead]);
+
   // Pre-open composer if launched from another surface (e.g. lead profile "Email client" button).
   const composerPrimedRef = useRef(false);
   useEffect(() => {
@@ -322,7 +534,8 @@ export function SalesInboxRoute({
       Boolean(initialCompose.to) ||
       Boolean(initialCompose.subject) ||
       Boolean(initialCompose.body) ||
-      Boolean(initialCompose.leadId);
+      Boolean(initialCompose.leadId) ||
+      Boolean(initialCompose.template);
     if (!hasAny) return;
     composerPrimedRef.current = true;
     setComposeMode("new");
@@ -332,8 +545,19 @@ export function SalesInboxRoute({
     setComposeSubject(initialCompose.subject ?? "");
     setComposeBody(initialCompose.body ?? "");
     setComposeLeadId(initialCompose.leadId ?? null);
+    setComposeOutreachActive(false);
+    setComposeAttachments([]);
     setComposerOpen(true);
   }, [initialCompose, senderOptions]);
+
+  const outreachPrimedRef = useRef(false);
+  useEffect(() => {
+    if (outreachPrimedRef.current) return;
+    if (initialCompose?.template !== "outreach") return;
+    if (!composerOpen) return;
+    outreachPrimedRef.current = true;
+    void applyOutreachTemplate();
+  }, [applyOutreachTemplate, composerOpen, initialCompose?.template]);
 
   useEffect(() => {
     if (activeThreadId) void loadThread(activeThreadId);
@@ -369,6 +593,7 @@ export function SalesInboxRoute({
     setComposeBody("");
     setComposeLeadId(activeThread.leadId ?? null);
     setComposeAttachments([]);
+    setComposeOutreachActive(false);
     setComposerOpen(true);
   }, [activeThread, activeMessages, senderOptions]);
 
@@ -381,6 +606,7 @@ export function SalesInboxRoute({
     setComposeBody("");
     setComposeLeadId(null);
     setComposeAttachments([]);
+    setComposeOutreachActive(false);
     setComposerOpen(true);
   }, [senderOptions]);
 
@@ -402,6 +628,7 @@ export function SalesInboxRoute({
           subject: composeSubject,
           from: senderOptions.length > 0 ? composeFrom : undefined,
           body: composeBody,
+          html: composeOutreachActive ? buildOutreachHtml(composeBody) : undefined,
           threadId: composeMode === "reply" ? activeThread?.id ?? null : null,
           leadId: composeLeadId,
           inReplyTo,
@@ -410,6 +637,7 @@ export function SalesInboxRoute({
             filename: a.filename,
             content: a.content,
             contentType: a.contentType,
+            contentId: a.contentId,
             size: a.size,
           })),
         }),
@@ -420,6 +648,7 @@ export function SalesInboxRoute({
         return;
       }
       setComposerOpen(false);
+      setComposeOutreachActive(false);
       await refreshThreads();
       const newId = json.thread?.id ?? activeThread?.id ?? null;
       if (newId) {
@@ -431,22 +660,7 @@ export function SalesInboxRoute({
     } finally {
       setSending(false);
     }
-  }, [activeMessages, activeThread?.id, composeAttachments, composeBody, composeCc, composeFrom, composeLeadId, composeMode, composeSubject, composeTo, loadThread, refreshThreads, senderOptions.length]);
-
-  const leadOptions = useMemo(() => {
-    if (viewerRole === "partner") return initialLeadOptions ?? [];
-    const leads = portalLeads ?? [];
-    const visibleLeads = viewerRole === "sales"
-      ? viewerAgentId
-        ? leads.filter((lead) => lead.ownerId === viewerAgentId)
-        : []
-      : leads;
-    return visibleLeads.map((lead) => ({
-      id: lead.id,
-      label: `${lead.company} · ${lead.contactName ?? "no contact"}`,
-      email: lead.userProfile?.email ?? "",
-    }));
-  }, [initialLeadOptions, portalLeads, viewerAgentId, viewerRole]);
+  }, [activeMessages, activeThread?.id, composeAttachments, composeBody, composeCc, composeFrom, composeLeadId, composeMode, composeOutreachActive, composeSubject, composeTo, loadThread, refreshThreads, senderOptions.length]);
 
   const inboxDescription = viewerRole === "partner"
     ? "Send and receive emails directly from 1OS. Replies are automatically threaded to your referred lead."
@@ -738,13 +952,25 @@ export function SalesInboxRoute({
           <div className="w-full max-w-2xl rounded-2xl border border-white/12 bg-[#0d0e10] p-5 shadow-2xl">
             <header className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-medium text-white">{composeMode === "reply" ? "Reply" : "New email"}</h3>
-              <button
-                type="button"
-                onClick={() => setComposerOpen(false)}
-                className="rounded-lg border border-white/12 px-2.5 py-1 text-xs text-white/70 hover:bg-white/[0.06]"
-              >
-                Close
-              </button>
+              <div className="flex items-center gap-2">
+                {composeMode === "new" ? (
+                  <button
+                    type="button"
+                    onClick={applyOutreachTemplate}
+                    disabled={attachmentBusy}
+                    className="rounded-lg border border-emerald-300/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-100 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Outreach
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setComposerOpen(false)}
+                  className="rounded-lg border border-white/12 px-2.5 py-1 text-xs text-white/70 hover:bg-white/[0.06]"
+                >
+                  Close
+                </button>
+              </div>
             </header>
 
             {composeMode === "new" ? (
@@ -813,6 +1039,16 @@ export function SalesInboxRoute({
               className="mt-1 w-full rounded-xl border border-white/12 bg-black/40 px-3 py-2 text-sm text-white"
             />
 
+            {composeOutreachActive ? (
+              <div className="mt-3 overflow-hidden rounded-xl border border-white/12 bg-white/[0.03]">
+                <img
+                  src={OUTREACH_BANNER_PATH}
+                  alt="Foundation-1 outreach banner"
+                  className="h-auto w-full object-cover"
+                />
+              </div>
+            ) : null}
+
             <label className="mt-3 block text-[0.62rem] uppercase tracking-[0.22em] text-white/52">Message</label>
             <textarea
               value={composeBody}
@@ -850,7 +1086,7 @@ export function SalesInboxRoute({
                     const encoded = await Promise.all(
                       files.map(
                         (file) =>
-                          new Promise<{ filename: string; content: string; contentType: string; size: number }>(
+                          new Promise<ComposeAttachment>(
                             (resolve, reject) => {
                               const reader = new FileReader();
                               reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
@@ -889,12 +1125,14 @@ export function SalesInboxRoute({
                       className="inline-flex items-center gap-2 rounded-full border border-white/14 bg-white/[0.04] px-2.5 py-1 text-[0.7rem] text-white/78"
                     >
                       <span className="max-w-[16rem] truncate">{att.filename}</span>
+                      {att.contentId ? <span className="text-white/40">Inline</span> : null}
                       <span className="text-white/40">{(att.size / 1024).toFixed(0)} KB</span>
                       <button
                         type="button"
-                        onClick={() =>
-                          setComposeAttachments((prev) => prev.filter((_, i) => i !== index))
-                        }
+                        onClick={() => {
+                          if (att.contentId === OUTREACH_BANNER_CONTENT_ID) setComposeOutreachActive(false);
+                          setComposeAttachments((prev) => prev.filter((_, i) => i !== index));
+                        }}
                         className="text-white/50 transition hover:text-white"
                         aria-label={`Remove ${att.filename}`}
                       >
@@ -914,6 +1152,7 @@ export function SalesInboxRoute({
                 onClick={() => {
                   setComposerOpen(false);
                   setComposeAttachments([]);
+                  setComposeOutreachActive(false);
                 }}
                 className="rounded-xl border border-white/12 px-3 py-2 text-sm text-white/74 hover:bg-white/[0.04]"
                 disabled={sending}

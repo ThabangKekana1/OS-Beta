@@ -6,7 +6,16 @@ export const dynamic = "force-dynamic";
 export default async function SalesInboxPage({
   searchParams,
 }: {
-  searchParams: Promise<{ thread?: string; lead?: string; to?: string; subject?: string; body?: string }>;
+  searchParams: Promise<{
+    thread?: string;
+    lead?: string;
+    to?: string;
+    subject?: string;
+    body?: string;
+    template?: string;
+    company?: string;
+    name?: string;
+  }>;
 }) {
   const session = await requireServerAuthSession("sales");
   const params = await searchParams;
@@ -21,6 +30,9 @@ export default async function SalesInboxPage({
         subject: params.subject ?? null,
         body: params.body ?? null,
         leadId: params.lead ?? null,
+        template: params.template ?? null,
+        company: params.company ?? null,
+        contactName: params.name ?? null,
       }}
     />
   );
