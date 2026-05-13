@@ -10,6 +10,7 @@ import type { AdminLead, AdminLeadContactStatus, AdminLeadOrigin, AdminLeadPartn
 import { adminLeadOriginLabels, adminLeadOrigins, adminLeadPartners } from "@/lib/admin-types";
 
 const ALL = "all" as const;
+const OUTREACH_EMAIL_SUBJECT = "Zero-Cost Solar Proposal";
 
 type LeadEngagement = {
   leadId: string;
@@ -60,12 +61,13 @@ function buildInboxHref(lead: AdminLead, engagement: LeadEngagement | null) {
 
   params.set("lead", lead.id);
   params.set("to", lead.userProfile.email);
-  params.set("subject", emailSubject(lead));
   params.set("company", lead.company);
   params.set("name", lead.contactName || lead.contactFirstName || "");
   if (engagement?.state === "awaiting_reply") {
+    params.set("subject", emailSubject(lead));
     params.set("body", followUpEmailBody(lead));
   } else {
+    params.set("subject", OUTREACH_EMAIL_SUBJECT);
     params.set("template", "outreach");
   }
   return `/admin/inbox?${params.toString()}`;

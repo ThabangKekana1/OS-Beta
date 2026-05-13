@@ -106,6 +106,7 @@ const OUTREACH_BANNER_FILENAME = "Email Banner 1-3.png";
 const OUTREACH_BANNER_CONTENT_ID = "foundation1-outreach-banner";
 const OUTREACH_BROCHURE_PATH = "/resources/foundation-1-brochure.pdf";
 const OUTREACH_BROCHURE_FILENAME = "foundation-1 Brochure.pdf";
+const OUTREACH_SUBJECT = "Zero-Cost Solar Proposal";
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -142,11 +143,6 @@ function textToHtml(value: string): string {
 
 function firstName(value: string | null | undefined): string {
   return value?.trim().split(/\s+/)[0] ?? "";
-}
-
-function buildOutreachSubject(lead: ComposeLeadDetails | null): string {
-  const company = lead?.company?.trim();
-  return company ? `Foundation-1 - ${company}` : "Foundation-1 energy savings proposal";
 }
 
 function buildOutreachBody(lead: ComposeLeadDetails | null): string {
@@ -507,7 +503,7 @@ export function SalesInboxRoute({
 
       setComposeBody(buildOutreachBody(selectedComposeLead));
       setComposeOutreachActive(true);
-      if (!composeSubject.trim()) setComposeSubject(buildOutreachSubject(selectedComposeLead));
+      setComposeSubject(OUTREACH_SUBJECT);
       if (!composeTo.trim() && selectedComposeLead?.email) setComposeTo(selectedComposeLead.email);
       setComposeAttachments((prev) => [
         ...prev.filter(
@@ -523,7 +519,7 @@ export function SalesInboxRoute({
     } finally {
       setAttachmentBusy(false);
     }
-  }, [composeSubject, composeTo, selectedComposeLead]);
+  }, [composeTo, selectedComposeLead]);
 
   // Pre-open composer if launched from another surface (e.g. lead profile "Email client" button).
   const composerPrimedRef = useRef(false);

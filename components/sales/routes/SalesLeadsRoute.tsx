@@ -44,6 +44,7 @@ const sequenceFilters: Array<{ value: SequenceState | "all"; label: string }> = 
 ];
 
 const ALL_INDUSTRIES = "all" as const;
+const OUTREACH_EMAIL_SUBJECT = "Zero-Cost Solar Proposal";
 
 function formatDateTime(value: string) {
   const parsed = new Date(value);
@@ -172,12 +173,13 @@ function buildInboxHref({
 
   if (lead.linkedAdminLeadId) params.set("lead", lead.linkedAdminLeadId);
   params.set("to", lead.email);
-  params.set("subject", emailSubject(lead));
   params.set("company", lead.company);
   params.set("name", lead.contactName);
   if (state === "awaiting_reply" || state === "contacted") {
+    params.set("subject", emailSubject(lead));
     params.set("body", followUpEmailBody(lead));
   } else {
+    params.set("subject", OUTREACH_EMAIL_SUBJECT);
     params.set("template", "outreach");
   }
   return `${inboxHref}?${params.toString()}`;
