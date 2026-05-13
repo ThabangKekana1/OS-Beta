@@ -4,7 +4,21 @@ import {
   type AdminStateSnapshot,
 } from "@/lib/admin-state";
 import { normalizeWorkspaceStateSnapshot, type WorkspaceStateSnapshot } from "@/lib/workspace-state";
-import type { AdminLead, PartnerOrg, SalesLead } from "@/lib/admin-types";
+import {
+  adminLeadContactStatuses,
+  adminLeadOrigins,
+  adminLeadPartners,
+  adminLeadStages,
+  type AdminLead,
+  type AdminLeadContactStatus,
+  type AdminLeadDocument,
+  type AdminLeadOrigin,
+  type AdminLeadPartner,
+  type AdminLeadPriority,
+  type AdminLeadStage,
+  type PartnerOrg,
+  type SalesLead,
+} from "@/lib/admin-types";
 
 type StoreReadResult<T> = {
   found: boolean;
@@ -12,6 +26,94 @@ type StoreReadResult<T> = {
 };
 
 const SUPABASE_PAGE_SIZE = 1000;
+const ADMIN_LEAD_COMPACT_SELECT = `
+  id,
+  client_profile_id,
+  company,
+  business_registration_number,
+  contact_name,
+  contact_email,
+  owner_id,
+  stage,
+  priority,
+  readiness_score,
+  estimated_value_zar,
+  eoi_signing_token,
+  eoi_signed_at,
+  onboarding_completed_at,
+  disqualified_at,
+  created_at,
+  industry:payload->industry,
+  monthly_spend:payload->monthlyElectricitySpendEstimateZar,
+  is_business_registered:payload->isBusinessRegistered,
+  is_business_operational:payload->isBusinessOperational,
+  has_six_month_utility_bill:payload->hasSixMonthUtilityBill,
+  contact_status:payload->contactStatus,
+  profile_id:payload->userProfile->id,
+  profile_full_name:payload->userProfile->fullName,
+  profile_phone:payload->userProfile->phone,
+  profile_role:payload->userProfile->role,
+  profile_joined_at:payload->userProfile->joinedAt,
+  physical_address:payload->physicalAddress,
+  city:payload->city,
+  province:payload->province,
+  origin:payload->origin,
+  partner:payload->partner,
+  partner_org_id:payload->partnerOrgId,
+  source:payload->source,
+  last_touched:payload->lastTouched,
+  next_action:payload->nextAction
+`;
+const adminLeadStageSet = new Set<string>(adminLeadStages);
+const adminLeadContactStatusSet = new Set<string>(adminLeadContactStatuses);
+const adminLeadOriginSet = new Set<string>(adminLeadOrigins);
+const adminLeadPartnerSet = new Set<string>(adminLeadPartners);
+const adminLeadPrioritySet = new Set<string>(["Standard", "Priority", "Executive"]);
+const adminLeadSourceSet = new Set<string>(["Migrate Portal", "Referral", "Outbound"]);
+
+type CompactAdminLeadRow = {
+  id: string | null;
+  client_profile_id: string | null;
+  company: string | null;
+  business_registration_number: string | null;
+  contact_name: string | null;
+  contact_email: string | null;
+  owner_id: string | null;
+  stage: string | null;
+  priority: string | null;
+  readiness_score: number | null;
+  estimated_value_zar: number | null;
+  eoi_signing_token: string | null;
+  eoi_signed_at: string | null;
+  onboarding_completed_at: string | null;
+  disqualified_at: string | null;
+  created_at: string | null;
+  industry?: unknown;
+  monthly_spend?: unknown;
+  is_business_registered?: unknown;
+  is_business_operational?: unknown;
+  has_six_month_utility_bill?: unknown;
+  contact_status?: unknown;
+  profile_id?: unknown;
+  profile_full_name?: unknown;
+  profile_phone?: unknown;
+  profile_role?: unknown;
+  profile_joined_at?: unknown;
+  physical_address?: unknown;
+  city?: unknown;
+  province?: unknown;
+  origin?: unknown;
+  partner?: unknown;
+  partner_org_id?: unknown;
+  source?: unknown;
+  last_touched?: unknown;
+  next_action?: unknown;
+};
+
+type AdminLeadDocumentRow = {
+  lead_id: string | null;
+  payload: unknown;
+};
 
 function isMissingRelationError(error: { code?: string; message?: string } | null) {
   const message = error?.message?.toLowerCase() ?? "";
@@ -25,6 +127,141 @@ function toIsoOrNull(value: string | null | undefined) {
 
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+function stringValue(value: unknown, fallback = "") {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
+}
+
+function nullableStringValue(value: unknown) {
+  const text = stringValue(value);
+  return text.length > 0 ? text : null;
+}
+
+function numberValue(value: unknown, fallback = 0) {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function booleanValue(value: unknown, fallback = false) {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function oneOf<T extends string>(
+  value: unknown,
+  allowed: Set<string>,
+  fallback: T,
+): T {
+  return typeof value === "string" && allowed.has(value) ? (value as T) : fallback;
+}
+
+function partnerValue(value: unknown): AdminLeadPartner | null {
+  return typeof value === "string" && adminLeadPartnerSet.has(value)
+    ? (value as AdminLeadPartner)
+    : null;
+}
+
+function splitContactName(contactName: string) {
+  const parts = contactName.trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts[0] ?? contactName,
+    surname: parts.slice(1).join(" "),
+  };
+}
+
+function compactAdminLeadFromRow(
+  row: CompactAdminLeadRow,
+  documents: AdminLeadDocument[],
+): AdminLead | null {
+  const id = stringValue(row.id);
+  if (!id) {
+    return null;
+  }
+
+  const company = stringValue(row.company, "Unknown company");
+  const contactEmail = stringValue(row.contact_email).toLowerCase();
+  const profileFullName = stringValue(row.profile_full_name);
+  const contactName = stringValue(
+    row.contact_name,
+    profileFullName || contactEmail || "Unknown contact",
+  );
+  const { firstName, surname } = splitContactName(contactName);
+  const role = stringValue(row.profile_role, "Owner");
+  const stage = oneOf<AdminLeadStage>(
+    row.stage,
+    adminLeadStageSet,
+    "Client Registered",
+  );
+  const disqualifiedAt = toIsoOrNull(row.disqualified_at);
+  const createdAt = toIsoOrNull(row.created_at) ?? "";
+
+  return {
+    id,
+    clientProfileId: stringValue(row.client_profile_id, `profile-${id}`),
+    company,
+    businessRegistrationNumber: stringValue(row.business_registration_number),
+    industry: stringValue(row.industry),
+    contactFirstName: firstName,
+    contactSurname: surname,
+    contactPosition: role,
+    contactName,
+    monthlyElectricitySpendEstimateZar: Math.max(0, Math.round(numberValue(row.monthly_spend))),
+    isBusinessRegistered: booleanValue(
+      row.is_business_registered,
+      Boolean(stringValue(row.business_registration_number)),
+    ),
+    isClientRegistered: true,
+    isBusinessOperational: booleanValue(row.is_business_operational, true),
+    hasSixMonthUtilityBill: booleanValue(row.has_six_month_utility_bill),
+    physicalAddress: stringValue(row.physical_address),
+    city: stringValue(row.city),
+    province: stringValue(row.province),
+    source: oneOf<AdminLead["source"]>(row.source, adminLeadSourceSet, "Outbound"),
+    origin: oneOf<AdminLeadOrigin>(row.origin, adminLeadOriginSet, "imported"),
+    partner: partnerValue(row.partner),
+    partnerOrgId: nullableStringValue(row.partner_org_id),
+    stage,
+    contactStatus: oneOf<AdminLeadContactStatus>(
+      row.contact_status,
+      adminLeadContactStatusSet,
+      "Not Contacted",
+    ),
+    priority: oneOf<AdminLeadPriority>(row.priority, adminLeadPrioritySet, "Standard"),
+    ownerId: stringValue(row.owner_id, "agent-karman"),
+    linkedSalesLeadId: null,
+    registrationSource: null,
+    readinessScore: numberValue(row.readiness_score),
+    estimatedValueZar: Math.max(0, Math.round(numberValue(row.estimated_value_zar))),
+    lastTouched: stringValue(row.last_touched, "Imported"),
+    nextAction: stringValue(row.next_action, "Send outreach email."),
+    migrateAccountName: company,
+    migrateAccountId: id,
+    userProfile: {
+      id: stringValue(row.profile_id, `usr-${id}`),
+      fullName: profileFullName || contactName,
+      email: contactEmail,
+      phone: stringValue(row.profile_phone),
+      role,
+      joinedAt: stringValue(row.profile_joined_at, createdAt),
+    },
+    eoiSigningToken: nullableStringValue(row.eoi_signing_token),
+    eoiSignatureId: null,
+    eoiSignedBy: null,
+    eoiSignedAt: toIsoOrNull(row.eoi_signed_at),
+    eoiAcceptedTermsAt: null,
+    onboardingCompletedAt: toIsoOrNull(row.onboarding_completed_at),
+    disqualification: disqualifiedAt
+      ? {
+          reason: "Disqualified",
+          by: "system",
+          at: disqualifiedAt,
+        }
+      : null,
+    tasks: [],
+    documents,
+    notes: [],
+    events: [],
+  };
 }
 
 function adminLeadRow(lead: AdminLead) {
@@ -89,8 +326,80 @@ function payloadFromRows<T>(rows: Array<{ payload: unknown }>) {
   return rows.map((row) => row.payload) as T[];
 }
 
+async function readAdminLeadRows(): Promise<{
+  data: CompactAdminLeadRow[] | null;
+  error: { code?: string; message?: string } | null;
+}> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) {
+    return { data: null, error: null };
+  }
+
+  const countResult = await supabase
+    .from("oneos_admin_leads")
+    .select("id", { count: "exact", head: true });
+  if (countResult.error) {
+    return { data: null, error: countResult.error };
+  }
+
+  const totalRows = countResult.count ?? 0;
+  if (totalRows === 0) {
+    return { data: [], error: null };
+  }
+
+  const rows: CompactAdminLeadRow[] = [];
+  const pageCount = Math.ceil(totalRows / SUPABASE_PAGE_SIZE);
+  const pageResults = await Promise.all(
+    Array.from({ length: pageCount }, (_unused, pageIndex) => {
+      const from = pageIndex * SUPABASE_PAGE_SIZE;
+      return supabase
+        .from("oneos_admin_leads")
+        .select(ADMIN_LEAD_COMPACT_SELECT)
+        .range(from, from + SUPABASE_PAGE_SIZE - 1);
+    }),
+  );
+
+  for (const { data, error } of pageResults) {
+    if (error) {
+      return { data: null, error };
+    }
+
+    rows.push(...((data ?? []) as CompactAdminLeadRow[]));
+  }
+
+  return { data: rows, error: null };
+}
+
+async function readAdminLeadDocumentRows(): Promise<{
+  data: AdminLeadDocumentRow[] | null;
+  error: { code?: string; message?: string } | null;
+}> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) {
+    return { data: null, error: null };
+  }
+
+  const rows: AdminLeadDocumentRow[] = [];
+  for (let from = 0; ; from += SUPABASE_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("oneos_client_documents")
+      .select("lead_id, payload")
+      .range(from, from + SUPABASE_PAGE_SIZE - 1);
+
+    if (error) {
+      return { data: null, error };
+    }
+
+    const page = (data ?? []) as AdminLeadDocumentRow[];
+    rows.push(...page);
+    if (page.length < SUPABASE_PAGE_SIZE) {
+      return { data: rows, error: null };
+    }
+  }
+}
+
 async function readPayloadRows(
-  table: "oneos_admin_leads" | "oneos_sales_leads",
+  table: "oneos_sales_leads",
 ): Promise<{
   data: Array<{ payload: unknown }> | null;
   error: { code?: string; message?: string } | null;
@@ -132,14 +441,19 @@ export async function readAdminStateFromDatabase(): Promise<StoreReadResult<Admi
       .select("active_lead_id, partner_orgs")
       .eq("id", "singleton")
       .maybeSingle(),
-    readPayloadRows("oneos_admin_leads"),
+    readAdminLeadRows(),
     readPayloadRows("oneos_sales_leads"),
   ]);
+  const documentRowsResult =
+    leadsResult.error || isMissingRelationError(leadsResult.error)
+      ? { data: [], error: null }
+      : await readAdminLeadDocumentRows();
 
   if (
     isMissingRelationError(stateResult.error) ||
     isMissingRelationError(leadsResult.error) ||
-    isMissingRelationError(salesLeadsResult.error)
+    isMissingRelationError(salesLeadsResult.error) ||
+    isMissingRelationError(documentRowsResult.error)
   ) {
     return { found: false, snapshot: null };
   }
@@ -156,7 +470,21 @@ export async function readAdminStateFromDatabase(): Promise<StoreReadResult<Admi
     throw salesLeadsResult.error;
   }
 
-  const leads = payloadFromRows<AdminLead>(leadsResult.data ?? []);
+  if (documentRowsResult.error) {
+    throw documentRowsResult.error;
+  }
+
+  const documentsByLeadId = new Map<string, AdminLeadDocument[]>();
+  for (const row of documentRowsResult.data ?? []) {
+    if (!row.lead_id) continue;
+    const documents = documentsByLeadId.get(row.lead_id) ?? [];
+    documents.push(row.payload as AdminLeadDocument);
+    documentsByLeadId.set(row.lead_id, documents);
+  }
+
+  const leads = (leadsResult.data ?? [])
+    .map((row) => compactAdminLeadFromRow(row, documentsByLeadId.get(row.id ?? "") ?? []))
+    .filter((lead): lead is AdminLead => Boolean(lead));
   const salesLeads = payloadFromRows<SalesLead>(salesLeadsResult.data ?? []);
   const partnerOrgsRaw = stateResult.data?.partner_orgs;
   const partnerOrgs: PartnerOrg[] = Array.isArray(partnerOrgsRaw)

@@ -64,6 +64,10 @@ test("server stores prefer Supabase Postgres before storage fallback", () => {
   assert.match(dbStore, /oneos_admin_leads/);
   assert.match(dbStore, /oneos_workspace_states/);
   assert.match(dbStore, /SUPABASE_PAGE_SIZE = 1000/);
+  assert.match(dbStore, /ADMIN_LEAD_COMPACT_SELECT/);
+  assert.match(dbStore, /payload->industry/);
+  assert.match(dbStore, /readAdminLeadRows\(\)/);
+  assert.doesNotMatch(dbStore, /readPayloadRows\("oneos_admin_leads"\)/);
   assert.match(dbStore, /\.range\(from, from \+ SUPABASE_PAGE_SIZE - 1\)/);
   assert.match(agentConfig, /oneos_agent_config/);
   assert.match(agentConfig, /readJsonObject/);
