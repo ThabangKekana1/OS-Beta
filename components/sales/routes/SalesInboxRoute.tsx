@@ -284,6 +284,8 @@ export function SalesInboxRoute({
   const [composeLeadId, setComposeLeadId] = useState<string | null>(initialLeadFilter);
   const [composeAttachments, setComposeAttachments] = useState<ComposeAttachment[]>([]);
   const [composeOutreachActive, setComposeOutreachActive] = useState(false);
+  const [leadSearch, setLeadSearch] = useState("");
+  const [leadSearchOpen, setLeadSearchOpen] = useState(false);
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const [sending, setSending] = useState(false);
@@ -348,6 +350,10 @@ export function SalesInboxRoute({
     ) {
       return {
         id: initialCompose.leadId ?? composeLeadId,
+        label:
+          [initialCompose.company, initialCompose.contactName].filter(Boolean).join(" · ") ||
+          initialCompose.to ||
+          null,
         email: initialCompose.to ?? "",
         company: initialCompose.company ?? null,
         contactName: initialCompose.contactName ?? null,
@@ -356,6 +362,43 @@ export function SalesInboxRoute({
 
     return null;
   }, [composeLeadId, initialCompose, leadOptions, portalLeads]);
+
+  const filteredLeadOptions = useMemo(() => {
+    const query = leadSearch.trim().toLowerCase();
+    const matches = query
+      ? leadOptions.filter((lead) =>
+          [
+            lead.label,
+            lead.email,
+            lead.company ?? "",
+            lead.contactName ?? "",
+          ].some((value) => value.toLowerCase().includes(query)),
+        )
+      : leadOptions;
+    return matches.slice(0, 40);
+  }, [leadOptions, leadSearch]);
+
+  const selectComposeLead = useCallback(
+    (lead: InboxLeadOption | null) => {
+      const previousLeadEmail = selectedComposeLead?.email?.trim() ?? "";
+      setComposeLeadId(lead?.id ?? null);
+      setLeadSearch(lead?.label ?? "");
+      setLeadSearchOpen(false);
+      if (lead?.email && (!composeTo.trim() || composeTo.trim() === previousLeadEmail)) {
+        setComposeTo(lead.email);
+      }
+    },
+    [composeTo, selectedComposeLead?.email],
+  );
+
+  useEffect(() => {
+    if (!composerOpen || leadSearchOpen) return;
+    if (selectedComposeLead?.label) {
+      setLeadSearch(selectedComposeLead.label);
+      return;
+    }
+    if (!composeLeadId) setLeadSearch("");
+  }, [composerOpen, composeLeadId, leadSearchOpen, selectedComposeLead?.label]);
 
   const refreshThreads = useCallback(async () => {
     setLoadingList(true);
@@ -546,6 +589,12 @@ export function SalesInboxRoute({
     setComposeLeadId(initialCompose.leadId ?? null);
     setComposeOutreachActive(false);
     setComposeAttachments([]);
+    setLeadSearch(
+      [initialCompose.company, initialCompose.contactName].filter(Boolean).join(" · ") ||
+        initialCompose.to ||
+        "",
+    );
+    setLeadSearchOpen(false);
     setComposerOpen(true);
   }, [initialCompose, senderOptions]);
 
@@ -593,6 +642,8 @@ export function SalesInboxRoute({
     setComposeLeadId(activeThread.leadId ?? null);
     setComposeAttachments([]);
     setComposeOutreachActive(false);
+    setLeadSearch("");
+    setLeadSearchOpen(false);
     setComposerOpen(true);
   }, [activeThread, activeMessages, senderOptions]);
 
@@ -606,6 +657,8 @@ export function SalesInboxRoute({
     setComposeLeadId(null);
     setComposeAttachments([]);
     setComposeOutreachActive(false);
+    setLeadSearch("");
+    setLeadSearchOpen(false);
     setComposerOpen(true);
   }, [senderOptions]);
 
@@ -648,6 +701,7 @@ export function SalesInboxRoute({
       }
       setComposerOpen(false);
       setComposeOutreachActive(false);
+      setLeadSearchOpen(false);
       await refreshThreads();
       const newId = json.thread?.id ?? activeThread?.id ?? null;
       if (newId) {
@@ -947,9 +1001,9 @@ export function SalesInboxRoute({
       </div>
 
       {composerOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-4 sm:items-center">
-          <div className="w-full max-w-2xl rounded-2xl border border-white/12 bg-[#0d0e10] p-5 shadow-2xl">
-            <header className="mb-3 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-3 sm:items-center sm:p-4">
+          <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/12 bg-[#0d0e10] shadow-2xl sm:max-h-[calc(100dvh-2rem)]">
+            <header className="flex shrink-0 items-center justify-between border-b border-white/8 px-5 py-4">
               <h3 className="text-base font-medium text-white">{composeMode === "reply" ? "Reply" : "New email"}</h3>
               <div className="flex items-center gap-2">
                 {composeMode === "new" ? (
@@ -964,7 +1018,10 @@ export function SalesInboxRoute({
                 ) : null}
                 <button
                   type="button"
-                  onClick={() => setComposerOpen(false)}
+                  onClick={() => {
+                    setComposerOpen(false);
+                    setLeadSearchOpen(false);
+                  }}
                   className="rounded-lg border border-white/12 px-2.5 py-1 text-xs text-white/70 hover:bg-white/[0.06]"
                 >
                   Close
@@ -972,26 +1029,67 @@ export function SalesInboxRoute({
               </div>
             </header>
 
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+
             {composeMode === "new" ? (
               <div className="mb-3">
                 <label className="text-[0.62rem] uppercase tracking-[0.22em] text-white/52">Link to lead (optional)</label>
-                <select
-                  value={composeLeadId ?? ""}
-                  onChange={(event) => {
-                    const id = event.target.value || null;
-                    setComposeLeadId(id);
-                    if (id) {
-                      const opt = leadOptions.find((o) => o.id === id);
-                      if (opt?.email && !composeTo) setComposeTo(opt.email);
-                    }
-                  }}
-                  className="mt-1 w-full rounded-xl border border-white/12 bg-black/40 px-3 py-2 text-sm text-white"
-                >
-                  <option value="">— No lead —</option>
-                  {leadOptions.map((opt) => (
-                    <option key={opt.id} value={opt.id}>{opt.label}</option>
-                  ))}
-                </select>
+                <div className="relative mt-1">
+                  <input
+                    type="search"
+                    value={leadSearch}
+                    onFocus={() => setLeadSearchOpen(true)}
+                    onBlur={() => window.setTimeout(() => setLeadSearchOpen(false), 120)}
+                    onChange={(event) => {
+                      setLeadSearch(event.target.value);
+                      setLeadSearchOpen(true);
+                      if (!event.target.value.trim()) setComposeLeadId(null);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        setLeadSearchOpen(false);
+                        return;
+                      }
+                      if (event.key === "Enter" && filteredLeadOptions[0]) {
+                        event.preventDefault();
+                        selectComposeLead(filteredLeadOptions[0]);
+                      }
+                    }}
+                    placeholder="Search company, contact, or email"
+                    className="w-full rounded-xl border border-white/12 bg-black/40 px-3 py-2 pr-20 text-sm text-white placeholder:text-white/30"
+                  />
+                  {composeLeadId ? (
+                    <button
+                      type="button"
+                      onClick={() => selectComposeLead(null)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg border border-white/12 px-2 py-1 text-[0.64rem] uppercase tracking-[0.16em] text-white/62 transition hover:bg-white/[0.05] hover:text-white"
+                    >
+                      Clear
+                    </button>
+                  ) : null}
+                  {leadSearchOpen ? (
+                    <div className="absolute left-0 right-0 top-full z-30 mt-2 max-h-56 overflow-y-auto rounded-xl border border-white/12 bg-[#090a0c] p-1 shadow-2xl">
+                      {filteredLeadOptions.length === 0 ? (
+                        <p className="px-3 py-3 text-sm text-white/46">No matching leads.</p>
+                      ) : (
+                        filteredLeadOptions.map((lead) => (
+                          <button
+                            key={lead.id}
+                            type="button"
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              selectComposeLead(lead);
+                            }}
+                            className="block w-full rounded-lg px-3 py-2 text-left transition hover:bg-white/[0.06]"
+                          >
+                            <span className="block truncate text-sm font-medium text-white/86">{lead.label}</span>
+                            <span className="mt-0.5 block truncate text-xs text-white/42">{lead.email || "No email on record"}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  ) : null}
+                </div>
               </div>
             ) : null}
 
@@ -1144,14 +1242,16 @@ export function SalesInboxRoute({
                 <p className="mt-2 text-[0.7rem] text-white/40">Up to 3 MB total · send larger files via Drive/Dropbox link.</p>
               )}
             </div>
+            </div>
 
-            <div className="mt-4 flex items-center justify-end gap-2">
+            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-white/8 bg-[#0d0e10] px-5 py-4">
               <button
                 type="button"
                 onClick={() => {
                   setComposerOpen(false);
                   setComposeAttachments([]);
                   setComposeOutreachActive(false);
+                  setLeadSearchOpen(false);
                 }}
                 className="rounded-xl border border-white/12 px-3 py-2 text-sm text-white/74 hover:bg-white/[0.04]"
                 disabled={sending}
