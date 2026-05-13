@@ -38,7 +38,7 @@ export function AdminHeader({
 }) {
   return (
     <div className="flex flex-col gap-4 border-b border-white/8 pb-5 lg:flex-row lg:items-end lg:justify-between">
-      <div>
+      <div className="min-w-0 flex-1">
         <p className="line-label">{eyebrow}</p>
         <h1
           className="mt-3 max-w-3xl text-[clamp(1.6rem,2.4vw,2.4rem)] font-medium leading-[1.1] tracking-[-0.03em] text-white"
@@ -48,7 +48,7 @@ export function AdminHeader({
         </h1>
         <p className="mt-3 max-w-3xl text-base leading-7 text-white/62">{description}</p>
       </div>
-      {actions ? <div className="shrink-0">{actions}</div> : null}
+      {actions ? <div className="min-w-0 max-w-full">{actions}</div> : null}
     </div>
   );
 }

@@ -11,6 +11,8 @@ type StoreReadResult<T> = {
   snapshot: T | null;
 };
 
+const SUPABASE_PAGE_SIZE = 1000;
+
 function isMissingRelationError(error: { code?: string; message?: string } | null) {
   const message = error?.message?.toLowerCase() ?? "";
   return error?.code === "42P01" || message.includes("does not exist");
@@ -87,6 +89,37 @@ function payloadFromRows<T>(rows: Array<{ payload: unknown }>) {
   return rows.map((row) => row.payload) as T[];
 }
 
+async function readPayloadRows(
+  table: "oneos_admin_leads" | "oneos_sales_leads",
+): Promise<{
+  data: Array<{ payload: unknown }> | null;
+  error: { code?: string; message?: string } | null;
+}> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) {
+    return { data: null, error: null };
+  }
+
+  const rows: Array<{ payload: unknown }> = [];
+  for (let from = 0; ; from += SUPABASE_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from(table)
+      .select("payload, updated_at")
+      .order("updated_at", { ascending: false })
+      .range(from, from + SUPABASE_PAGE_SIZE - 1);
+
+    if (error) {
+      return { data: null, error };
+    }
+
+    const page = (data ?? []) as Array<{ payload: unknown }>;
+    rows.push(...page);
+    if (page.length < SUPABASE_PAGE_SIZE) {
+      return { data: rows, error: null };
+    }
+  }
+}
+
 export async function readAdminStateFromDatabase(): Promise<StoreReadResult<AdminStateSnapshot>> {
   const supabase = getSupabaseAdminClient();
   if (!supabase) {
@@ -99,14 +132,8 @@ export async function readAdminStateFromDatabase(): Promise<StoreReadResult<Admi
       .select("active_lead_id, partner_orgs")
       .eq("id", "singleton")
       .maybeSingle(),
-    supabase
-      .from("oneos_admin_leads")
-      .select("payload, updated_at")
-      .order("updated_at", { ascending: false }),
-    supabase
-      .from("oneos_sales_leads")
-      .select("payload, updated_at")
-      .order("updated_at", { ascending: false }),
+    readPayloadRows("oneos_admin_leads"),
+    readPayloadRows("oneos_sales_leads"),
   ]);
 
   if (

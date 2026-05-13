@@ -63,9 +63,20 @@ test("server stores prefer Supabase Postgres before storage fallback", () => {
   assert.match(adminState, /value === undefined[\s\S]*return \[\]/);
   assert.match(dbStore, /oneos_admin_leads/);
   assert.match(dbStore, /oneos_workspace_states/);
+  assert.match(dbStore, /SUPABASE_PAGE_SIZE = 1000/);
+  assert.match(dbStore, /\.range\(from, from \+ SUPABASE_PAGE_SIZE - 1\)/);
   assert.match(agentConfig, /oneos_agent_config/);
   assert.match(agentConfig, /readJsonObject/);
   assert.match(agentConfig, /writeJsonObject/);
+});
+
+test("admin lead KPI counts only real EOI-stage deals", () => {
+  const adminKpis = read("lib/admin-kpis.ts");
+
+  assert.match(adminKpis, /EOI_DEAL_STAGES/);
+  assert.match(adminKpis, /"EOI Signed"/);
+  assert.doesNotMatch(adminKpis, /stage !== "Onboarding Complete"/);
+  assert.doesNotMatch(adminKpis, /stage !== "Disqualified"/);
 });
 
 test("agent guardrails are backed by a durable table and visible save actions", () => {

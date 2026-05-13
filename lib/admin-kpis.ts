@@ -1,6 +1,14 @@
-import type { AdminLead } from "@/lib/admin-types";
+import type { AdminLead, AdminLeadStage } from "@/lib/admin-types";
 
 export const DEAL_VALUE_ZAR = 10_000;
+
+const EOI_DEAL_STAGES = new Set<AdminLeadStage>([
+  "EOI Signed",
+  "Utility Bills Uploaded",
+  "Compliance Pack Uploaded",
+  "Term Sheet Uploaded",
+  "Onboarding Complete",
+]);
 
 function leadDealValue() {
   return DEAL_VALUE_ZAR;
@@ -11,7 +19,7 @@ function isClosedDeal(lead: AdminLead) {
 }
 
 export function isEoiDeal(lead: AdminLead) {
-  return lead.stage !== "Onboarding Complete" && lead.stage !== "Disqualified";
+  return Boolean(lead.eoiSignedAt) || EOI_DEAL_STAGES.has(lead.stage);
 }
 
 export function sumDealValue(leads: AdminLead[]) {

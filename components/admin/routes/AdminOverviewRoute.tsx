@@ -24,6 +24,10 @@ function toCurrency(value: number) {
   }).format(value);
 }
 
+function formatCount(value: number) {
+  return new Intl.NumberFormat("en-ZA").format(value);
+}
+
 function scoreTone(score: number) {
   if (score >= 80) return "High";
   if (score >= 60) return "Medium";
@@ -82,16 +86,16 @@ export function AdminOverviewRoute({
   const recentSignupLeads = leads.filter(isSignupShellLead).slice(0, 5);
 
   const selectedStats = [
-    ["EOIs", String(eoiSignedLeads.length)],
+    ["Signed EOIs", formatCount(eoiSignedLeads.length)],
     ["EOI Value", toCurrency(sumDealValue(eoiSignedLeads))],
-    ["Closed", String(closedLeads.length)],
+    ["Closed", formatCount(closedLeads.length)],
     ["Closed Value", toCurrency(sumDealValue(closedLeads))],
-    ["Sales Leads", String(newSalesLeads.length)],
-    ["SLA Risk", String(activeRisks.length)],
+    ["New Sales Leads", formatCount(newSalesLeads.length)],
+    ["SLA Risk", formatCount(activeRisks.length)],
   ] satisfies Array<[string, string]>;
   const salesAgentStats = salesLeadQualificationStages.map((stage) => [
     stage,
-    String(salesLeadsInPeriod.filter((lead) => lead.qualificationStage === stage).length),
+    formatCount(salesLeadsInPeriod.filter((lead) => lead.qualificationStage === stage).length),
   ]) satisfies Array<[string, string]>;
 
   return (
@@ -99,15 +103,15 @@ export function AdminOverviewRoute({
       <section className="app-surface rounded-[2.2rem] px-5 py-5 lg:px-7 lg:py-6">
         <AdminHeader
           eyebrow="Admin CRM"
-          title="Sales command centre for 1OS Migrate leads."
-          description="Track pipeline health, revenue potential, and follow-through quality without touching the client migration workspace."
+          title="Admin lead command centre."
+          description="Track imported leads, outreach status, registrations, and real EOI movement from one operational dashboard."
           actions={
-            <div className="flex flex-wrap gap-2">
-              <AdminBadge label={`${leads.length} Total Leads`} tone="bright" />
-              <AdminBadge label={`${eoiLeads.length} EOI Deals`} />
-              <AdminBadge label={`${registrationDrafts.length} Registrations In Progress`} tone="muted" />
-              <AdminBadge label={`${agents.length} Team Members`} tone="muted" />
-              <AdminBadge label={`${toCurrency(DEAL_VALUE_ZAR)} / Deal`} tone="muted" />
+            <div className="grid w-full min-w-0 grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5 lg:w-[min(46rem,54vw)]">
+              <OverviewMetric label="Total Leads" value={formatCount(leads.length)} tone="bright" />
+              <OverviewMetric label="EOI Deals" value={formatCount(eoiLeads.length)} />
+              <OverviewMetric label="Registrations" value={formatCount(registrationDrafts.length)} />
+              <OverviewMetric label="Team" value={formatCount(agents.length)} />
+              <OverviewMetric label="Deal Value" value={toCurrency(DEAL_VALUE_ZAR)} />
             </div>
           }
         />
@@ -152,25 +156,25 @@ export function AdminOverviewRoute({
           <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3">
             <dt className="text-xs text-white/52">Selected leads</dt>
             <dd className="mt-2 text-2xl font-medium tracking-[-0.04em] text-white">
-              {industryLeads.length}
+              {formatCount(industryLeads.length)}
             </dd>
           </div>
           <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3">
             <dt className="text-xs text-white/52">Not contacted</dt>
             <dd className="mt-2 text-2xl font-medium tracking-[-0.04em] text-white">
-              {industryLeads.filter((lead) => lead.contactStatus === "Not Contacted").length}
+              {formatCount(industryLeads.filter((lead) => lead.contactStatus === "Not Contacted").length)}
             </dd>
           </div>
           <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3">
             <dt className="text-xs text-white/52">Interested</dt>
             <dd className="mt-2 text-2xl font-medium tracking-[-0.04em] text-white">
-              {industryLeads.filter((lead) => lead.contactStatus === "Interested").length}
+              {formatCount(industryLeads.filter((lead) => lead.contactStatus === "Interested").length)}
             </dd>
           </div>
           <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3">
             <dt className="text-xs text-white/52">Priority</dt>
             <dd className="mt-2 text-2xl font-medium tracking-[-0.04em] text-white">
-              {industryLeads.filter((lead) => lead.priority !== "Standard").length}
+              {formatCount(industryLeads.filter((lead) => lead.priority !== "Standard").length)}
             </dd>
           </div>
         </dl>
@@ -303,30 +307,64 @@ export function AdminOverviewRoute({
             <AdminBadge label="Readiness" tone="muted" />
           </div>
           <div className="mt-4 flex flex-col gap-3">
-            {[...eoiLeads]
-              .sort((a, b) => b.readinessScore - a.readinessScore)
-              .slice(0, 5)
-              .map((lead) => (
-                <div
-                  key={lead.id}
-                  className="rounded-[1rem] border border-white/10 bg-black/40 px-4 py-4"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium text-white">{lead.company}</p>
-                      <p className="mt-1 text-xs text-white/42">
-                        {lead.stage} • {lead.priority}
-                      </p>
+            {eoiLeads.length === 0 ? (
+              <div className="rounded-[1rem] border border-white/10 bg-black/40 px-4 py-4 text-sm text-white/54">
+                No signed EOI deals yet.
+              </div>
+            ) : (
+              [...eoiLeads]
+                .sort((a, b) => b.readinessScore - a.readinessScore)
+                .slice(0, 5)
+                .map((lead) => (
+                  <div
+                    key={lead.id}
+                    className="rounded-[1rem] border border-white/10 bg-black/40 px-4 py-4"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-white">{lead.company}</p>
+                        <p className="mt-1 text-xs text-white/42">
+                          {lead.stage} • {lead.priority}
+                        </p>
+                      </div>
+                      <span className="rounded-full border border-white/12 px-2.5 py-1 text-xs uppercase tracking-[0.2em] text-white/62">
+                        {scoreTone(lead.readinessScore)} {lead.readinessScore}
+                      </span>
                     </div>
-                    <span className="rounded-full border border-white/12 px-2.5 py-1 text-xs uppercase tracking-[0.2em] text-white/62">
-                      {scoreTone(lead.readinessScore)} {lead.readinessScore}
-                    </span>
                   </div>
-                </div>
-              ))}
+                ))
+            )}
           </div>
         </div>
       </section>
+    </div>
+  );
+}
+
+function OverviewMetric({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  tone?: "neutral" | "bright";
+}) {
+  const labelClassName =
+    tone === "bright"
+      ? "text-[0.64rem] font-medium uppercase tracking-[0.16em] text-black/55"
+      : "text-[0.64rem] font-medium uppercase tracking-[0.16em] text-white/46";
+
+  return (
+    <div
+      className={
+        tone === "bright"
+          ? "rounded-xl border border-white/18 bg-white px-3 py-2 text-black"
+          : "rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-white"
+      }
+    >
+      <p className={labelClassName}>{label}</p>
+      <p className="mt-1 truncate text-lg font-medium tracking-[-0.03em]">{value}</p>
     </div>
   );
 }
