@@ -147,26 +147,29 @@ function firstName(value: string | null | undefined): string {
 
 function buildOutreachBody(lead: ComposeLeadDetails | null): string {
   const name = firstName(lead?.contactName) || "[Name]";
-  const company = lead?.company?.trim() || "[Company Name]";
+  const company = lead?.company?.trim();
+  const companyLowerPlaceholder = company || "[company name]";
+  const companyTitlePlaceholder = company || "[Company Name]";
 
   return [
     `Good day ${name},`,
     "",
     "I hope you are well.",
     "",
-    "My name is Karman from Foundation-1, an energy-as-a-service company based in Johannesburg.",
+    "My name is Karman Kekana, the founder of Foundation-1, an energy-as-a-service company based in Johannesburg.",
     "",
-    "I am reaching out because we help South African businesses reduce electricity costs through zero-capex energy solutions, fully financed by Nedbank.",
+    "I am reaching out because I would like to have a discussion to reduce your electricity costs through zero-capex energy solutions, fully financed by our financing partner, Nedbank.",
     "",
-    `For qualifying businesses, our Generocity solar solution can help ${company} save up to 35% on monthly electricity spend. This means there is no upfront payment for the solar panels, installation, maintenance, or insurance. There are also no separate monthly payments for the system. You only pay your new electricity tariff, which is structured to be lower than your current electricity cost.`,
+    `For ${companyLowerPlaceholder}, our Generocity solar solution can help save up to 45% on monthly electricity spend. This means there is no upfront payment for the solar panels, installation, maintenance, or insurance.. these are 100% taken care of. There are also no separate monthly payments for the system. You only pay your new electricity tariff, which is structured to be lower than your current electricity cost.. this also means no more load shedding.`,
     "",
-    `The solar infrastructure remains owned by the development financier, Nedbank. In return, ${company} gets access to the system, full maintenance support, insurance cover, and reduced exposure to load shedding without carrying the capital cost of buying the system.`,
+    `The solar infrastructure remains owned by our development financier (Nedbank). In return, ${companyTitlePlaceholder} gets access to the system, full maintenance support, insurance cover, and reduced exposure to load shedding without carrying the capital cost of buying the system.`,
     "",
-    "For larger electricity users, Foundation-1 also offers Lumen, backed by a 56 megawatt solar farm in the Free State. Through Lumen, qualifying businesses can enter into a power purchase agreement and save up to 50% on monthly electricity spend.",
+    "Foundation-1 also offers Lumen, backed by a 56 megawatt solar farm in the Free State. We would bring electricity to your business premises through a process called wheeling, should your electricity spend be much higher, you also pay nothing upfront, pay nothing during the course except for your new and improved monthly tarrif.",
     "",
-    "To get a savings proposal, we would only need recent 6 month utility bill and a signed Expression of Interest. I have also attached a brochure for your attention below.",
     "",
-    "Would you be open to a brief discussion?",
+    "I hope our energy-as-a-service model excites you and would like to ask if this might be of interest to for further discussion?",
+    "",
+    "Thanks, and I will be hoping to hear from you,",
     "",
     "Regards,",
     "Karman Kekana",
