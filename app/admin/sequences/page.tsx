@@ -1,7 +1,11 @@
 import { SalesLeadsRoute } from "@/components/sales/routes/SalesLeadsRoute";
 import { readAdminStateSnapshot } from "@/lib/admin-state-store";
+import { requireServerAuthSession } from "@/lib/auth-server";
+
+export const dynamic = "force-dynamic";
 
 export default async function AdminSequencesPage() {
+  await requireServerAuthSession("admin");
   const { snapshot } = await readAdminStateSnapshot();
   const partnerOrgs = (snapshot.partnerOrgs ?? [])
     .filter((org) => org.status === "Active")
