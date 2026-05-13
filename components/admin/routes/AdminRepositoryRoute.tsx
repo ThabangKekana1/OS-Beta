@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
-import { Download, Upload, X } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Clock3, Download, Mail, MessageCircle, Upload, X } from "lucide-react";
 import { AdminBadge, AdminHeader } from "@/components/admin/AdminPrimitives";
 import { useAdminPortal } from "@/components/admin/AdminPortalProvider";
 import { downloadCsvFile, sanitizeFileSegment } from "@/lib/download-utils";
@@ -9,6 +10,75 @@ import type { AdminLead, AdminLeadContactStatus, AdminLeadOrigin, AdminLeadPartn
 import { adminLeadOriginLabels, adminLeadOrigins, adminLeadPartners } from "@/lib/admin-types";
 
 const ALL = "all" as const;
+
+type LeadEngagement = {
+  leadId: string;
+  latestThreadId: string;
+  lastMessageAt: string;
+  lastDirection: "inbound" | "outbound" | null;
+  unreadCount: number;
+  state: "awaiting_reply" | "responded";
+};
+
+function firstNameForLead(lead: AdminLead) {
+  return lead.contactFirstName?.trim() || lead.contactName.trim().split(/\s+/)[0] || lead.contactName;
+}
+
+function emailSubject(lead: AdminLead) {
+  return `Foundation-1 - ${lead.company}`;
+}
+
+function initialEmailBody(lead: AdminLead) {
+  return [
+    `Hi ${firstNameForLead(lead)},`,
+    "",
+    "I wanted to introduce Foundation-1 and understand whether your business is exploring ways to reduce electricity costs and improve energy reliability.",
+    "",
+    "If this is relevant, I can send through the short qualification steps and confirm whether your profile fits the programme.",
+    "",
+    "Kind regards,",
+  ].join("\n");
+}
+
+function followUpEmailBody(lead: AdminLead) {
+  return [
+    `Hi ${firstNameForLead(lead)},`,
+    "",
+    "Following up on my previous email. Is reducing electricity spend or improving power reliability something your team is currently looking at?",
+    "",
+    "A short reply is enough and I can route you to the right next step.",
+    "",
+    "Kind regards,",
+  ].join("\n");
+}
+
+function formatEngagementTime(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "Unknown";
+  return new Intl.DateTimeFormat("en-ZA", {
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(parsed);
+}
+
+function buildInboxHref(lead: AdminLead, engagement: LeadEngagement | null) {
+  const params = new URLSearchParams();
+  if (engagement?.state === "responded" && engagement.latestThreadId) {
+    params.set("thread", engagement.latestThreadId);
+    return `/admin/inbox?${params.toString()}`;
+  }
+
+  params.set("lead", lead.id);
+  params.set("to", lead.userProfile.email);
+  params.set("subject", emailSubject(lead));
+  params.set(
+    "body",
+    engagement?.state === "awaiting_reply" ? followUpEmailBody(lead) : initialEmailBody(lead),
+  );
+  return `/admin/inbox?${params.toString()}`;
+}
 
 export function AdminRepositoryRoute() {
   const {
@@ -45,6 +115,7 @@ export function AdminRepositoryRoute() {
   const [search, setSearch] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [page, setPage] = useState(1);
+  const [engagementByLeadId, setEngagementByLeadId] = useState<Record<string, LeadEngagement>>({});
   const PAGE_SIZE = 30;
 
   const visibleContacts = useMemo(() => {
@@ -96,6 +167,42 @@ export function AdminRepositoryRoute() {
       ),
     [visibleContacts, currentPage],
   );
+  const pagedLeadIdsKey = useMemo(
+    () => pagedContacts.map((lead) => lead.id).join(","),
+    [pagedContacts],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function refreshEngagement() {
+      if (!pagedLeadIdsKey) {
+        setEngagementByLeadId({});
+        return;
+      }
+
+      try {
+        const url = new URL("/api/email/lead-engagement", window.location.origin);
+        url.searchParams.set("leadIds", pagedLeadIdsKey);
+        const res = await fetch(url.toString(), { cache: "no-store" });
+        const json = (await res.json()) as {
+          engagement?: Record<string, LeadEngagement>;
+        };
+        if (!cancelled && res.ok) {
+          setEngagementByLeadId(json.engagement ?? {});
+        }
+      } catch {
+        if (!cancelled) setEngagementByLeadId({});
+      }
+    }
+
+    void refreshEngagement();
+    const interval = window.setInterval(() => void refreshEngagement(), 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [pagedLeadIdsKey]);
 
   const totals = useMemo(() => {
     const counts: Record<string, number> = { total: leads.length };
@@ -336,14 +443,16 @@ export function AdminRepositoryRoute() {
                 <th className="px-3 py-3 text-left font-medium">Assigned to</th>
                 <th className="px-3 py-3 text-left font-medium">Partner</th>
                 <th className="px-3 py-3 text-left font-medium">Contact status</th>
+                <th className="px-3 py-3 text-left font-medium">Email status</th>
                 <th className="px-3 py-3 text-left font-medium">Stage</th>
                 <th className="px-3 py-3 text-left font-medium">Last touched</th>
+                <th className="px-3 py-3 text-left font-medium">Action</th>
               </tr>
             </thead>
             <tbody>
               {visibleContacts.length === 0 ? (
                 <tr className="border-t border-white/8">
-                  <td colSpan={12} className="px-3 py-8 text-center text-sm text-white/46">
+                  <td colSpan={14} className="px-3 py-8 text-center text-sm text-white/46">
                     No contacts match the current filters.
                   </td>
                 </tr>
@@ -442,8 +551,57 @@ export function AdminRepositoryRoute() {
                         ))}
                       </select>
                     </td>
+                    <td className="px-3 py-3">
+                      {(() => {
+                        const engagement = engagementByLeadId[lead.id] ?? null;
+                        if (engagement?.state === "responded") {
+                          return (
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300/35 bg-emerald-500/10 px-2.5 py-1 text-[0.62rem] uppercase tracking-[0.16em] text-emerald-100">
+                              <MessageCircle className="size-3" />
+                              Responded
+                            </span>
+                          );
+                        }
+                        if (engagement?.state === "awaiting_reply") {
+                          return (
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/35 bg-amber-500/10 px-2.5 py-1 text-[0.62rem] uppercase tracking-[0.16em] text-amber-100">
+                              <Clock3 className="size-3" />
+                              Awaiting reply
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/14 bg-white/[0.04] px-2.5 py-1 text-[0.62rem] uppercase tracking-[0.16em] text-white/68">
+                            <Mail className="size-3" />
+                            Not emailed
+                          </span>
+                        );
+                      })()}
+                      {engagementByLeadId[lead.id]?.lastMessageAt ? (
+                        <div className="mt-1 text-[0.68rem] text-white/40">
+                          {formatEngagementTime(engagementByLeadId[lead.id].lastMessageAt)}
+                        </div>
+                      ) : null}
+                    </td>
                     <td className="px-3 py-3 text-white/62">{lead.stage}</td>
                     <td className="px-3 py-3 text-white/52">{lead.lastTouched}</td>
+                    <td className="px-3 py-3">
+                      {lead.userProfile.email ? (
+                        <Link
+                          href={buildInboxHref(lead, engagementByLeadId[lead.id] ?? null)}
+                          className="inline-flex items-center gap-1.5 rounded-[0.65rem] border border-white/12 px-2.5 py-1 text-[0.64rem] uppercase tracking-[0.14em] text-white/72 transition hover:border-white/26 hover:text-white"
+                        >
+                          <Mail className="size-3" />
+                          {engagementByLeadId[lead.id]?.state === "responded"
+                            ? "Open reply"
+                            : engagementByLeadId[lead.id]?.state === "awaiting_reply"
+                              ? "Follow up"
+                              : "Email"}
+                        </Link>
+                      ) : (
+                        <span className="text-xs text-white/35">No email</span>
+                      )}
+                    </td>
                   </tr>
                 ))
               )}

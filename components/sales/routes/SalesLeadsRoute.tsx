@@ -43,6 +43,8 @@ const sequenceFilters: Array<{ value: SequenceState | "all"; label: string }> = 
   { value: "unqualified", label: "Unqualified" },
 ];
 
+const ALL_INDUSTRIES = "all" as const;
+
 function formatDateTime(value: string) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
@@ -246,9 +248,14 @@ export function SalesLeadsRoute({
     email: "",
   });
   const [sequenceFilter, setSequenceFilter] = useState<SequenceState | "all">("all");
+  const [industryFilter, setIndustryFilter] = useState<string>(ALL_INDUSTRIES);
   const [engagementByLeadId, setEngagementByLeadId] = useState<Record<string, LeadEngagement>>({});
   const [partnerAssignments, setPartnerAssignments] = useState<Record<string, string | null>>({});
   const [pendingPartnerAssignmentId, setPendingPartnerAssignmentId] = useState<string | null>(null);
+  const adminLeadById = useMemo(
+    () => new Map(leads.map((lead) => [lead.id, lead])),
+    [leads],
+  );
 
   const linkedLeadIds = useMemo(
     () =>
@@ -302,6 +309,22 @@ export function SalesLeadsRoute({
       ),
     [agentId, salesLeads],
   );
+  const salesLeadIndustryById = useMemo(() => {
+    const industries: Record<string, string> = {};
+    for (const lead of baseSalesLeads) {
+      industries[lead.id] = lead.linkedAdminLeadId
+        ? adminLeadById.get(lead.linkedAdminLeadId)?.industry?.trim() ?? ""
+        : "";
+    }
+    return industries;
+  }, [adminLeadById, baseSalesLeads]);
+  const industryOptions = useMemo(() => {
+    const set = new Set<string>();
+    Object.values(salesLeadIndustryById).forEach((industry) => {
+      if (industry) set.add(industry);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [salesLeadIndustryById]);
   const sequenceStateBySalesLeadId = useMemo(() => {
     const states: Record<string, SequenceState> = {};
     for (const lead of baseSalesLeads) {
@@ -332,12 +355,22 @@ export function SalesLeadsRoute({
   }, [baseSalesLeads, sequenceStateBySalesLeadId]);
   const visibleSalesLeads = useMemo(
     () =>
-      baseSalesLeads.filter((lead) =>
-        sequenceFilter === "all"
-          ? true
-          : sequenceStateBySalesLeadId[lead.id] === sequenceFilter,
-      ),
-    [baseSalesLeads, sequenceFilter, sequenceStateBySalesLeadId],
+      baseSalesLeads.filter((lead) => {
+        if (
+          sequenceFilter !== "all" &&
+          sequenceStateBySalesLeadId[lead.id] !== sequenceFilter
+        ) {
+          return false;
+        }
+        if (
+          industryFilter !== ALL_INDUSTRIES &&
+          salesLeadIndustryById[lead.id] !== industryFilter
+        ) {
+          return false;
+        }
+        return true;
+      }),
+    [baseSalesLeads, industryFilter, salesLeadIndustryById, sequenceFilter, sequenceStateBySalesLeadId],
   );
   const selectedOwnerId = agentId ?? agents[0]?.id ?? "";
 
@@ -551,22 +584,41 @@ export function SalesLeadsRoute({
               Add a prospect, send the first sequence email from Inbox, then track replies here.
             </p>
           </div>
-          <label className="flex min-w-[12rem] flex-col gap-2">
-            <span className="text-[0.64rem] font-medium uppercase tracking-[0.2em] text-white/46">
-              Sequence view
-            </span>
-            <select
-              value={sequenceFilter}
-              onChange={(event) => setSequenceFilter(event.target.value as SequenceState | "all")}
-              className="admin-input admin-select h-10 rounded-xl px-3 text-sm font-medium text-white"
-            >
-              {sequenceFilters.map((filter) => (
-                <option key={filter.value} value={filter.value}>
-                  {filter.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="flex flex-wrap gap-2">
+            <label className="flex min-w-[12rem] flex-col gap-2">
+              <span className="text-[0.64rem] font-medium uppercase tracking-[0.2em] text-white/46">
+                Industry
+              </span>
+              <select
+                value={industryFilter}
+                onChange={(event) => setIndustryFilter(event.target.value)}
+                className="admin-input admin-select h-10 rounded-xl px-3 text-sm font-medium text-white"
+              >
+                <option value={ALL_INDUSTRIES}>All industries</option>
+                {industryOptions.map((industry) => (
+                  <option key={industry} value={industry}>
+                    {industry}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex min-w-[12rem] flex-col gap-2">
+              <span className="text-[0.64rem] font-medium uppercase tracking-[0.2em] text-white/46">
+                Sequence view
+              </span>
+              <select
+                value={sequenceFilter}
+                onChange={(event) => setSequenceFilter(event.target.value as SequenceState | "all")}
+                className="admin-input admin-select h-10 rounded-xl px-3 text-sm font-medium text-white"
+              >
+                {sequenceFilters.map((filter) => (
+                  <option key={filter.value} value={filter.value}>
+                    {filter.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
         {formError ? <p className="mt-2 text-sm text-white/56">{formError}</p> : null}
         <div className="mt-3 grid gap-2 md:grid-cols-4">
@@ -614,6 +666,7 @@ export function SalesLeadsRoute({
             <tr className="bg-white/[0.03] text-xs uppercase tracking-[0.2em] text-white/52">
               <th className="px-3 py-3 text-left font-medium">Name</th>
               <th className="px-3 py-3 text-left font-medium">Company</th>
+              <th className="px-3 py-3 text-left font-medium">Industry</th>
               <th className="px-3 py-3 text-left font-medium">Email</th>
               {showAssignedTo ? (
                 <th className="px-3 py-3 text-left font-medium">Assigned to</th>
@@ -633,6 +686,9 @@ export function SalesLeadsRoute({
               <tr key={lead.id} className="border-t border-white/8 align-top hover:bg-white/[0.04]">
                 <td className="px-3 py-3">{lead.contactName}</td>
                 <td className="px-3 py-3">{lead.company}</td>
+                <td className="px-3 py-3 text-white/62">
+                  {salesLeadIndustryById[lead.id] || "—"}
+                </td>
                 <td className="px-3 py-3 text-white/62">{lead.email}</td>
                 {showAssignedTo ? (
                   <td className="px-3 py-3">
@@ -846,7 +902,7 @@ export function SalesLeadsRoute({
           <p className="border-t border-white/8 px-4 py-6 text-sm text-white/58">
             {baseSalesLeads.length === 0
               ? "No leads are assigned to this profile yet."
-              : "No leads match the current sequence filter."}
+              : "No leads match the current filters."}
           </p>
         ) : null}
       </div>

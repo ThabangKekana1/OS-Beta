@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { AdminBadge, AdminHeader } from "@/components/admin/AdminPrimitives";
 import { useAdminPortal } from "@/components/admin/AdminPortalProvider";
 import { RegistrationLinkCard } from "@/components/registration/RegistrationLinkCard";
@@ -39,6 +39,8 @@ function countLeadsWithDocumentInPeriod(
   ).length;
 }
 
+const ALL_INDUSTRIES = "all" as const;
+
 export function SalesOverviewRoute({
   email,
   agentId,
@@ -46,9 +48,17 @@ export function SalesOverviewRoute({
   email: string;
   agentId: string | null;
 }) {
-  const { leads } = useAdminPortal();
+  const { leads, salesLeads } = useAdminPortal();
   const registrationPath = registrationLinkPath(
     registrationLinkIdForProfile({ email, role: "sales", agentId }),
+  );
+  const leadById = useMemo(
+    () => new Map(leads.map((lead) => [lead.id, lead])),
+    [leads],
+  );
+  const visibleSalesLeads = useMemo(
+    () => (agentId ? salesLeads.filter((lead) => lead.ownerId === agentId) : salesLeads),
+    [agentId, salesLeads],
   );
   const visibleClients = agentId
     ? leads.filter((lead) => lead.ownerId === agentId)
@@ -60,8 +70,28 @@ export function SalesOverviewRoute({
   const completedClients = visibleClients.filter((lead) => lead.stage === "Onboarding Complete");
   const periods = getStatisticsPeriods();
   const [selectedPeriodId, setSelectedPeriodId] = useState<StatisticsPeriodId>("24h");
+  const [selectedIndustry, setSelectedIndustry] = useState<string>(ALL_INDUSTRIES);
   const selectedPeriod =
     periods.find((period) => period.id === selectedPeriodId) ?? periods[0];
+  const salesLeadIndustry = (leadId: string | null) =>
+    leadId ? leadById.get(leadId)?.industry?.trim() ?? "" : "";
+  const industries = useMemo(() => {
+    const set = new Set<string>();
+    visibleSalesLeads.forEach((lead) => {
+      const industry = salesLeadIndustry(lead.linkedAdminLeadId);
+      if (industry) set.add(industry);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [leadById, visibleSalesLeads]);
+  const industrySalesLeads = useMemo(
+    () =>
+      selectedIndustry === ALL_INDUSTRIES
+        ? visibleSalesLeads
+        : visibleSalesLeads.filter(
+            (lead) => salesLeadIndustry(lead.linkedAdminLeadId) === selectedIndustry,
+          ),
+    [leadById, selectedIndustry, visibleSalesLeads],
+  );
   const eoiCount = visibleClients.filter((lead) =>
     isWithinStatisticsPeriod(lead.eoiSignedAt, selectedPeriod),
   ).length;
@@ -116,6 +146,7 @@ export function SalesOverviewRoute({
               Client Registration Link
             </Link>
             <AdminBadge label={`${openClients.length} Active Clients`} tone="bright" />
+            <AdminBadge label={`${visibleSalesLeads.length} Sales Leads`} tone="muted" />
           </div>
         }
       />
@@ -125,6 +156,56 @@ export function SalesOverviewRoute({
         role="sales"
         agentId={agentId}
       />
+
+      <section className="rounded-2xl border border-white/12 bg-white/[0.03] p-4">
+        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-white/8 pb-3">
+          <div>
+            <p className="line-label">Lead Book</p>
+            <p className="mt-2 text-sm text-white/56">
+              Sales leads assigned to this profile. Industry is inherited from linked admin lead records.
+            </p>
+          </div>
+          <label className="flex min-w-[14rem] flex-col gap-2">
+            <span className="text-[0.64rem] font-medium uppercase tracking-[0.2em] text-white/46">
+              Industry
+            </span>
+            <select
+              value={selectedIndustry}
+              onChange={(event) => setSelectedIndustry(event.target.value)}
+              className="h-10 rounded-xl border border-white/12 bg-black/45 px-3 text-sm font-medium text-white outline-none transition focus:border-white/32"
+            >
+              <option value={ALL_INDUSTRIES} className="bg-zinc-950 text-white">
+                All industries
+              </option>
+              {industries.map((industry) => (
+                <option key={industry} value={industry} className="bg-zinc-950 text-white">
+                  {industry}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <dl className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3">
+            <dt className="text-xs text-white/52">Total leads</dt>
+            <dd className="mt-2 text-2xl font-medium tracking-[-0.04em] text-white">
+              {visibleSalesLeads.length}
+            </dd>
+          </div>
+          <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3">
+            <dt className="text-xs text-white/52">Selected industry</dt>
+            <dd className="mt-2 text-2xl font-medium tracking-[-0.04em] text-white">
+              {industrySalesLeads.length}
+            </dd>
+          </div>
+          <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3">
+            <dt className="text-xs text-white/52">Qualified</dt>
+            <dd className="mt-2 text-2xl font-medium tracking-[-0.04em] text-white">
+              {industrySalesLeads.filter((lead) => lead.qualificationStage === "Qualifies").length}
+            </dd>
+          </div>
+        </dl>
+      </section>
 
       <section className="rounded-2xl border border-white/12 bg-white/[0.03] p-4">
         <div className="flex flex-wrap items-end justify-between gap-3 border-b border-white/8 pb-3">

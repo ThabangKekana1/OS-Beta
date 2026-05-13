@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useAdminPortal } from "@/components/admin/AdminPortalProvider";
 import { AdminBadge, AdminHeader } from "@/components/admin/AdminPrimitives";
 import { RegistrationLinkCard } from "@/components/registration/RegistrationLinkCard";
@@ -30,6 +30,8 @@ function scoreTone(score: number) {
   return "Low";
 }
 
+const ALL_INDUSTRIES = "all" as const;
+
 export function AdminOverviewRoute({
   email,
   agentId,
@@ -42,8 +44,23 @@ export function AdminOverviewRoute({
   const eoiLeads = leads.filter(isEoiDeal);
   const periods = getStatisticsPeriods();
   const [selectedPeriodId, setSelectedPeriodId] = useState<StatisticsPeriodId>("24h");
+  const [selectedIndustry, setSelectedIndustry] = useState<string>(ALL_INDUSTRIES);
   const selectedPeriod =
     periods.find((period) => period.id === selectedPeriodId) ?? periods[0];
+  const industries = useMemo(() => {
+    const set = new Set<string>();
+    leads.forEach((lead) => {
+      if (lead.industry.trim()) set.add(lead.industry.trim());
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [leads]);
+  const industryLeads = useMemo(
+    () =>
+      selectedIndustry === ALL_INDUSTRIES
+        ? leads
+        : leads.filter((lead) => lead.industry === selectedIndustry),
+    [leads, selectedIndustry],
+  );
   const eoiSignedLeads = leads.filter(
     (lead) => isEoiDeal(lead) && isWithinStatisticsPeriod(lead.eoiSignedAt, selectedPeriod),
   );
@@ -86,6 +103,7 @@ export function AdminOverviewRoute({
           description="Track pipeline health, revenue potential, and follow-through quality without touching the client migration workspace."
           actions={
             <div className="flex flex-wrap gap-2">
+              <AdminBadge label={`${leads.length} Total Leads`} tone="bright" />
               <AdminBadge label={`${eoiLeads.length} EOI Deals`} />
               <AdminBadge label={`${registrationDrafts.length} Registrations In Progress`} tone="muted" />
               <AdminBadge label={`${agents.length} Team Members`} tone="muted" />
@@ -100,6 +118,63 @@ export function AdminOverviewRoute({
         role="admin"
         agentId={agentId}
       />
+
+      <section className="app-surface rounded-[2rem] p-5">
+        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-white/8 pb-4">
+          <div>
+            <p className="line-label">Repository Totals</p>
+            <p className="mt-2 text-sm text-white/56">
+              Lead ownership and outreach start in Repository. Use industry filtering to segment the admin contact book.
+            </p>
+          </div>
+          <label className="flex min-w-[14rem] flex-col gap-2">
+            <span className="text-[0.64rem] font-medium uppercase tracking-[0.2em] text-white/46">
+              Industry
+            </span>
+            <select
+              value={selectedIndustry}
+              onChange={(event) => setSelectedIndustry(event.target.value)}
+              className="h-10 rounded-xl border border-white/12 bg-black/45 px-3 text-sm font-medium text-white outline-none transition focus:border-white/32"
+            >
+              <option value={ALL_INDUSTRIES} className="bg-zinc-950 text-white">
+                All industries
+              </option>
+              {industries.map((industry) => (
+                <option key={industry} value={industry} className="bg-zinc-950 text-white">
+                  {industry}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <dl className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3">
+            <dt className="text-xs text-white/52">Selected leads</dt>
+            <dd className="mt-2 text-2xl font-medium tracking-[-0.04em] text-white">
+              {industryLeads.length}
+            </dd>
+          </div>
+          <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3">
+            <dt className="text-xs text-white/52">Not contacted</dt>
+            <dd className="mt-2 text-2xl font-medium tracking-[-0.04em] text-white">
+              {industryLeads.filter((lead) => lead.contactStatus === "Not Contacted").length}
+            </dd>
+          </div>
+          <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3">
+            <dt className="text-xs text-white/52">Interested</dt>
+            <dd className="mt-2 text-2xl font-medium tracking-[-0.04em] text-white">
+              {industryLeads.filter((lead) => lead.contactStatus === "Interested").length}
+            </dd>
+          </div>
+          <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3">
+            <dt className="text-xs text-white/52">Priority</dt>
+            <dd className="mt-2 text-2xl font-medium tracking-[-0.04em] text-white">
+              {industryLeads.filter((lead) => lead.priority !== "Standard").length}
+            </dd>
+          </div>
+        </dl>
+      </section>
 
       <section className="app-surface rounded-[2rem] p-5">
         <div className="flex flex-wrap items-end justify-between gap-3 border-b border-white/8 pb-4">
