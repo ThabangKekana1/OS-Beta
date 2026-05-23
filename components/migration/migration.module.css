@@ -76,8 +76,20 @@
   color: rgba(255, 255, 255, 0.9);
 }
 
+.landingBrandBar {
+  position: relative;
+  z-index: 2;
+  padding: 22px 0 0;
+}
+
+.landingBrand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
 .hero {
-  height: calc(100vh - 69px);
+  height: calc(100vh - 58px);
   display: flex;
   align-items: center;
   overflow: hidden;
@@ -1117,4 +1129,33 @@
   font-size: 0.82rem;
   color: rgba(140, 160, 255, 0.9);
   font-family: "SF Mono", "Fira Code", monospace;
+}
+
+/* ─── Nav active link + logout button ────────────────────────── */
+.navLinkActive {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.navLogout {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.68rem;
+  font-weight: 600;
+  font-family: inherit;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 4px 9px;
+  min-height: 26px;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease;
+}
+
+.navLogout:hover {
+  color: rgba(255, 255, 255, 0.78);
+  border-color: rgba(255, 255, 255, 0.32);
 }

@@ -6,6 +6,7 @@ import { Mail, Download, ArrowRight, Copy, Check } from "lucide-react";
 import type { MigrationAssessmentResult } from "@/lib/calculateMigrationAssessment";
 import {
   readStoredMigrationAssessment,
+  unlockMigrationDashboard,
   writeStoredMigrationAssessment,
 } from "@/components/migration/MigrationState";
 import { QualificationBadge } from "@/components/migration/QualificationBadge";
@@ -229,6 +230,10 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
   const [credentials, setCredentials] = useState<{ profileId: string; accessCode: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const router = useRouter();
+  const dashboardPath = credentials ? `/migration/dashboard?p=${credentials.profileId}` : "/migration/dashboard";
+  const dashboardUrl = credentials
+    ? `${typeof window === "undefined" ? "https://1os.foundation-1.co.za" : window.location.origin}${dashboardPath}`
+    : "https://1os.foundation-1.co.za/migration/dashboard";
   const bestIllustrativeSaving = Math.max(
     ...ufmsSolar.scenarios.map((scenario) => scenario.tenYearSavingAgainstEskom),
     wheeling.conservative.tenYearSavingAgainstEskom,
@@ -454,8 +459,9 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
                   : null;
                 if (!creds) {
                   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-                  const profileId = Array.from(crypto.getRandomValues(new Uint8Array(6)))
+                  const profileIdSuffix = Array.from(crypto.getRandomValues(new Uint8Array(8)))
                     .map((b) => chars[b % chars.length]).join("");
+                  const profileId = `F1-${profileIdSuffix}`;
                   const accessCode = String(1000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 9000));
                   creds = { profileId, accessCode };
                   writeStoredMigrationAssessment({ ...stored, profileId, accessCode });
@@ -517,14 +523,17 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
             <div className={styles.credentialDashboardUrl}>
               <span className={styles.credentialLabel}>Dashboard URL</span>
               <span className={styles.credentialUrlText}>
-                1os.foundation-1.co.za/migration/dashboard
+                {dashboardUrl}
               </span>
             </div>
             <div className={styles.buttonRow} style={{ marginTop: 20 }}>
               <button
                 className={styles.primaryButton}
                 type="button"
-                onClick={() => router.push("/migration/dashboard")}
+                onClick={() => {
+                  unlockMigrationDashboard(credentials.profileId);
+                  router.push(dashboardPath);
+                }}
               >
                 <ArrowRight size={14} strokeWidth={2.5} />
                 I&apos;ve saved my details — Continue
@@ -533,7 +542,7 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
                 className={styles.ghostButton}
                 type="button"
                 onClick={() => {
-                  const text = `Profile ID: ${credentials.profileId}\nAccess code: ${credentials.accessCode}\nDashboard: 1os.foundation-1.co.za/migration/dashboard`;
+                  const text = `Profile ID: ${credentials.profileId}\nAccess code: ${credentials.accessCode}\nDashboard: ${dashboardUrl}`;
                   void navigator.clipboard.writeText(text).then(() => {
                     setCopied(true);
                     setTimeout(() => setCopied(false), 2000);

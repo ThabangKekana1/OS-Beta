@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { calculateMigrationAssessment } from "@/lib/calculateMigrationAssessment";
 import {
+  unlockMigrationDashboard,
   useStoredMigrationAssessment,
+  writeStoredMigrationAssessment,
 } from "@/components/migration/MigrationState";
 import { MigrationProgressTracker } from "@/components/migration/MigrationProgressTracker";
 import { NextActionPanel } from "@/components/migration/NextActionPanel";
@@ -34,27 +36,164 @@ function formatStatus(status: string) {
   return STATUS_LABELS[status] ?? status.replaceAll("_", " ").replace(/^\w/, (c) => c.toUpperCase());
 }
 
+function cleanProfileId(value: string) {
+  return value.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 24);
+}
+
+function profileIdFromUrl() {
+  if (typeof window === "undefined") return "";
+  return cleanProfileId(new URLSearchParams(window.location.search).get("p") ?? "");
+}
+
+function hasCompleteDashboardResult(value: unknown) {
+  if (!value || typeof value !== "object") return false;
+  const result = value as {
+    currentUtilityProjection?: unknown;
+    ufmsSolar?: { scenarios?: unknown[] };
+    wheeling?: { photovoltaicOnlyReference?: unknown };
+  };
+  return Boolean(
+    result.currentUtilityProjection &&
+    result.ufmsSolar?.scenarios?.[1] &&
+    result.wheeling?.photovoltaicOnlyReference,
+  );
+}
+
 export function MigrationDashboard() {
   const stored = useStoredMigrationAssessment();
+  const [profileFromUrl, setProfileFromUrl] = useState("");
+  const [unlocked, setUnlocked] = useState<boolean | null>(null);
+  const [profileIdInput, setProfileIdInput] = useState("");
+  const [codeInput, setCodeInput] = useState("");
+  const [codeError, setCodeError] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
+
+  useEffect(() => {
+    setProfileFromUrl(profileIdFromUrl());
+  }, []);
+
+  const activeStored = stored && (!profileFromUrl || stored.profileId === profileFromUrl) ? stored : null;
+
+  useEffect(() => {
+    if (!activeStored?.profileId || !activeStored?.accessCode) {
+      setUnlocked(false);
+      return;
+    }
+    const flag = sessionStorage.getItem("foundation1:migration:unlocked");
+    setUnlocked(flag === activeStored.profileId);
+  }, [activeStored]);
+
+  useEffect(() => {
+    const nextProfileId = profileFromUrl || activeStored?.profileId || "";
+    if (nextProfileId) setProfileIdInput(nextProfileId);
+  }, [activeStored?.profileId, profileFromUrl]);
+
+  async function attemptUnlock() {
+    const profileId = cleanProfileId(profileIdInput || profileFromUrl || activeStored?.profileId || "");
+    const accessCode = codeInput.replace(/\D/g, "");
+
+    if (!profileId) {
+      setCodeError("Enter your Profile ID.");
+      return;
+    }
+    if (!/^\d{4}$/.test(accessCode)) {
+      setCodeError("Enter the 4-digit access code.");
+      return;
+    }
+
+    if (activeStored?.profileId === profileId && activeStored.accessCode === accessCode) {
+      unlockMigrationDashboard(profileId);
+      setUnlocked(true);
+      return;
+    }
+
+    setLoginLoading(true);
+    setCodeError("");
+    try {
+      const response = await fetch("/api/migration/profiles/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profileId, accessCode }),
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        assessment?: Parameters<typeof writeStoredMigrationAssessment>[0];
+      };
+
+      if (!response.ok || !payload.ok || !payload.assessment) {
+        setCodeError(payload.error ?? "Unable to unlock this Migration Profile.");
+        return;
+      }
+
+      writeStoredMigrationAssessment(payload.assessment);
+      unlockMigrationDashboard(profileId);
+      setUnlocked(true);
+    } catch {
+      setCodeError("Unable to reach the Migration Profile store. Please try again.");
+    } finally {
+      setLoginLoading(false);
+    }
+  }
 
   const uploadedTypes = useMemo(() => {
-    return new Set(stored?.documents.map((document) => document.documentType) ?? []);
-  }, [stored]);
+    return new Set(activeStored?.documents.map((document) => document.documentType) ?? []);
+  }, [activeStored]);
   const utilityProfileComplete =
     uploadedTypes.has("expression_of_interest") && uploadedTypes.has("utility_bill");
 
-  if (stored === undefined) return null;
+  if (stored === undefined || unlocked === null) return null;
 
-  if (!stored) {
+  if (!activeStored || !unlocked) {
     return (
       <section className={styles.section}>
         <div className={styles.shell}>
-          <div className={`${styles.panel} ${styles.form}`}>
-            <h1 className={styles.sectionTitle}>No Migration Assessment found.</h1>
-            <p className={styles.sectionCopy}>Start with the instant assessment to generate a report.</p>
-            <div className={styles.buttonRow}>
-              <Link href="/migration/start" className={styles.primaryButton}>
-                Start Migration Assessment
+          <div className={`${styles.panel} ${styles.form}`} style={{ maxWidth: 420 }}>
+            <h1 className={styles.sectionTitle} style={{ fontSize: "1.1rem" }}>Unlock Migration Dashboard</h1>
+            <p className={styles.sectionCopy}>
+              Enter the Profile ID from your unique dashboard link and the 4-digit access code you were issued.
+            </p>
+            <div className={styles.fieldStack} style={{ marginTop: 20 }}>
+              <label className={styles.label}>
+                Profile ID
+                <input
+                  className={styles.input}
+                  type="text"
+                  value={profileIdInput}
+                  placeholder="F1-ABCDEFGH"
+                  onChange={(e) => {
+                    setCodeError("");
+                    setProfileIdInput(cleanProfileId(e.target.value));
+                  }}
+                />
+              </label>
+              <label className={styles.label}>
+                Access Code
+                <input
+                  className={styles.input}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={codeInput}
+                  placeholder="0000"
+                  onChange={(e) => {
+                    setCodeError("");
+                    setCodeInput(e.target.value.replace(/\D/g, ""));
+                  }}
+                  onKeyDown={(e) => { if (e.key === "Enter") void attemptUnlock(); }}
+                />
+              </label>
+              {codeError && <p className={styles.error}>{codeError}</p>}
+              <button
+                className={styles.primaryButton}
+                type="button"
+                disabled={loginLoading}
+                onClick={() => void attemptUnlock()}
+              >
+                {loginLoading ? "Unlocking…" : "Unlock Dashboard"}
+              </button>
+              <Link href="/migration/start" className={styles.ghostButton}>
+                Start New Assessment
               </Link>
             </div>
           </div>
@@ -63,13 +202,13 @@ export function MigrationDashboard() {
     );
   }
 
-  const result = stored.result?.currentUtilityProjection
-    ? stored.result
-    : calculateMigrationAssessment(stored.input);
-  const eoiDocument = stored.documents.find(
+  const result = hasCompleteDashboardResult(activeStored.result)
+    ? activeStored.result
+    : calculateMigrationAssessment(activeStored.input);
+  const eoiDocument = activeStored.documents.find(
     (document) => document.documentType === "expression_of_interest",
   );
-  const utilityBillDocument = stored.documents.find(
+  const utilityBillDocument = activeStored.documents.find(
     (document) => document.documentType === "utility_bill",
   );
   const nextAction = utilityProfileComplete
@@ -79,7 +218,7 @@ export function MigrationDashboard() {
         primaryHref: "/migration/proposal-status",
         primaryLabel: "View Proposal Status",
       }
-    : stored.registration
+    : activeStored.registration
       ? {
           title: "Utility Profile Required",
           copy: "Upload your signed Expression of Interest and six months of utility bills to unlock proposal preparation.",
@@ -105,7 +244,7 @@ export function MigrationDashboard() {
           </div>
           <span className={styles.statusChip}>
             <span className={styles.statusDot} />
-            {formatStatus(stored.status)}
+            {formatStatus(activeStored.status)}
           </span>
         </div>
 
@@ -144,7 +283,7 @@ export function MigrationDashboard() {
           </section>
           <section className={styles.reportPreview}>
             <span className={styles.cardLabel}>Progress</span>
-            <MigrationProgressTracker activeIndex={utilityProfileComplete ? 2 : stored.registration ? 1 : 0} />
+            <MigrationProgressTracker activeIndex={utilityProfileComplete ? 2 : activeStored.registration ? 1 : 0} />
           </section>
         </div>
 

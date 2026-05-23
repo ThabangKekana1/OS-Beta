@@ -49,6 +49,36 @@ export type StoredMigrationAssessment = {
 
 const STORAGE_KEY = "foundation1:migration-assessment";
 const STORAGE_EVENT = "foundation1:migration-assessment:changed";
+const DASHBOARD_UNLOCK_KEY = "foundation1:migration:unlocked";
+const DASHBOARD_UNLOCK_EVENT = "foundation1:migration:unlock-changed";
+
+function hasBrowserStorage() {
+  return typeof window !== "undefined";
+}
+
+function sanitizedForRemote(value: StoredMigrationAssessment) {
+  const { accessCode: _accessCode, ...assessment } = value;
+  return assessment;
+}
+
+async function syncStoredMigrationAssessment(value: StoredMigrationAssessment) {
+  if (!hasBrowserStorage() || !value.profileId || !value.accessCode) return;
+
+  try {
+    await fetch("/api/migration/profiles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        profileId: value.profileId,
+        accessCode: value.accessCode,
+        assessment: sanitizedForRemote(value),
+      }),
+      keepalive: true,
+    });
+  } catch {
+    // Local storage remains the source of truth if the remote profile store is unavailable.
+  }
+}
 
 export function readStoredMigrationAssessment(): StoredMigrationAssessment | null {
   if (typeof window === "undefined") return null;
@@ -77,17 +107,36 @@ function parseStoredMigrationAssessment(raw: string | null | undefined) {
 
 export function writeStoredMigrationAssessment(value: StoredMigrationAssessment) {
   if (typeof window === "undefined") return;
+  const nextValue = { ...value, updatedAt: new Date().toISOString() };
   window.localStorage.setItem(
     STORAGE_KEY,
-    JSON.stringify({ ...value, updatedAt: new Date().toISOString() }),
+    JSON.stringify(nextValue),
   );
   window.dispatchEvent(new Event(STORAGE_EVENT));
+  void syncStoredMigrationAssessment(nextValue);
 }
 
 export function clearStoredMigrationAssessment() {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(STORAGE_KEY);
   window.dispatchEvent(new Event(STORAGE_EVENT));
+}
+
+export function unlockMigrationDashboard(profileId: string) {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.setItem(DASHBOARD_UNLOCK_KEY, profileId);
+  window.dispatchEvent(new Event(DASHBOARD_UNLOCK_EVENT));
+}
+
+export function clearMigrationDashboardUnlock() {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.removeItem(DASHBOARD_UNLOCK_KEY);
+  window.dispatchEvent(new Event(DASHBOARD_UNLOCK_EVENT));
+}
+
+export function readMigrationDashboardUnlockedProfile() {
+  if (typeof window === "undefined") return null;
+  return window.sessionStorage.getItem(DASHBOARD_UNLOCK_KEY);
 }
 
 function subscribeToStoredMigrationAssessment(onStoreChange: () => void) {
@@ -102,6 +151,18 @@ function subscribeToStoredMigrationAssessment(onStoreChange: () => void) {
   };
 }
 
+function subscribeToMigrationDashboardUnlock(onStoreChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+
+  window.addEventListener("storage", onStoreChange);
+  window.addEventListener(DASHBOARD_UNLOCK_EVENT, onStoreChange);
+
+  return () => {
+    window.removeEventListener("storage", onStoreChange);
+    window.removeEventListener(DASHBOARD_UNLOCK_EVENT, onStoreChange);
+  };
+}
+
 export function useStoredMigrationAssessment() {
   const raw = useSyncExternalStore(
     subscribeToStoredMigrationAssessment,
@@ -113,4 +174,12 @@ export function useStoredMigrationAssessment() {
     if (raw === undefined) return undefined;
     return parseStoredMigrationAssessment(raw);
   }, [raw]);
+}
+
+export function useMigrationDashboardUnlockedProfile() {
+  return useSyncExternalStore(
+    subscribeToMigrationDashboardUnlock,
+    readMigrationDashboardUnlockedProfile,
+    () => null,
+  );
 }

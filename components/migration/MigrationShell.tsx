@@ -3,12 +3,26 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LogOut } from "lucide-react";
+import {
+  clearMigrationDashboardUnlock,
+  clearStoredMigrationAssessment,
+  useMigrationDashboardUnlockedProfile,
+  useStoredMigrationAssessment,
+} from "@/components/migration/MigrationState";
 import styles from "@/components/migration/migration.module.css";
 
 export function MigrationShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const onReport = pathname === "/migration/report";
-  const onDashboard = pathname?.startsWith("/migration/dashboard");
+  const stored = useStoredMigrationAssessment();
+  const unlockedProfile = useMigrationDashboardUnlockedProfile();
+  const hasDashboardSession = Boolean(stored?.profileId && unlockedProfile === stored.profileId);
+
+  function logout() {
+    clearStoredMigrationAssessment();
+    clearMigrationDashboardUnlock();
+    window.location.assign("/migration");
+  }
 
   return (
     <main className={styles.page}>
@@ -26,8 +40,35 @@ export function MigrationShell({ children }: { children: React.ReactNode }) {
             <span className={styles.brandPill}>Migration</span>
           </Link>
           <div className={styles.navLinks}>
-            {(onReport || onDashboard) && (
-              <Link href="/migration/report">Report</Link>
+            {hasDashboardSession ? (
+              <>
+                <Link
+                  href="/migration/start"
+                  className={pathname === "/migration/start" ? styles.navLinkActive : undefined}
+                >
+                  Assessment
+                </Link>
+                <Link
+                  href="/migration/report"
+                  className={pathname === "/migration/report" ? styles.navLinkActive : undefined}
+                >
+                  Report
+                </Link>
+                <Link
+                  href="/migration/dashboard"
+                  className={pathname?.startsWith("/migration/dashboard") ? styles.navLinkActive : undefined}
+                >
+                  Dashboard
+                </Link>
+                <button className={styles.navLogout} type="button" onClick={logout}>
+                  <LogOut size={13} strokeWidth={2.2} />
+                  Logout
+                </button>
+              </>
+            ) : (
+              (pathname === "/migration/report" || pathname?.startsWith("/migration/dashboard")) && (
+                <Link href="/migration/report">Report</Link>
+              )
             )}
           </div>
         </nav>
