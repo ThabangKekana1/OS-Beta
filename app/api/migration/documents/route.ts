@@ -115,10 +115,20 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const { data: documentRows } = await supabase
+    .from("migration_documents")
+    .select("document_type")
+    .eq("assessment_id", assessmentId);
+  const uploadedTypes = new Set((documentRows ?? []).map((row) => row.document_type));
+  const nextStatus =
+    uploadedTypes.has("expression_of_interest") && uploadedTypes.has("utility_bill")
+      ? "utility_profile_uploaded"
+      : "registered";
+
   await supabase
     .from("migration_assessments")
     .update({
-      status: "utility_profile_uploaded",
+      status: nextStatus,
     })
     .eq("id", assessmentId);
 

@@ -558,21 +558,120 @@
   gap: 14px;
 }
 
+.eoiTemplateCard,
+.uploadGroup {
+  display: grid;
+  gap: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+  background: #050505;
+  padding: 16px;
+}
+
+.eoiTemplateCard {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  background: rgba(88, 113, 255, 0.06);
+  border-color: rgba(88, 113, 255, 0.24);
+}
+
 .dropBox {
+  position: relative;
+  display: grid;
+  place-items: center;
+  gap: 7px;
   border: 1px dashed rgba(255, 255, 255, 0.2);
   border-radius: 8px;
-  background: #050505;
-  padding: 22px;
-  transition: border-color 160ms ease;
+  background: #030303;
+  padding: 26px 18px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease;
 }
 
 .dropBox:hover {
   border-color: rgba(255, 255, 255, 0.4);
 }
 
+.dropBoxActive {
+  border-color: rgba(88, 113, 255, 0.85);
+  background: rgba(88, 113, 255, 0.1);
+}
+
 .fileInput {
   width: 100%;
   color: rgba(255, 255, 255, 0.7);
+}
+
+.dropBox .fileInput {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.dropIcon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  color: rgba(180, 190, 255, 0.9);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.dropTitle {
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.dropMeta {
+  color: rgba(255, 255, 255, 0.34);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.queuedFiles {
+  display: grid;
+  gap: 8px;
+}
+
+.queuedFile {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.035);
+  padding: 8px 9px;
+  color: rgba(255, 255, 255, 0.64);
+  font-size: 0.78rem;
+}
+
+.queuedFile span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queuedFile button {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+}
+
+.queuedFile button:hover {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .progressList {
@@ -666,6 +765,10 @@
   .exposureGridThree,
   .cardsGridTwo,
   .cardsGridThree {
+    grid-template-columns: 1fr;
+  }
+
+  .eoiTemplateCard {
     grid-template-columns: 1fr;
   }
 }
