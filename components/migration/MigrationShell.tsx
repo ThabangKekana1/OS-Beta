@@ -2,12 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import styles from "@/components/migration/migration.module.css";
-import { useStoredMigrationAssessment } from "@/components/migration/MigrationState";
 
 export function MigrationShell({ children }: { children: React.ReactNode }) {
-  const stored = useStoredMigrationAssessment();
-  const hasReport = stored !== null;
+  const pathname = usePathname();
+  const onReport = pathname === "/migration/report";
+  const onDashboard = pathname?.startsWith("/migration/dashboard");
 
   return (
     <main className={styles.page}>
@@ -25,9 +26,9 @@ export function MigrationShell({ children }: { children: React.ReactNode }) {
             <span className={styles.brandPill}>Migration</span>
           </Link>
           <div className={styles.navLinks}>
-            <Link href="/migration/start">Assessment</Link>
-            {hasReport && <Link href="/migration/report">Report</Link>}
-            {hasReport && <Link href="/migration/dashboard">Dashboard</Link>}
+            {(onReport || onDashboard) && (
+              <Link href="/migration/report">Report</Link>
+            )}
           </div>
         </nav>
       </div>

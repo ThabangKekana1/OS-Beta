@@ -1,9 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { Mail, Download, ArrowRight } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Mail, Download, ArrowRight, Copy, Check } from "lucide-react";
 import type { MigrationAssessmentResult } from "@/lib/calculateMigrationAssessment";
+import {
+  readStoredMigrationAssessment,
+  writeStoredMigrationAssessment,
+} from "@/components/migration/MigrationState";
 import { QualificationBadge } from "@/components/migration/QualificationBadge";
 import { SavingsCard } from "@/components/migration/SavingsCard";
 import styles from "@/components/migration/migration.module.css";
@@ -221,6 +225,10 @@ async function downloadReportPDF(result: MigrationAssessmentResult): Promise<voi
 export function MigrationReport({ result }: { result: MigrationAssessmentResult }) {
   const { currentUtilityProjection, ufmsSolar, wheeling, combinedScenarios } = result;
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [showCredentials, setShowCredentials] = useState(false);
+  const [credentials, setCredentials] = useState<{ profileId: string; accessCode: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const router = useRouter();
   const bestIllustrativeSaving = Math.max(
     ...ufmsSolar.scenarios.map((scenario) => scenario.tenYearSavingAgainstEskom),
     wheeling.conservative.tenYearSavingAgainstEskom,
@@ -434,10 +442,31 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
             Continue to your dashboard to capture your business details, download the EOI template, and upload your utility bills. Foundation-1 will then prepare your formal proposal.
           </p>
           <div className={styles.buttonRow} style={{ marginTop: 16 }}>
-            <Link href="/migration/dashboard" className={styles.primaryButton}>
+            <button
+              className={styles.primaryButton}
+              type="button"
+              onClick={() => {
+                const stored = readStoredMigrationAssessment();
+                if (!stored) return;
+                // Generate credentials if not already done
+                let creds = stored.profileId && stored.accessCode
+                  ? { profileId: stored.profileId, accessCode: stored.accessCode }
+                  : null;
+                if (!creds) {
+                  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+                  const profileId = Array.from(crypto.getRandomValues(new Uint8Array(6)))
+                    .map((b) => chars[b % chars.length]).join("");
+                  const accessCode = String(1000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 9000));
+                  creds = { profileId, accessCode };
+                  writeStoredMigrationAssessment({ ...stored, profileId, accessCode });
+                }
+                setCredentials(creds);
+                setShowCredentials(true);
+              }}
+            >
               <ArrowRight size={14} strokeWidth={2.5} />
               Continue to Dashboard
-            </Link>
+            </button>
             <button
               className={styles.ghostButton}
               type="button"
@@ -463,6 +492,61 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
           <p className={styles.warningText}>{result.disclaimer}</p>
         </div>
       </div>
+
+      {/* Credential reveal overlay */}
+      {showCredentials && credentials && (
+        <div className={styles.credentialOverlay}>
+          <div className={styles.credentialCard}>
+            <h2 className={styles.credentialTitle}>Save your access details</h2>
+            <p className={styles.credentialCopy}>
+              These are your unique profile credentials. Save them — you&apos;ll need the access
+              code to return to your dashboard from another device.
+            </p>
+            <div className={styles.credentialFields}>
+              <div className={styles.credentialField}>
+                <span className={styles.credentialLabel}>Profile ID</span>
+                <span className={styles.credentialValue}>{credentials.profileId}</span>
+              </div>
+              <div className={styles.credentialField}>
+                <span className={styles.credentialLabel}>Access code</span>
+                <span className={styles.credentialValue} style={{ letterSpacing: "0.2em" }}>
+                  {credentials.accessCode}
+                </span>
+              </div>
+            </div>
+            <div className={styles.credentialDashboardUrl}>
+              <span className={styles.credentialLabel}>Dashboard URL</span>
+              <span className={styles.credentialUrlText}>
+                1os.foundation-1.co.za/migration/dashboard
+              </span>
+            </div>
+            <div className={styles.buttonRow} style={{ marginTop: 20 }}>
+              <button
+                className={styles.primaryButton}
+                type="button"
+                onClick={() => router.push("/migration/dashboard")}
+              >
+                <ArrowRight size={14} strokeWidth={2.5} />
+                I&apos;ve saved my details — Continue
+              </button>
+              <button
+                className={styles.ghostButton}
+                type="button"
+                onClick={() => {
+                  const text = `Profile ID: ${credentials.profileId}\nAccess code: ${credentials.accessCode}\nDashboard: 1os.foundation-1.co.za/migration/dashboard`;
+                  void navigator.clipboard.writeText(text).then(() => {
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  });
+                }}
+              >
+                {copied ? <Check size={14} strokeWidth={2.5} /> : <Copy size={14} strokeWidth={2.5} />}
+                {copied ? "Copied!" : "Copy details"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

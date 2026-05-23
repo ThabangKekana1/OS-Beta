@@ -32,6 +32,8 @@ export type StoredMigrationAssessment = {
   result: MigrationAssessmentResult;
   registration?: MigrationRegistration;
   documents: MigrationDocumentRecord[];
+  profileId?: string;   // generated when user continues to dashboard
+  accessCode?: string;  // 4-digit PIN shown to user once
   status:
     | "draft_assessment"
     | "instant_report_generated"

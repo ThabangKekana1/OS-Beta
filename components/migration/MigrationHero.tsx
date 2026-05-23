@@ -30,9 +30,6 @@ export function MigrationHero() {
                 Start Assessment
                 <ArrowRight size={14} strokeWidth={2.5} />
               </Link>
-              <Link href="/migration/dashboard" className={styles.secondaryButton}>
-                Dashboard
-              </Link>
             </div>
           </div>
           <div className={styles.trustGrid} aria-label="Trust indicators">

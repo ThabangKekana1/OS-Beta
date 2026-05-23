@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { MigrationHero } from "@/components/migration/MigrationHero";
-import { MigrationShell } from "@/components/migration/MigrationShell";
+import styles from "@/components/migration/migration.module.css";
 
 export const metadata: Metadata = {
   title: "Foundation-1 Energy Migration",
@@ -10,8 +10,8 @@ export const metadata: Metadata = {
 
 export default function MigrationPage() {
   return (
-    <MigrationShell>
+    <main className={styles.page}>
       <MigrationHero />
-    </MigrationShell>
+    </main>
   );
 }
