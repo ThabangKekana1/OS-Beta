@@ -1,4 +1,4 @@
-import { SalesInboxRoute } from "@/components/sales/routes/SalesInboxRoute";
+import { AdminInboxRoute } from "@/components/admin/routes/AdminInboxRoute";
 import { getAdminSenderOptions } from "@/lib/admin-mailboxes";
 import { requireServerAuthSession } from "@/lib/auth-server";
 
@@ -16,17 +16,22 @@ export default async function AdminInboxPage({
     template?: string;
     company?: string;
     name?: string;
+    mailbox?: string;
   }>;
 }) {
-  const session = await requireServerAuthSession("admin");
-  const params = await searchParams;
+  const [params, session] = await Promise.all([
+    searchParams,
+    requireServerAuthSession("admin"),
+  ]);
   const senderOptions = getAdminSenderOptions();
   return (
-    <SalesInboxRoute
+    <AdminInboxRoute
       initialThreadId={params.thread ?? null}
       initialLeadFilter={params.lead ?? null}
+      initialMailbox={params.mailbox ?? null}
       viewerRole="admin"
-      viewerAgentId={session.agentId}
+      viewerAgentId={null}
+      viewerEmail={session.email}
       senderOptions={senderOptions}
       initialCompose={{
         to: params.to ?? null,

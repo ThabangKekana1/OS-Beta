@@ -9,8 +9,8 @@ export default async function AdminLeadProfilePage({
   return (
     <AdminLeadProfileRoute
       leadId={id}
-      backHref="/admin/clients"
-      backLabel="Back to Clients"
+      backHref="/admin/leads"
+      backLabel="Back to Leads"
       actorRole="admin"
     />
   );

@@ -104,22 +104,15 @@ export async function proxy(request: NextRequest) {
   const claims = claimsData?.claims ?? null;
   const isSignedIn = Boolean(claims?.email && (claims?.email_verified ?? true));
 
-  // Already signed in → bounce away from the login/signup screens.
-  if (pathname === "/login" || pathname === "/signup") {
-    if (isSignedIn) {
-      const target = NextResponse.redirect(new URL("/", request.url));
-      response.cookies.getAll().forEach((c) => target.cookies.set(c));
-      return applySecurityHeaders(target);
-    }
+  // Keep /login reachable even with an existing session so operators can
+  // switch accounts or recover from stale cookies.
+  if (pathname === "/login") {
     return applySecurityHeaders(response);
   }
 
   // Authenticated-only sections: redirect anonymous visitors to /login. Role
   // mismatches are handled by the route layouts via `requireServerAuthSession`.
-  const requiresAuth =
-    pathname.startsWith("/admin") ||
-    pathname.startsWith("/sales") ||
-    pathname.startsWith("/partner");
+  const requiresAuth = pathname.startsWith("/admin") || pathname.startsWith("/sales");
 
   if (requiresAuth && !isSignedIn) {
     const target = NextResponse.redirect(withNextParam(request));

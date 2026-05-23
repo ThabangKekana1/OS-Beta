@@ -6,8 +6,8 @@ import { sanitizeNextPath } from "@/lib/url";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 function resolveNextPath(searchParams: URLSearchParams) {
-  const next = sanitizeNextPath(searchParams.get("next"), "/workspace");
-  if (next !== "/workspace") {
+  const next = sanitizeNextPath(searchParams.get("next"), "/admin");
+  if (next !== "/admin") {
     return next;
   }
 
@@ -110,7 +110,7 @@ export default function AuthConfirmPage() {
         <p className="mt-4 text-sm leading-7 text-white/68">
           {error
             ? "Your verification link could not be completed automatically."
-            : "We’re opening your 1OS workspace and dropping you straight into Dawn."}
+            : "We’re opening the 1OS admin dashboard."}
         </p>
         {error ? (
           <p className="mt-4 rounded-lg border border-rose-500/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">

@@ -4,140 +4,117 @@ import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
 const root = process.cwd();
-const read = (p) => readFileSync(join(root, p), "utf8");
+const read = (path) => readFileSync(join(root, path), "utf8");
+const exists = (path) => existsSync(join(root, path));
 
-// --- Pure mapping tests (transcribed from lib/lead-status-mapping.ts) ---
-// We re-implement the small mapping to assert the contract without spinning up
-// a TS runtime in node:test. The source file is the source of truth; this
-// guards against regressions in either direction.
+test("admin navigation exposes Leads, Sales, and Inbox", () => {
+  const sidebar = read("components/admin/AdminSidebar.tsx");
+  assert.match(sidebar, /label: "Leads"/);
+  assert.match(sidebar, /href: `\$\{rootPath\}\/leads`/);
+  assert.match(sidebar, /label: "Sales"/);
+  assert.match(sidebar, /href: "\/admin\/sales"/);
+  assert.match(sidebar, /label: "Inbox"/);
+  assert.match(sidebar, /href: `\$\{rootPath\}\/inbox`/);
+  assert.doesNotMatch(sidebar, /KPI|Settings|Partners|Clients|Workspace|Pipeline|Archive/);
+});
 
-const adminToQualification = {
-  "Not Contacted": "Havent Contacted",
-  Contacted: "Contacted",
-  Interested: "Interested",
-  "Not Interested": "Not Interested",
-  "Follow Up": "Contacted",
-  Converted: "Qualifies",
-};
+test("sales shell uses scoped leads and hides admin-only navigation", () => {
+  const layout = read("app/sales/layout.tsx");
+  const leadsPage = read("app/sales/leads/page.tsx");
+  const inboxPage = read("app/sales/inbox/page.tsx");
 
-const qualificationToAdmin = {
-  "Havent Contacted": "Not Contacted",
-  Contacted: "Contacted",
-  Interested: "Interested",
-  "Not Interested": "Not Interested",
-  "Does Not Qualify": "Not Interested",
-  Qualifies: "Converted",
-};
+  assert.match(layout, /requireServerAuthSession\("sales"\)/);
+  assert.match(layout, /leadOwnerScopeId=\{session\.agentId\}/);
+  assert.match(layout, /showSales=\{false\}/);
+  assert.match(leadsPage, /basePath="\/sales"/);
+  assert.match(leadsPage, /showOwnerControls=\{false\}/);
+  assert.match(leadsPage, /showPartnerControls=\{false\}/);
+  assert.match(inboxPage, /viewerRole="sales"/);
+  assert.match(inboxPage, /viewerAgentId=\{session\.agentId\}/);
+});
 
-test("lead-status-mapping source matches the documented contract", () => {
-  const src = read("lib/lead-status-mapping.ts");
-  for (const [from, to] of Object.entries(adminToQualification)) {
-    assert.match(
-      src,
-      new RegExp(`case "${from}":\\s*\\n\\s*return "${to}";`),
-      `adminContactToQualification: ${from} -> ${to} missing`,
-    );
+test("admin shell, sales, and inbox use the retained admin routes", () => {
+  const layout = read("app/admin/layout.tsx");
+  const inboxPage = read("app/admin/inbox/page.tsx");
+  const inboxRoute = read("components/admin/routes/AdminInboxRoute.tsx");
+  const salesPage = read("app/admin/sales/page.tsx");
+  const salesRoute = read("components/admin/routes/AdminSalesRoute.tsx");
+
+  assert.match(layout, /includeSalesLeads=\{false\}/);
+  assert.match(layout, /includeRegistrationDrafts=\{false\}/);
+  assert.match(layout, /AdminSidebar/);
+  assert.match(salesPage, /AdminSalesRoute/);
+  assert.match(salesRoute, /Sales Activity/);
+  assert.match(salesRoute, /Activity Ledger/);
+  assert.match(salesRoute, /Agent Profile/);
+  assert.match(salesRoute, /Agent Profiles/);
+  assert.match(salesRoute, /Pressure Metrics/);
+  assert.match(salesRoute, /Not contacted/);
+  assert.match(salesRoute, /No email thread/);
+  assert.match(salesRoute, /Stage Progress/);
+  assert.match(salesRoute, /Pressure Queue/);
+  assert.match(salesRoute, /Dashboard Identity/);
+  assert.match(salesRoute, /Emails Sent \/ Received/);
+  assert.match(salesRoute, /Login Audit/);
+  assert.match(salesRoute, /\/api\/admin\/sales\/surveillance/);
+  assert.match(salesRoute, /lead-engagement/);
+  assert.match(inboxPage, /AdminInboxRoute/);
+  assert.match(inboxRoute, /export function AdminInboxRoute/);
+  assert.doesNotMatch(inboxPage, /components\/sales/);
+});
+
+test("lead profile exposes the approved registration and document upload links", () => {
+  const profile = read("components/admin/routes/AdminLeadProfileRoute.tsx");
+
+  assert.match(profile, /Registration Link/);
+  assert.match(profile, /Document Upload Link/);
+  assert.match(profile, /registrationLinkPath/);
+  assert.match(profile, /documentUploadLinkPath/);
+  assert.doesNotMatch(profile, /utility-bills|Utility Bills Upload Link|buildUtilityBillUploadPath/);
+});
+
+test("state mutation API mutates admin leads and sales-owned leads only", () => {
+  const route = read("app/api/admin/state/mutate/route.ts");
+  assert.match(route, /leadUpserts/);
+  assert.match(route, /leadDeletes/);
+  assert.match(route, /session\.role === "admin"/);
+  assert.match(route, /session\.role === "sales"/);
+  assert.match(route, /Sales users can only mutate their own leads/);
+  assert.match(route, /Sales users cannot delete leads/);
+  assert.doesNotMatch(route, /salesLeadUpserts|salesLeadDeletes|partnerCanAccessClientLead|buildAdminLeadStubFromSalesLead/);
+});
+
+test("public Get Started keeps routing to generic registration", () => {
+  const links = read("lib/links.ts");
+  const landing = read("components/routes/PublicMarketingLandingRoute.tsx");
+
+  assert.match(links, /BUSINESS_REGISTRATION_URL = "\/register"/);
+  assert.match(landing, /BUSINESS_REGISTRATION_URL/);
+});
+
+test("lead import and EOI dependencies remain because they are part of the approved workflow", () => {
+  const leadsRoute = read("components/admin/routes/AdminLeadsRoute.tsx");
+  const eoiTemplate = read("lib/eoi-template.ts");
+
+  assert.match(leadsRoute, /import\("fflate"\)/);
+  assert.match(eoiTemplate, /buildEoiTemplateText/);
+  assert.doesNotMatch(eoiTemplate, /PDFDocument|pdf-lib/);
+});
+
+test("deleted admin pages and components do not exist", () => {
+  const deletedPaths = [
+    "app/admin/kpis/page.tsx",
+    "app/admin/settings/page.tsx",
+    "app/admin/clients/page.tsx",
+    "app/admin/partners/page.tsx",
+    "app/admin/sales-reps/page.tsx",
+    "components/admin/routes/AdminKpisRoute.tsx",
+    "components/admin/routes/AdminSettingsRoute.tsx",
+    "components/admin/routes/AdminPartnersRoute.tsx",
+    "components/admin/routes/AdminClientsRoute.tsx",
+  ];
+
+  for (const deletedPath of deletedPaths) {
+    assert.equal(exists(deletedPath), false, `${deletedPath} should be deleted`);
   }
-  for (const [from, to] of Object.entries(qualificationToAdmin)) {
-    assert.match(
-      src,
-      new RegExp(`case "${from}":\\s*\\n\\s*return "${to}";`),
-      `qualificationToAdminContact: ${from} -> ${to} missing`,
-    );
-  }
-});
-
-test("AdminLead exposes link IDs for the lead<->business mirror", () => {
-  const src = read("lib/admin-types.ts");
-  assert.match(src, /linkedSalesLeadId: string \| null/);
-  assert.match(src, /linkedAdminLeadId: string \| null/);
-  assert.match(src, /isClientRegistered: boolean/);
-});
-
-test("provider mirrors contact-status, owner, and terminal stages across linked leads", () => {
-  const src = read("components/admin/AdminPortalProvider.tsx");
-  // Contact status mirror to sales qualification.
-  assert.match(src, /adminContactToQualification\(status\)/);
-  // Owner mirror to sales lead.
-  assert.match(src, /linkedSalesLeadId.*ownerId/s);
-  // Terminal stages mirror.
-  assert.match(src, /stage === "Onboarding Complete"/);
-  assert.match(src, /stage === "Disqualified"/);
-  // Conversion repoints the link to the new full lead.
-  assert.match(src, /linkedAdminLeadId: created\.leadId/);
-});
-
-test("provider can delete open sales leads while protecting registered clients", () => {
-  const src = read("components/admin/AdminPortalProvider.tsx");
-  assert.match(src, /const deleteSalesLead =/);
-  assert.match(src, /salesLead\.status === "Converted"/);
-  assert.match(src, /linkedAdminLead\?\.isClientRegistered/);
-  assert.match(src, /currentSalesLeads\.filter\(\(lead\) => lead\.id !== salesLeadId\)/);
-});
-
-test("delta-sync endpoint exists and supports per-entity upserts/deletes", () => {
-  const path = "app/api/admin/state/mutate/route.ts";
-  assert.ok(existsSync(join(root, path)), `${path} missing`);
-  const src = read(path);
-  assert.match(src, /export async function POST/);
-  assert.match(src, /leadUpserts/);
-  assert.match(src, /leadDeletes/);
-  assert.match(src, /salesLeadUpserts/);
-  assert.match(src, /salesLeadDeletes/);
-  // Server merges deltas against current snapshot, not blind overwrite.
-  assert.match(src, /readAdminStateSnapshot/);
-  assert.match(src, /writeAdminStateSnapshot/);
-});
-
-test("provider sends deltas instead of full snapshots", () => {
-  const src = read("components/admin/AdminPortalProvider.tsx");
-  // Old behavior must be gone.
-  assert.doesNotMatch(src, /PUT\s*[^\n]*\/api\/admin\/state["']/);
-  // New behavior present.
-  assert.match(src, /\/api\/admin\/state\/mutate/);
-  assert.match(src, /diffById/);
-});
-
-test("save status banner is mounted in both admin and sales layouts", () => {
-  assert.match(read("app/admin/layout.tsx"), /SaveStatusBanner/);
-  assert.match(read("app/sales/layout.tsx"), /SaveStatusBanner/);
-});
-
-test("convertSalesLeadToClient deletes the original stub admin lead", () => {
-  const src = read("components/admin/AdminPortalProvider.tsx");
-  assert.match(src, /oldStubId.*current\.filter/s);
-});
-
-test("lead sequences reuse inbox threads and update CRM status from email activity", () => {
-  assert.ok(
-    existsSync(join(root, "app/api/email/lead-engagement/route.ts")),
-    "lead engagement route missing",
-  );
-  assert.ok(
-    existsSync(join(root, "lib/lead-email-activity.ts")),
-    "lead email activity helper missing",
-  );
-
-  assert.match(read("app/api/email/send/route.ts"), /recordLeadEmailSent/);
-  assert.match(read("app/api/email/inbound/route.ts"), /recordLeadEmailReply/);
-  assert.match(read("components/sales/routes/SalesLeadsRoute.tsx"), /Sequence view/);
-  assert.match(read("components/sales/routes/SalesLeadsRoute.tsx"), /awaiting_reply/);
-});
-
-test("admin dashboard exposes exactly the approved shared sender addresses", () => {
-  const addressing = read("lib/email-addressing.ts");
-  const adminMailboxes = read("lib/admin-mailboxes.ts");
-  const sendRoute = read("app/api/email/send/route.ts");
-  const envExample = read(".env.example");
-
-  assert.match(addressing, /DEFAULT_OUTBOUND_EMAIL_DOMAIN = "replies\.1os\.co\.za"/);
-  assert.match(adminMailboxes, /karman@foundation-1\.co\.za/);
-  assert.match(adminMailboxes, /sales@1os\.co\.za/);
-  assert.match(adminMailboxes, /support@1os\.co\.za/);
-  assert.doesNotMatch(adminMailboxes, /sales@foundation-1\.co\.za/);
-  assert.doesNotMatch(adminMailboxes, /sales@replies\.1os\.co\.za/);
-  assert.match(sendRoute, /emailOnOutboundDomain\(session\.email\)/);
-  assert.match(envExample, /Karman <karman@foundation-1\.co\.za>/);
-  assert.match(envExample, /Foundation-1 Sales <sales@1os\.co\.za>/);
-  assert.match(envExample, /1OS Support <support@1os\.co\.za>/);
 });

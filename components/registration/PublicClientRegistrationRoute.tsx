@@ -6,17 +6,23 @@ import {
   ClientRegistrationForm,
   type RegistrationFormValues,
 } from "@/components/registration/ClientRegistrationForm";
+import { EnergyWaitingRoomBackground } from "@/components/registration/EnergyWaitingRoomBackground";
 
 type PublicClientRegistrationRouteProps = {
-  linkId: string;
+  linkId?: string | null;
 };
 
-export function PublicClientRegistrationRoute({ linkId }: PublicClientRegistrationRouteProps) {
+export function PublicClientRegistrationRoute({ linkId = null }: PublicClientRegistrationRouteProps) {
   const [linkOwner, setLinkOwner] = useState<string | null>(null);
   const [isInvalid, setIsInvalid] = useState(false);
   const [registeredProfileId, setRegisteredProfileId] = useState<string | null>(null);
+  const [initialValues, setInitialValues] = useState<Partial<RegistrationFormValues>>({});
 
   useEffect(() => {
+    if (!linkId) {
+      return;
+    }
+
     let cancelled = false;
 
     const loadLink = async () => {
@@ -26,6 +32,7 @@ export function PublicClientRegistrationRoute({ linkId }: PublicClientRegistrati
       const payload = (await response.json().catch(() => null)) as {
         ok?: boolean;
         source?: { profileName?: string };
+        lead?: Partial<RegistrationFormValues> | null;
       } | null;
 
       if (cancelled) {
@@ -38,6 +45,7 @@ export function PublicClientRegistrationRoute({ linkId }: PublicClientRegistrati
       }
 
       setLinkOwner(payload.source.profileName);
+      setInitialValues(payload.lead ?? {});
     };
 
     void loadLink();
@@ -48,7 +56,8 @@ export function PublicClientRegistrationRoute({ linkId }: PublicClientRegistrati
   }, [linkId]);
 
   const handleSubmit = async (values: RegistrationFormValues) => {
-    const response = await fetch(`/api/register/${encodeURIComponent(linkId)}`, {
+    const endpoint = linkId ? `/api/register/${encodeURIComponent(linkId)}` : "/api/register";
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -71,8 +80,9 @@ export function PublicClientRegistrationRoute({ linkId }: PublicClientRegistrati
 
   if (isInvalid) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-black px-6 text-white">
-        <section className="app-surface max-w-xl rounded-[1.6rem] p-6 text-center">
+      <div className="relative isolate flex min-h-screen items-center justify-center overflow-hidden bg-black px-6 text-white">
+        <EnergyWaitingRoomBackground />
+        <section className="app-surface relative z-10 max-w-xl rounded-[1.6rem] p-6 text-center">
           <p className="line-label">Client Registration</p>
           <h1 className="mt-3 text-3xl font-medium tracking-[-0.04em]">
             Registration link not found
@@ -93,8 +103,9 @@ export function PublicClientRegistrationRoute({ linkId }: PublicClientRegistrati
 
   if (registeredProfileId) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-black px-6 text-white">
-        <section className="app-surface max-w-xl rounded-[1.6rem] p-6 text-center">
+      <div className="relative isolate flex min-h-screen items-center justify-center overflow-hidden bg-black px-6 text-white">
+        <EnergyWaitingRoomBackground />
+        <section className="app-surface relative z-10 max-w-xl rounded-[1.6rem] p-6 text-center">
           <p className="line-label">Client Registration</p>
           <h1 className="mt-3 text-3xl font-medium tracking-[-0.04em]">
             Registration submitted
@@ -108,16 +119,28 @@ export function PublicClientRegistrationRoute({ linkId }: PublicClientRegistrati
   }
 
   return (
-    <main className="min-h-screen bg-black px-4 py-6 text-white lg:px-8">
-      <ClientRegistrationForm
+    <ClientRegistrationForm
+        key={`${linkId ?? "generic"}-${linkOwner ?? "loading"}`}
         defaultOwnerId="public-link"
         lockOwner
-        eyebrow="Client Registration"
-        title={linkOwner ? `Register with ${linkOwner}` : "Client registration"}
-        description="Complete the onboarding registration form. This link is assigned to the 1OS profile that sent it to you."
+        initialValues={initialValues}
+        storageKey={`oneos:registration:${linkId ?? "generic"}`}
+        eyebrow="Foundation-1 Registration"
+        title={
+          linkOwner ? (
+            `Complete registration for ${linkOwner}`
+          ) : (
+            <>
+              Register your business for{" "}
+              <span className="whitespace-nowrap">zero-cost solar.</span>
+            </>
+          )
+        }
+        description={linkId
+          ? "This secure form is connected to your dedicated Foundation-1 profile. Complete it once and your dashboard profile is updated automatically."
+          : "For businesses discovering Foundation-1 directly, this creates a new dashboard profile for the team to qualify and continue onboarding."}
         submitLabel="Submit Registration"
         onSubmit={handleSubmit}
       />
-    </main>
   );
 }

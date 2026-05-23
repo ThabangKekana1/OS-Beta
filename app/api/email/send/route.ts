@@ -3,9 +3,13 @@ import { getServerAuthSession } from "@/lib/auth-server";
 import { sendEmail } from "@/lib/email";
 import {
   appendSignatureToText,
+  buildSystemEmailSignature,
   buildEmailHtmlWithSignature,
-  getEmailSignature,
+  getSystemEmailFooterImage,
+  shouldRebuildHtmlForSystemSignature,
+  SYSTEM_EMAIL_FOOTER_CONTENT_ID,
 } from "@/lib/email-signatures";
+import { systemSignatureTextForSender } from "@/lib/email-signature-copy";
 import { recordMessage } from "@/lib/email-threads";
 import { recordLeadEmailSent } from "@/lib/lead-email-activity";
 import { resolveAdminSenderOption } from "@/lib/admin-mailboxes";
@@ -197,14 +201,32 @@ export async function POST(request: Request) {
 
   const mailboxOwnerUserId = personalMailbox ? session.userId : null;
   const mailboxAddress = personalMailbox ? session.email : adminSender?.email ?? null;
-  const savedSignature = session.userId ? await getEmailSignature(session.userId) : null;
-  const signatureFooterImage = savedSignature?.footerImage ?? null;
-  const signatureFooterContentId = signatureFooterImage ? "oneos-signature-footer" : null;
-  const finalBodyText = appendSignatureToText(body, savedSignature);
+  const shouldAppendSystemSignature = Boolean(
+    systemSignatureTextForSender({
+      ownerEmail: session.email,
+      ownerRole: session.role,
+    }),
+  );
+  const signatureFooterImage = shouldAppendSystemSignature
+    ? await getSystemEmailFooterImage()
+    : null;
+  const signatureFooterContentId = signatureFooterImage ? SYSTEM_EMAIL_FOOTER_CONTENT_ID : null;
+  const systemSignature = shouldAppendSystemSignature
+    ? buildSystemEmailSignature({
+        ownerUserId: session.userId,
+        ownerEmail: session.email,
+        ownerRole: session.role,
+        footerImage: signatureFooterImage,
+      })
+    : null;
+  const finalBodyText = appendSignatureToText(body, systemSignature);
+  const bodyHtmlForSignature = shouldRebuildHtmlForSystemSignature(payload.html, systemSignature)
+    ? null
+    : payload.html;
   const finalBodyHtml = buildEmailHtmlWithSignature({
-    bodyText: body,
-    bodyHtml: payload.html,
-    signature: savedSignature,
+    bodyText: finalBodyText,
+    bodyHtml: bodyHtmlForSignature,
+    signature: systemSignature,
     footerImageContentId: signatureFooterContentId,
   });
   const resendAttachments: SendAttachment[] = attachments.map((a) => ({

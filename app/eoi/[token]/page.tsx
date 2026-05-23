@@ -4,8 +4,8 @@ import { EoiSigningForm } from "@/components/eoi/EoiSigningForm";
 import { readAdminStateSnapshot } from "@/lib/admin-state-store";
 
 export const metadata: Metadata = {
-  title: "1OS | EOI Signing",
-  description: "Digital signature page for your 1OS Expression of Interest.",
+  title: "1OS | EOI Template",
+  description: "Copy your 1OS Expression of Interest template onto company letterhead.",
 };
 
 export default async function EoiSigningPage({
@@ -27,7 +27,7 @@ export default async function EoiSigningPage({
           EOI link not found
         </h1>
         <p className="max-w-lg text-center text-sm leading-7 text-white/62">
-          This signing link is invalid or has been removed from the onboarding profile.
+          This EOI template link is invalid or has been removed from the onboarding profile.
         </p>
         <Link
           href="/documents"
@@ -42,7 +42,6 @@ export default async function EoiSigningPage({
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-black p-6 text-white">
       <EoiSigningForm
-        token={token}
         initialLead={{
           clientProfileId: lead.clientProfileId,
           company: lead.company,

@@ -10,14 +10,17 @@ const ADMIN_SENDERS = [
   {
     label: "Karman",
     email: "karman@foundation-1.co.za",
+    aliases: ["karman@replies.1os.co.za"],
   },
   {
-    label: "Foundation-1 Sales",
-    email: "sales@1os.co.za",
+    label: "Sales",
+    email: "sales@foundation-1.co.za",
+    aliases: ["sales@replies.1os.co.za", "sales@1os.co.za"],
   },
   {
-    label: "1OS Support",
-    email: "support@1os.co.za",
+    label: "Support",
+    email: "support@foundation-1.co.za",
+    aliases: ["support@replies.1os.co.za", "support@1os.co.za"],
   },
 ] as const;
 
@@ -41,11 +44,19 @@ export function resolveAdminSenderOption(value: string | null | undefined) {
   if (!value?.trim()) return options[0] ?? null;
 
   const email = extractEmail(value);
+  const normalizedValue = value.trim().toLowerCase();
   return (
     options.find(
-      (option) =>
-        option.email === email ||
-        option.value.trim().toLowerCase() === value.trim().toLowerCase(),
+      (option, index) => {
+        const sender = ADMIN_SENDERS[index];
+        const aliases: readonly string[] = sender.aliases;
+        return (
+          option.email === email ||
+          option.value.trim().toLowerCase() === normalizedValue ||
+          aliases.includes(email) ||
+          aliases.includes(normalizedValue)
+        );
+      },
     ) ?? null
   );
 }

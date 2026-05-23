@@ -16,9 +16,9 @@ const orbitron = Orbitron({
 });
 
 export const metadata: Metadata = {
-  title: "1OS | Migration Operating System",
+  title: "1OS | Energy-as-a-Service and Commercial Solar in South Africa",
   description:
-    "1OS guides businesses from Eskom dependence to close through one premium migration workspace for qualification, documents, proposals, term sheets, and execution.",
+    "1OS builds energy infrastructure for South Africa through commercial solar, energy-as-a-service, and guided business migration workflows.",
   keywords: [
     "1OS",
     "energy migration",
@@ -31,15 +31,19 @@ export const metadata: Metadata = {
     "Africa energy platform",
   ],
   openGraph: {
-    title: "1OS | Migration Operating System",
+    title: "1OS | Energy-as-a-Service and Commercial Solar in South Africa",
     description:
-      "A conversational operating surface for moving businesses from registration to close with trust, clarity, and commercial speed.",
+      "Commercial solar, lower-cost electricity, and guided business energy migration through one private 1OS workspace.",
     type: "website",
   },
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
-    apple: "/favicon.svg",
+    icon: [
+      { url: "/favicon.ico?v=foundation-1", sizes: "32x32" },
+      { url: "/favicon-32x32.png?v=foundation-1", type: "image/png", sizes: "32x32" },
+      { url: "/favicon.png?v=foundation-1", type: "image/png" },
+    ],
+    shortcut: "/favicon.ico?v=foundation-1",
+    apple: "/apple-touch-icon.png?v=foundation-1",
   },
 };
 
@@ -56,7 +60,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en-ZA" className={`${inter.variable} ${orbitron.variable}`}>
+    <html lang="en-ZA" className={`${inter.variable} ${orbitron.variable}`} data-scroll-behavior="smooth">
       <body>
         <ErrorBoundary>{children}</ErrorBoundary>
       </body>

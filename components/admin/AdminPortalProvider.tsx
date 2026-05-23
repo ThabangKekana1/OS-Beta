@@ -19,13 +19,13 @@ import {
 } from "@/lib/client-registration";
 import { makeId, timelineLabel } from "@/lib/formatting";
 import { registrationLinkIdForProfile } from "@/lib/registration-links";
-import type { RegistrationDraft } from "@/lib/registration-agent";
 import {
   ADMIN_STORAGE_KEY,
   clearAdminStorageSnapshot,
   readAdminStorageSnapshot,
   writeAdminStorageSnapshot,
 } from "@/lib/admin-storage";
+import { isValidSouthAfricanCompanyRegistration } from "@/lib/company-registration";
 import { adminLeadStages, adminLeadContactStatuses, salesLeadQualificationStages } from "@/lib/admin-types";
 import {
   adminContactToQualification,
@@ -41,10 +41,14 @@ import type {
   AdminLeadPartner,
   AdminLeadPriority,
   AdminLeadStage,
+  AdminLeadTask,
   AdminTaskOwner,
+  PartnerOrg,
   SalesLead,
   SalesLeadQualificationStage,
 } from "@/lib/admin-types";
+
+type RegistrationDraft = never;
 
 type CreateTaskInput = {
   title: string;
@@ -82,10 +86,51 @@ type CreateSalesLeadInput = {
   ownerId: string;
 };
 
+type CreateLeadShellInput = {
+  contactName: string;
+  company: string;
+  email: string;
+  ownerId: string;
+  contactNumber?: string;
+  industry?: string;
+  source?: AdminLead["source"];
+  origin?: AdminLeadOrigin;
+  partner?: AdminLeadPartner | null;
+};
+
+type LeadShellImportInput = CreateLeadShellInput &
+  Partial<UpdateLeadProfileInput> & {
+    rowNumber: number;
+  };
+
+type UpdateLeadProfileInput = {
+  company?: string;
+  businessRegistrationNumber?: string;
+  industry?: string;
+  contactFirstName?: string;
+  contactSurname?: string;
+  contactPosition?: string;
+  contactEmail?: string;
+  contactNumber?: string;
+  monthlyElectricitySpendEstimateZar?: number;
+  isBusinessRegistered?: boolean;
+  isBusinessOperational?: boolean;
+  hasSixMonthUtilityBill?: boolean;
+  physicalAddress?: string;
+  city?: string;
+  province?: string;
+  source?: AdminLead["source"];
+};
+
 type ConvertSalesLeadToClientInput = {
   salesLeadId: string;
+  businessName: string;
   businessRegistrationNumber: string;
   industry: string;
+  contactFirstName: string;
+  contactSurname: string;
+  contactPosition: string;
+  contactEmail: string;
   contactNumber: string;
   monthlyElectricitySpendEstimateZar: number;
   isBusinessRegistered: boolean;
@@ -131,6 +176,12 @@ type AdminPortalContextValue = {
   createLeadTask: (leadId: string, input: CreateTaskInput) => void;
   toggleLeadTask: (leadId: string, taskId: string) => void;
   createLead: (input: CreateLeadInput) => CreateLeadResult | null;
+  createLeadShell: (input: CreateLeadShellInput) => CreateLeadResult | null;
+  importLeadShells: (inputs: LeadShellImportInput[]) => {
+    imported: number;
+    failures: { row: number; reason: string }[];
+  };
+  updateLeadProfile: (leadId: string, input: UpdateLeadProfileInput) => void;
   createSalesLead: (input: CreateSalesLeadInput) => string | null;
   updateSalesLeadQualificationStage: (
     salesLeadId: string,
@@ -245,6 +296,43 @@ const COMPLIANCE_PACK_NEXT_ACTION =
   "(5) Last 6 months bank statements, " +
   "(6) Valid tax clearance certificate.";
 
+function ensureRegistrationTasks(tasks: AdminLeadTask[]) {
+  const existingTitles = new Set(tasks.map((task) => task.title));
+  const required: Array<Pick<AdminLeadTask, "title" | "owner" | "dueLabel" | "status">> = [
+    {
+      title: "Submit signed EOI",
+      owner: "Client",
+      dueLabel: "Today",
+      status: "open",
+    },
+    {
+      title: "Upload 6-month utility bill pack",
+      owner: "Agent",
+      dueLabel: "Today",
+      status: "open",
+    },
+    {
+      title: "Submit signed proposal",
+      owner: "Agent",
+      dueLabel: "Today",
+      status: "open",
+    },
+    {
+      title: "Submit signed term sheet",
+      owner: "Agent",
+      dueLabel: "Today",
+      status: "open",
+    },
+  ];
+
+  return [
+    ...tasks,
+    ...required
+      .filter((task) => !existingTitles.has(task.title))
+      .map((task) => ({ ...task, id: makeId("task") })),
+  ];
+}
+
 function upsertDocument(
   lead: AdminLead,
   document: Omit<AdminLeadDocument, "id"> & { id?: string },
@@ -289,13 +377,20 @@ export function AdminPortalProvider({
   actorEmail = null,
   actorName = null,
   actorAgentId = null,
+  includeSalesLeads = true,
+  includeRegistrationDrafts = true,
+  leadOwnerScopeId = null,
 }: {
   children: ReactNode;
   actorRole?: "admin" | "sales" | "partner" | null;
   actorEmail?: string | null;
   actorName?: string | null;
   actorAgentId?: string | null;
+  includeSalesLeads?: boolean;
+  includeRegistrationDrafts?: boolean;
+  leadOwnerScopeId?: string | null;
 }) {
+  const scopedOwnerId = leadOwnerScopeId?.trim() || null;
   const initialSnapshot = createDefaultAdminStateSnapshot();
   const [leads, setLeads] = useState<AdminLead[]>(
     () => initialSnapshot.leads,
@@ -326,6 +421,27 @@ export function AdminPortalProvider({
 
   const activeLead = leads.find((lead) => lead.id === activeLeadId) ?? null;
 
+  const applyLeadScope = (snapshot: {
+    leads: AdminLead[];
+    salesLeads: SalesLead[];
+    activeLeadId: string | null;
+    partnerOrgs?: PartnerOrg[];
+  }) => {
+    const scopedLeads = scopedOwnerId
+      ? snapshot.leads.filter((lead) => lead.ownerId === scopedOwnerId)
+      : snapshot.leads;
+    const scopedActiveLeadId = scopedLeads.some((lead) => lead.id === snapshot.activeLeadId)
+      ? snapshot.activeLeadId
+      : scopedLeads[0]?.id ?? null;
+
+    return {
+      ...snapshot,
+      leads: scopedLeads,
+      activeLeadId: scopedActiveLeadId,
+      salesLeads: includeSalesLeads ? snapshot.salesLeads : [],
+    };
+  };
+
   const clearSaveStatusIdleTimer = () => {
     if (saveStatusIdleTimerRef.current) {
       clearTimeout(saveStatusIdleTimerRef.current);
@@ -355,7 +471,14 @@ export function AdminPortalProvider({
 
     const loadRemoteState = async () => {
       try {
-        const response = await fetch("/api/admin/state", {
+        const url = new URL("/api/admin/state", window.location.origin);
+        if (!includeSalesLeads) {
+          url.searchParams.set("includeSalesLeads", "0");
+        }
+        if (!includeRegistrationDrafts) {
+          url.searchParams.set("includeRegistrationDrafts", "0");
+        }
+        const response = await fetch(url.toString(), {
           method: "GET",
           cache: "no-store",
         });
@@ -378,7 +501,8 @@ export function AdminPortalProvider({
         const serverSnapshot = normalizeAdminStateSnapshot(payload.snapshot);
         const backend = payload.backend === "supabase" ? "supabase" : "local";
         const localSnapshot = backend === "local" ? readAdminStorageSnapshot() : null;
-        const snapshot = localSnapshot ?? serverSnapshot;
+        const rawSnapshot = localSnapshot ?? serverSnapshot;
+        const snapshot = rawSnapshot ? applyLeadScope(rawSnapshot) : null;
         if (!cancelled && snapshot) {
           // Server is the single source of truth. Replace local state outright
           // so admin wipes / deletions actually clear the dashboard instead of
@@ -427,7 +551,8 @@ export function AdminPortalProvider({
         }
       } catch {
         if (!cancelled) {
-          const localSnapshot = readAdminStorageSnapshot();
+          const rawLocalSnapshot = readAdminStorageSnapshot();
+          const localSnapshot = rawLocalSnapshot ? applyLeadScope(rawLocalSnapshot) : null;
           if (localSnapshot) {
             setLeads(localSnapshot.leads);
             setSalesLeads(localSnapshot.salesLeads);
@@ -448,15 +573,10 @@ export function AdminPortalProvider({
 
     void loadRemoteState();
 
-    const interval = window.setInterval(() => {
-      void loadRemoteState();
-    }, 10000);
-
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
     };
-  }, []);
+  }, [includeRegistrationDrafts, includeSalesLeads, scopedOwnerId]);
 
   useEffect(() => {
     if (!isHydrated) {
@@ -486,7 +606,9 @@ export function AdminPortalProvider({
       latestSnapshotRef.current;
 
     const leadDelta = diffById(nextLeads, leadsBaselineRef.current);
-    const salesDelta = diffById(nextSalesLeads, salesLeadsBaselineRef.current);
+    const salesDelta = includeSalesLeads
+      ? diffById(nextSalesLeads, salesLeadsBaselineRef.current)
+      : { upserts: [], deletes: [] };
 
     if (
       leadDelta.upserts.length === 0 &&
@@ -531,13 +653,16 @@ export function AdminPortalProvider({
 
       const snapshot = normalizeAdminStateSnapshot(payload.snapshot);
       if (snapshot) {
+        const scopedSnapshot = applyLeadScope(snapshot);
         // Re-baseline against the server's authoritative response.
         leadsBaselineRef.current = new Map(
-          snapshot.leads.map((lead) => [lead.id, lead]),
+          scopedSnapshot.leads.map((lead) => [lead.id, lead]),
         );
-        salesLeadsBaselineRef.current = new Map(
-          snapshot.salesLeads.map((lead) => [lead.id, lead]),
-        );
+        if (includeSalesLeads) {
+          salesLeadsBaselineRef.current = new Map(
+            scopedSnapshot.salesLeads.map((lead) => [lead.id, lead]),
+          );
+        }
       }
 
       setSaveStatusWithAutoIdle("saved");
@@ -808,7 +933,7 @@ export function AdminPortalProvider({
           events: [
             {
               id: makeId("event"),
-              title: "Pipeline stage updated",
+              title: "Lifecycle stage updated",
               detail: `Lead moved to ${stage}.`,
               createdAt: timelineLabel(),
               tone: "agent",
@@ -836,7 +961,7 @@ export function AdminPortalProvider({
                 qualificationStage: "Does Not Qualify" as const,
                 qualificationReason:
                   sLead.qualificationReason ??
-                  "Disqualified from admin pipeline.",
+                  "Disqualified from admin lifecycle.",
                 status: "Converted" as const,
                 lastUpdatedAt: timestamp,
               };
@@ -1005,6 +1130,313 @@ export function AdminPortalProvider({
       leadId: created.leadId,
       clientProfileId: created.clientProfileId,
     };
+  };
+
+  const createLeadShell = (input: CreateLeadShellInput): CreateLeadResult | null => {
+    const contactName = input.contactName.trim();
+    const company = input.company.trim();
+    const email = input.email.trim().toLowerCase();
+    const ownerId = input.ownerId.trim();
+    const hasValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+    if (!contactName || !company || !hasValidEmail || !ownerId) {
+      return null;
+    }
+
+    const existingLead = leads.find(
+      (lead) => lead.userProfile.email.trim().toLowerCase() === email,
+    );
+    if (existingLead) {
+      setActiveLeadId(existingLead.id);
+      return {
+        leadId: existingLead.id,
+        clientProfileId: existingLead.clientProfileId,
+      };
+    }
+
+    const created = buildAdminLeadStubFromSalesLead({
+      contactName,
+      company,
+      email,
+      ownerId,
+      origin: input.origin ?? "created",
+    });
+
+    if (!created) {
+      return null;
+    }
+
+    const nextLead: AdminLead = {
+      ...created.lead,
+      contactPosition: created.lead.contactPosition || "Decision Maker",
+      industry: input.industry?.trim() ?? created.lead.industry,
+      source: input.source ?? created.lead.source,
+      partner: input.partner ?? created.lead.partner,
+      userProfile: {
+        ...created.lead.userProfile,
+        phone: input.contactNumber?.trim() ?? created.lead.userProfile.phone,
+      },
+    };
+
+    setLeads((current) => {
+      const nextLeads = [nextLead, ...current];
+      persistSnapshotImmediately({
+        leads: nextLeads,
+        salesLeads,
+        activeLeadId: nextLead.id,
+      });
+      return nextLeads;
+    });
+    setActiveLeadId(nextLead.id);
+
+    return {
+      leadId: nextLead.id,
+      clientProfileId: nextLead.clientProfileId,
+    };
+  };
+
+  const importLeadShells = (inputs: LeadShellImportInput[]) => {
+    const importedLeads: AdminLead[] = [];
+    const failures: { row: number; reason: string }[] = [];
+    const seenEmails = new Set(
+      leads.map((lead) => lead.userProfile.email.trim().toLowerCase()).filter(Boolean),
+    );
+
+    for (const input of inputs) {
+      const contactName = input.contactName.trim() || input.company.trim();
+      const company = input.company.trim();
+      const email = input.email.trim().toLowerCase();
+      const ownerId = input.ownerId.trim();
+      const hasValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+      if (!contactName || !company || !hasValidEmail || !ownerId) {
+        failures.push({
+          row: input.rowNumber,
+          reason: "Company and valid Email are required",
+        });
+        continue;
+      }
+
+      if (seenEmails.has(email)) {
+        failures.push({
+          row: input.rowNumber,
+          reason: "A lead profile with this email already exists",
+        });
+        continue;
+      }
+
+      const created = buildAdminLeadStubFromSalesLead({
+        contactName,
+        company,
+        email,
+        ownerId,
+        origin: input.origin ?? "imported",
+      });
+
+      if (!created) {
+        failures.push({
+          row: input.rowNumber,
+          reason: "Could not create lead profile",
+        });
+        continue;
+      }
+
+      const contactFirstName =
+        input.contactFirstName?.trim() ||
+        created.lead.contactFirstName ||
+        contactName.split(/\s+/)[0] ||
+        "";
+      const contactSurname =
+        input.contactSurname?.trim() ||
+        created.lead.contactSurname ||
+        contactName.split(/\s+/).slice(1).join(" ");
+      const contactPosition =
+        input.contactPosition?.trim() ||
+        created.lead.contactPosition ||
+        "Decision Maker";
+      const contactNumber = input.contactNumber?.trim() ?? created.lead.userProfile.phone;
+      const monthlyElectricitySpendEstimateZar =
+        typeof input.monthlyElectricitySpendEstimateZar === "number" &&
+        Number.isFinite(input.monthlyElectricitySpendEstimateZar)
+          ? Math.max(0, Math.round(input.monthlyElectricitySpendEstimateZar))
+          : created.lead.monthlyElectricitySpendEstimateZar;
+
+      const nextLead: AdminLead = {
+        ...created.lead,
+        businessRegistrationNumber:
+          input.businessRegistrationNumber?.trim() ?? created.lead.businessRegistrationNumber,
+        industry: input.industry?.trim() ?? created.lead.industry,
+        contactFirstName,
+        contactSurname,
+        contactPosition,
+        contactName: [contactFirstName, contactSurname].filter(Boolean).join(" ") || contactName,
+        monthlyElectricitySpendEstimateZar,
+        isBusinessRegistered: input.isBusinessRegistered ?? created.lead.isBusinessRegistered,
+        isBusinessOperational: input.isBusinessOperational ?? created.lead.isBusinessOperational,
+        hasSixMonthUtilityBill: input.hasSixMonthUtilityBill ?? created.lead.hasSixMonthUtilityBill,
+        physicalAddress: input.physicalAddress?.trim() ?? created.lead.physicalAddress,
+        city: input.city?.trim() ?? created.lead.city,
+        province: input.province?.trim() ?? created.lead.province,
+        source: input.source ?? created.lead.source,
+        partner: input.partner ?? created.lead.partner,
+        userProfile: {
+          ...created.lead.userProfile,
+          fullName: [contactFirstName, contactSurname].filter(Boolean).join(" ") || contactName,
+          email,
+          phone: contactNumber,
+          role: contactPosition,
+        },
+      };
+
+      importedLeads.push(nextLead);
+      seenEmails.add(email);
+    }
+
+    if (importedLeads.length > 0) {
+      const nextLeads = [...importedLeads, ...leads];
+      const nextActiveLeadId = importedLeads[0].id;
+      setLeads(nextLeads);
+      setActiveLeadId(nextActiveLeadId);
+      persistSnapshotImmediately({
+        leads: nextLeads,
+        salesLeads,
+        activeLeadId: nextActiveLeadId,
+      });
+    }
+
+    return {
+      imported: importedLeads.length,
+      failures,
+    };
+  };
+
+  const updateLeadProfile = (leadId: string, input: UpdateLeadProfileInput) => {
+    commitLeads((current) =>
+      updateLeadById(current, leadId, (lead) => {
+        const company = input.company !== undefined ? input.company.trim() : lead.company;
+        const businessRegistrationNumber =
+          input.businessRegistrationNumber !== undefined
+            ? input.businessRegistrationNumber.trim()
+            : lead.businessRegistrationNumber;
+        const industry = input.industry !== undefined ? input.industry.trim() : lead.industry;
+        const contactFirstName =
+          input.contactFirstName !== undefined
+            ? input.contactFirstName.trim()
+            : lead.contactFirstName ?? "";
+        const contactSurname =
+          input.contactSurname !== undefined
+            ? input.contactSurname.trim()
+            : lead.contactSurname ?? "";
+        const contactPosition =
+          input.contactPosition !== undefined
+            ? input.contactPosition.trim()
+            : lead.contactPosition ?? lead.userProfile.role;
+        const contactEmail =
+          input.contactEmail !== undefined
+            ? input.contactEmail.trim().toLowerCase()
+            : lead.userProfile.email;
+        const contactNumber =
+          input.contactNumber !== undefined
+            ? input.contactNumber.trim()
+            : lead.userProfile.phone;
+        const monthlyElectricitySpendEstimateZar =
+          input.monthlyElectricitySpendEstimateZar !== undefined &&
+          Number.isFinite(input.monthlyElectricitySpendEstimateZar)
+            ? Math.max(0, Math.round(input.monthlyElectricitySpendEstimateZar))
+            : lead.monthlyElectricitySpendEstimateZar;
+        const isBusinessRegistered =
+          input.isBusinessRegistered ?? lead.isBusinessRegistered;
+        const isBusinessOperational =
+          input.isBusinessOperational ?? lead.isBusinessOperational;
+        const hasSixMonthUtilityBill =
+          input.hasSixMonthUtilityBill ?? lead.hasSixMonthUtilityBill;
+        const physicalAddress =
+          input.physicalAddress !== undefined
+            ? input.physicalAddress.trim()
+            : lead.physicalAddress;
+        const city = input.city !== undefined ? input.city.trim() : lead.city;
+        const province =
+          input.province !== undefined ? input.province.trim() : lead.province;
+        const contactName =
+          [contactFirstName, contactSurname].filter(Boolean).join(" ") ||
+          lead.contactName;
+        const registrationComplete = Boolean(
+          company &&
+            isValidSouthAfricanCompanyRegistration(businessRegistrationNumber) &&
+            industry &&
+            contactFirstName &&
+            contactSurname &&
+            contactPosition &&
+            contactEmail &&
+            contactNumber &&
+            physicalAddress &&
+            city &&
+            province &&
+            monthlyElectricitySpendEstimateZar >= 10_000 &&
+            isBusinessRegistered &&
+            isBusinessOperational,
+        );
+        const completedNow = registrationComplete && !lead.isClientRegistered;
+        const nextStage =
+          registrationComplete && !TERMINAL_STAGES.has(lead.stage)
+            ? promoteStage(lead.stage, "EOI Generated")
+            : lead.stage;
+        const eoiSigningToken =
+          registrationComplete
+            ? lead.eoiSigningToken ?? buildEoiSigningToken(company)
+            : lead.eoiSigningToken;
+
+        return {
+          ...lead,
+          company,
+          businessRegistrationNumber,
+          industry,
+          contactFirstName,
+          contactSurname,
+          contactPosition,
+          contactName,
+          monthlyElectricitySpendEstimateZar,
+          isBusinessRegistered,
+          isClientRegistered: lead.isClientRegistered || registrationComplete,
+          isBusinessOperational,
+          hasSixMonthUtilityBill,
+          physicalAddress,
+          city,
+          province,
+          source: input.source ?? lead.source,
+          stage: nextStage,
+          readinessScore: registrationComplete
+            ? Math.max(lead.readinessScore, hasSixMonthUtilityBill ? 45 : 40)
+            : lead.readinessScore,
+          lastTouched: "Just now",
+          nextAction: completedNow
+            ? "Send the EOI template link and request the signed EOI on company letterhead."
+            : lead.nextAction,
+          migrateAccountName: company || lead.migrateAccountName,
+          eoiSigningToken,
+          userProfile: {
+            ...lead.userProfile,
+            fullName: contactName,
+            email: contactEmail,
+            phone: contactNumber,
+            role: contactPosition,
+          },
+          tasks: completedNow ? ensureRegistrationTasks(lead.tasks) : lead.tasks,
+          events: [
+            {
+              id: makeId("event"),
+              title: completedNow ? "Lead registration completed" : "Profile updated",
+              detail: completedNow
+                ? "Pre-qualified lead details completed in the profile."
+                : "Lead profile details updated.",
+              createdAt: timelineLabel(),
+              tone: "system",
+            },
+            ...lead.events,
+          ],
+        };
+      }),
+    );
   };
 
   const createSalesLead = (input: CreateSalesLeadInput): string | null => {
@@ -1227,7 +1659,7 @@ export function AdminPortalProvider({
     if (salesLead.status === "Converted" || salesLead.convertedClientProfileId) {
       return {
         ok: false,
-        error: "Converted leads must be managed from Clients, not deleted from My Leads.",
+        error: "Converted leads must be managed from the lead profile, not deleted from Leads.",
       };
     }
 
@@ -1238,7 +1670,7 @@ export function AdminPortalProvider({
     if (linkedAdminLead?.isClientRegistered) {
       return {
         ok: false,
-        error: "Registered client profiles cannot be deleted from My Leads.",
+        error: "Registered lead profiles cannot be deleted from Leads.",
       };
     }
 
@@ -1272,19 +1704,37 @@ export function AdminPortalProvider({
   const convertSalesLeadToClient = (
     input: ConvertSalesLeadToClientInput,
   ): CreateLeadResult | null => {
-    const salesLead = salesLeads.find((lead) => lead.id === input.salesLeadId);
+    const currentLeads = latestSnapshotRef.current.leads;
+    const currentSalesLeads = latestSnapshotRef.current.salesLeads;
+    const salesLead = currentSalesLeads.find((lead) => lead.id === input.salesLeadId);
     if (!salesLead || salesLead.status !== "Open" || salesLead.qualificationStage !== "Qualifies") {
       return null;
     }
 
-    const created = createLead({
-      businessName: salesLead.company,
+    const registrationSource =
+      actorRole && actorEmail && actorName
+        ? {
+            linkId: registrationLinkIdForProfile({
+              email: actorEmail,
+              role: actorRole,
+              agentId: actorAgentId,
+            }),
+            profileName: actorName,
+            profileRole: actorRole,
+            profileAgentId: actorAgentId,
+            partnerOrgId: salesLead.partnerOrgId ?? null,
+            channel: "dashboard" as const,
+          }
+        : null;
+    const contactParts = splitContactName(salesLead.contactName);
+    const created = buildAdminLeadFromClientRegistration({
+      businessName: input.businessName || salesLead.company,
       businessRegistrationNumber: input.businessRegistrationNumber,
       industry: input.industry,
-      contactFirstName: splitContactName(salesLead.contactName).contactFirstName,
-      contactSurname: splitContactName(salesLead.contactName).contactSurname || "Unknown",
-      contactPosition: "Owner",
-      contactEmail: salesLead.email,
+      contactFirstName: input.contactFirstName || contactParts.contactFirstName,
+      contactSurname: input.contactSurname || contactParts.contactSurname || "Unknown",
+      contactPosition: input.contactPosition || "Decision Maker",
+      contactEmail: input.contactEmail || salesLead.email,
       contactNumber: input.contactNumber,
       monthlyElectricitySpendEstimateZar: input.monthlyElectricitySpendEstimateZar,
       isBusinessRegistered: input.isBusinessRegistered,
@@ -1294,8 +1744,10 @@ export function AdminPortalProvider({
       city: input.city,
       province: input.province,
       source: input.source,
+      origin: "created",
       partnerOrgId: salesLead.partnerOrgId ?? null,
       ownerId: salesLead.ownerId,
+      registrationSource,
     });
 
     if (!created) {
@@ -1304,32 +1756,34 @@ export function AdminPortalProvider({
 
     const oldStubId = salesLead.linkedAdminLeadId;
     const timestamp = new Date().toISOString();
-
-    setLeads((current) => {
-      const filtered = oldStubId
-        ? current.filter((lead) => lead.id !== oldStubId)
-        : current;
-      const linked = filtered.map((lead) =>
-        lead.id === created.leadId
-          ? { ...lead, linkedSalesLeadId: input.salesLeadId }
-          : lead,
-      );
-      return linked;
-    });
-
-    setSalesLeads((current) =>
-      current.map((lead) =>
+    const linkedLead = {
+      ...created.lead,
+      linkedSalesLeadId: input.salesLeadId,
+    };
+    const nextLeads = [
+      linkedLead,
+      ...currentLeads.filter((lead) => lead.id !== oldStubId),
+    ];
+    const nextSalesLeads = currentSalesLeads.map((lead) =>
         lead.id === input.salesLeadId
           ? {
               ...lead,
-              status: "Converted",
+              status: "Converted" as const,
               convertedClientProfileId: created.clientProfileId,
               linkedAdminLeadId: created.leadId,
               lastUpdatedAt: timestamp,
             }
           : lead,
-      ),
     );
+
+    setLeads(nextLeads);
+    setSalesLeads(nextSalesLeads);
+    setActiveLeadId(created.leadId);
+    persistSnapshotImmediately({
+      leads: nextLeads,
+      salesLeads: nextSalesLeads,
+      activeLeadId: created.leadId,
+    });
 
     return created;
   };
@@ -1342,18 +1796,24 @@ export function AdminPortalProvider({
       return;
     }
 
-    commitLeads((current) =>
-      updateLeadById(current, leadId, (lead) => ({
+    const currentLeads = latestSnapshotRef.current.leads;
+    const currentSalesLeads = latestSnapshotRef.current.salesLeads;
+    let linkedSalesLeadId: string | null = null;
+    const timestamp = new Date().toISOString();
+    const disqualification = {
+      reason: cleanReason,
+      by: cleanBy || "Admin User",
+      at: timelineLabel(),
+    };
+    const nextLeads = updateLeadById(currentLeads, leadId, (lead) => {
+      linkedSalesLeadId = lead.linkedSalesLeadId;
+      return {
         ...lead,
         stage: "Disqualified",
         onboardingCompletedAt: null,
         priority: "Standard",
         lastTouched: "Just now",
-        disqualification: {
-          reason: cleanReason,
-          by: cleanBy || "Admin User",
-          at: timelineLabel(),
-        },
+        disqualification,
         events: [
           {
             id: makeId("event"),
@@ -1364,8 +1824,31 @@ export function AdminPortalProvider({
           },
           ...lead.events,
         ],
-      })),
-    );
+      };
+    });
+    const nextSalesLeads = linkedSalesLeadId
+      ? currentSalesLeads.map((lead) =>
+          lead.id === linkedSalesLeadId
+            ? {
+                ...lead,
+                qualificationStage: "Does Not Qualify" as const,
+                qualificationReason: cleanReason,
+                status: "Converted" as const,
+                lastUpdatedAt: timestamp,
+              }
+            : lead,
+        )
+      : currentSalesLeads;
+
+    setLeads(nextLeads);
+    if (nextSalesLeads !== currentSalesLeads) {
+      setSalesLeads(nextSalesLeads);
+    }
+    persistSnapshotImmediately({
+      leads: nextLeads,
+      salesLeads: nextSalesLeads,
+      activeLeadId,
+    });
   };
 
   const generateLeadEoi = (leadId: string) => {
@@ -1383,7 +1866,7 @@ export function AdminPortalProvider({
           stage: promotedStage,
           eoiSigningToken,
           readinessScore: Math.max(lead.readinessScore, 45),
-          nextAction: stageChanged ? "Capture signed EOI from the client." : lead.nextAction,
+          nextAction: stageChanged ? "Request signed EOI on company letterhead from the client." : lead.nextAction,
           lastTouched: "Just now",
         };
 
@@ -1406,8 +1889,8 @@ export function AdminPortalProvider({
               title: "EOI generated",
               detail:
                 STAGE_RANK[lead.stage] > STAGE_RANK["EOI Generated"]
-                  ? `EOI regenerated and signing link refreshed at /eoi/${eoiSigningToken}.`
-                  : `System generated Expression of Interest and shared /eoi/${eoiSigningToken} for digital signature.`,
+                  ? `EOI regenerated and template copy link refreshed at /eoi/${eoiSigningToken}.`
+                  : `System generated Expression of Interest and shared /eoi/${eoiSigningToken} for client letterhead completion.`,
               createdAt: timelineLabel(),
               tone: "system",
             },
@@ -1461,8 +1944,8 @@ export function AdminPortalProvider({
           events: [
             {
               id: makeId("event"),
-              title: "EOI digitally signed",
-              detail: `Client completed digital signature ${signatureId} and signed EOI was captured at ${signedAtIso}.`,
+              title: "Signed EOI recorded",
+              detail: `Signed EOI was captured at ${signedAtIso}. Record ID: ${signatureId}.`,
               createdAt: timelineLabel(),
               tone: "client",
             },
@@ -1854,6 +2337,9 @@ export function AdminPortalProvider({
     createLeadTask,
     toggleLeadTask,
     createLead,
+    createLeadShell,
+    importLeadShells,
+    updateLeadProfile,
     createSalesLead,
     updateSalesLeadQualificationStage,
     updateSalesLeadOwner,
@@ -1884,9 +2370,9 @@ export function AdminPortalProvider({
     return (
       <div className="flex min-h-screen items-center justify-center bg-black px-6 text-center">
         <div>
-          <p className="line-label">Loading CRM</p>
+          <p className="line-label">Loading Leads</p>
           <p className="mt-3 text-sm text-white/58">
-            Syncing admin and sales workspace state.
+            Syncing the lead book.
           </p>
         </div>
       </div>

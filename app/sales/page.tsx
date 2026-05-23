@@ -1,13 +1,5 @@
-import { SalesOverviewRoute } from "@/components/sales/routes/SalesOverviewRoute";
-import { requireServerAuthSession } from "@/lib/auth-server";
+import { redirect } from "next/navigation";
 
-export default async function SalesPage() {
-  const session = await requireServerAuthSession("sales");
-
-  return (
-    <SalesOverviewRoute
-      email={session.email}
-      agentId={session.agentId}
-    />
-  );
+export default function SalesPage() {
+  redirect("/sales/leads");
 }

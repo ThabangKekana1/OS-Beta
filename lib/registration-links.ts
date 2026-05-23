@@ -6,6 +6,12 @@ export type RegistrationProfile = {
   agentId: string | null;
 };
 
+export type RegistrationLeadProfile = {
+  leadId: string;
+  clientProfileId: string;
+  email?: string | null;
+};
+
 function hashBase36(value: string) {
   let hash = 2166136261;
 
@@ -22,6 +28,24 @@ export function registrationLinkIdForProfile(profile: RegistrationProfile) {
   return `${profile.role}-${hashBase36(stableKey)}`;
 }
 
+export function registrationLinkIdForLead(lead: RegistrationLeadProfile) {
+  const stableKey = [lead.leadId, lead.clientProfileId, lead.email?.trim().toLowerCase() ?? ""]
+    .filter(Boolean)
+    .join(":");
+  return `lead-${hashBase36(stableKey)}`;
+}
+
 export function registrationLinkPath(linkId: string) {
   return `/register/${encodeURIComponent(linkId)}`;
+}
+
+export function documentUploadLinkIdForLead(lead: RegistrationLeadProfile) {
+  const stableKey = ["documents", lead.leadId, lead.clientProfileId, lead.email?.trim().toLowerCase() ?? ""]
+    .filter(Boolean)
+    .join(":");
+  return `docs-${hashBase36(stableKey)}`;
+}
+
+export function documentUploadLinkPath(linkId: string) {
+  return `/upload/${encodeURIComponent(linkId)}`;
 }

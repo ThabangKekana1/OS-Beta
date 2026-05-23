@@ -1,17 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAdminPortal } from "@/components/admin/AdminPortalProvider";
 import { AdminBadge, AdminHeader } from "@/components/admin/AdminPrimitives";
+import { getAdminSenderOptions } from "@/lib/admin-mailboxes";
 import {
   buildEoiTemplateFilename,
   buildEoiTemplateText,
   EOI_TEMPLATE_TITLE,
 } from "@/lib/eoi-template";
+import { isValidSouthAfricanCompanyRegistration } from "@/lib/company-registration";
+import {
+  buildEmailHtmlWithFoundationBanner,
+  buildFoundationOutreachBody,
+  FOUNDATION_BROCHURE_FILENAME,
+  FOUNDATION_BROCHURE_PATH,
+  FOUNDATION_OUTREACH_SUBJECT,
+} from "@/lib/outreach-email-template";
+import type { EmailMessage, EmailThread } from "@/lib/email-threads";
 import type {
   AdminDocumentStatus,
   AdminLead,
+  AdminLeadContactStatus,
   AdminLeadPriority,
   AdminLeadStage,
   AdminTaskOwner,
@@ -22,7 +33,12 @@ import {
   downloadTextFile,
   sanitizeFileSegment,
 } from "@/lib/download-utils";
-import { buildUtilityBillUploadPath } from "@/lib/utility-bill-upload";
+import {
+  documentUploadLinkIdForLead,
+  documentUploadLinkPath,
+  registrationLinkIdForLead,
+  registrationLinkPath,
+} from "@/lib/registration-links";
 
 const priorities: AdminLeadPriority[] = ["Standard", "Priority", "Executive"];
 const taskOwners: AdminTaskOwner[] = ["Agent", "Client", "Ops", "Legal"];
@@ -67,6 +83,22 @@ const emptyWorkflowFiles: Record<WorkflowFileKey, File | null> = {
   termSheetIssue: null,
   signedTermSheet: null,
 };
+
+type ComposeAttachment = {
+  filename: string;
+  content: string;
+  contentType: string;
+  size: number;
+  contentId?: string;
+};
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "";
+  return new Date(value).toLocaleString("en-ZA", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
 
 function toCurrency(value: number) {
   return new Intl.NumberFormat("en-ZA", {
@@ -117,6 +149,111 @@ function buildDocumentText(lead: AdminLead, documentId: string) {
   ].join("\n");
 }
 
+function buildOutreachSubject() {
+  return FOUNDATION_OUTREACH_SUBJECT;
+}
+
+function buildOutreachBody(lead: AdminLead) {
+  return buildFoundationOutreachBody({
+    contactName: lead.contactName || lead.contactFirstName,
+    company: lead.company,
+  });
+}
+
+async function assetToComposeAttachment(
+  path: string,
+  filename: string,
+  contentType: string,
+  contentId?: string,
+): Promise<ComposeAttachment> {
+  const response = await fetch(path, { cache: "force-cache" });
+  if (!response.ok) throw new Error(`Could not load ${filename}`);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...Array.from(bytes.subarray(index, index + chunkSize)));
+  }
+  return {
+    filename,
+    content: btoa(binary),
+    contentType,
+    size: bytes.byteLength,
+    contentId,
+  };
+}
+
+async function buildFoundationOutreachAttachments(): Promise<ComposeAttachment[]> {
+  const brochureAttachment = await assetToComposeAttachment(
+    FOUNDATION_BROCHURE_PATH,
+    FOUNDATION_BROCHURE_FILENAME,
+    "application/pdf",
+  );
+  return [brochureAttachment];
+}
+
+function withoutFoundationOutreachAttachments(attachments: ComposeAttachment[]) {
+  return attachments.filter(
+    (attachment) => attachment.filename !== FOUNDATION_BROCHURE_FILENAME,
+  );
+}
+
+function buildProposalSubject(lead: AdminLead) {
+  return `Proposal - ${lead.company}`;
+}
+
+function buildProposalBody(lead: AdminLead) {
+  return [
+    `Hi ${lead.contactFirstName || lead.contactName},`,
+    "",
+    "Please find the proposal attached for your review.",
+    "",
+    "Once reviewed, reply to this email with any questions or confirmation on the next step.",
+    "",
+    "Kind regards,",
+  ].join("\n");
+}
+
+function registrationMissingFields(lead: AdminLead) {
+  const missing: string[] = [];
+  if (!lead.company.trim()) missing.push("company name");
+  if (!isValidSouthAfricanCompanyRegistration(lead.businessRegistrationNumber)) {
+    missing.push("valid company registration number");
+  }
+  if (!lead.industry.trim()) missing.push("industry");
+  if (!(lead.contactFirstName ?? "").trim()) missing.push("contact first name");
+  if (!(lead.contactSurname ?? "").trim()) missing.push("contact surname");
+  if (!(lead.contactPosition ?? lead.userProfile.role).trim()) missing.push("contact position");
+  if (!lead.userProfile.email.trim()) missing.push("contact email");
+  if (!lead.userProfile.phone.trim()) missing.push("contact phone");
+  if (!lead.physicalAddress.trim()) missing.push("physical address");
+  if (!lead.city.trim()) missing.push("city");
+  if (!lead.province.trim()) missing.push("province");
+  if (lead.monthlyElectricitySpendEstimateZar < 10_000) {
+    missing.push("monthly electricity spend");
+  }
+  if (!lead.isBusinessRegistered) missing.push("CIPC registered");
+  if (!lead.isBusinessOperational) missing.push("operational business");
+  return missing;
+}
+
+function fileToComposeAttachment(file: File): Promise<ComposeAttachment> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result ?? "");
+      resolve({
+        filename: file.name,
+        content: result.includes(",") ? result.split(",").pop() ?? "" : result,
+        contentType: file.type || "application/octet-stream",
+        size: file.size,
+      });
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
 function filenameFromDisposition(
   disposition: string | null,
   fallback: string,
@@ -145,8 +282,8 @@ function filenameFromDisposition(
 
 export function AdminLeadProfileRoute({
   leadId,
-  backHref = "/admin/clients",
-  backLabel = "Back to Clients",
+  backHref = "/admin/leads",
+  backLabel = "Back to Leads",
   actorRole = "admin",
 }: {
   leadId: string;
@@ -158,11 +295,14 @@ export function AdminLeadProfileRoute({
     leads,
     agents,
     leadStages,
+    contactStatuses,
     setActiveLeadId,
     updateLeadOwner,
     updateLeadPriority,
+    updateLeadContactStatus,
     updateLeadStage,
     updateLeadNextAction,
+    updateLeadProfile,
     addLeadNote,
     createLeadTask,
     toggleLeadTask,
@@ -182,15 +322,34 @@ export function AdminLeadProfileRoute({
       ) ?? null,
     [leadId, leads],
   );
+  const activeLeadId = lead?.id ?? null;
 
   const [nextActionDraft, setNextActionDraft] = useState("");
+  const [profileDraft, setProfileDraft] = useState({
+    company: "",
+    businessRegistrationNumber: "",
+    industry: "",
+    contactFirstName: "",
+    contactSurname: "",
+    contactPosition: "",
+    contactEmail: "",
+    contactNumber: "",
+    monthlyElectricitySpendEstimateZar: "",
+    isBusinessRegistered: false,
+    isBusinessOperational: false,
+    hasSixMonthUtilityBill: false,
+    physicalAddress: "",
+    city: "",
+    province: "",
+  });
   const [noteDraft, setNoteDraft] = useState("");
   const [taskTitleDraft, setTaskTitleDraft] = useState("");
   const [taskDueDraft, setTaskDueDraft] = useState("Tomorrow");
   const [taskOwnerDraft, setTaskOwnerDraft] = useState<AdminTaskOwner>("Agent");
   const [disqualifyReason, setDisqualifyReason] = useState("");
   const [copiedSigningLink, setCopiedSigningLink] = useState(false);
-  const [copiedUtilityBillLink, setCopiedUtilityBillLink] = useState(false);
+  const [copiedRegistrationLink, setCopiedRegistrationLink] = useState(false);
+  const [copiedDocumentUploadLink, setCopiedDocumentUploadLink] = useState(false);
   const [workflowNotice, setWorkflowNotice] = useState<string | null>(null);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadCategory, setUploadCategory] = useState<DocumentCategoryOption>("EOI");
@@ -201,29 +360,213 @@ export function AdminLeadProfileRoute({
     useState<Record<WorkflowFileKey, File | null>>(emptyWorkflowFiles);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [appOrigin, setAppOrigin] = useState("");
+  const senderOptions = useMemo(() => getAdminSenderOptions(), []);
+  const [emailThreads, setEmailThreads] = useState<EmailThread[]>([]);
+  const [selectedEmailThreadId, setSelectedEmailThreadId] = useState<string | null>(null);
+  const [emailMessages, setEmailMessages] = useState<EmailMessage[]>([]);
+  const [emailFrom, setEmailFrom] = useState(senderOptions[0]?.value ?? "");
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [emailAttachments, setEmailAttachments] = useState<ComposeAttachment[]>([]);
+  const [emailOutreachActive, setEmailOutreachActive] = useState(false);
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailNotice, setEmailNotice] = useState<string | null>(null);
   const eoiSigningPath = lead?.eoiSigningToken ? `/eoi/${lead.eoiSigningToken}` : null;
   const eoiSigningUrl = eoiSigningPath ? `${appOrigin}${eoiSigningPath}` : null;
-  const utilityBillUploadPath = buildUtilityBillUploadPath(lead?.eoiSigningToken);
-  const utilityBillUploadUrl = utilityBillUploadPath ? `${appOrigin}${utilityBillUploadPath}` : null;
-  const utilityBillUploadUnlocked = Boolean(lead?.eoiSignedAt && utilityBillUploadUrl);
-  const utilityBillEmailBody = utilityBillUploadUrl && lead
-    ? [
-        `Hi ${lead.contactFirstName || lead.contactName},`,
-        "",
-        "Thank you for approving the Expression of Interest.",
-        "",
-        "Please upload the last 6 months of utility bills or prepaid electricity receipts using this secure 1OS link:",
-        utilityBillUploadUrl,
-        "",
-        "One document per month is ideal. PDF, image, DOCX, XLSX, and TXT files are supported.",
-        "",
-        "Kind regards,",
-      ].join("\n")
-    : "";
+  const registrationLinkPathForLead = lead
+    ? registrationLinkPath(registrationLinkIdForLead({
+        leadId: lead.id,
+        clientProfileId: lead.clientProfileId,
+        email: lead.userProfile.email,
+      }))
+    : null;
+  const registrationLinkUrl = registrationLinkPathForLead ? `${appOrigin}${registrationLinkPathForLead}` : null;
+  const documentUploadPathForLead = lead
+    ? documentUploadLinkPath(documentUploadLinkIdForLead({
+        leadId: lead.id,
+        clientProfileId: lead.clientProfileId,
+        email: lead.userProfile.email,
+      }))
+    : null;
+  const documentUploadUrl = documentUploadPathForLead ? `${appOrigin}${documentUploadPathForLead}` : null;
   const isAdminActor = actorRole === "admin";
   const isSalesActor = actorRole === "sales";
   const isPartnerActor = actorRole === "partner";
   const isSalesLikeActor = isSalesActor || isPartnerActor;
+  const selectedEmailThread = emailThreads.find((thread) => thread.id === selectedEmailThreadId) ?? null;
+  const missingRegistrationFields = useMemo(
+    () => (lead ? registrationMissingFields(lead) : []),
+    [lead],
+  );
+  const canGenerateEoi = missingRegistrationFields.length === 0;
+
+  const refreshLeadThreads = useCallback(async () => {
+    if (!activeLeadId) {
+      setEmailThreads([]);
+      setSelectedEmailThreadId(null);
+      return;
+    }
+
+    setEmailLoading(true);
+    setEmailNotice(null);
+    try {
+      const response = await fetch(
+        `/api/email/threads?leadId=${encodeURIComponent(activeLeadId)}`,
+        { cache: "no-store" },
+      );
+      const payload = (await response.json()) as { threads?: EmailThread[]; error?: string };
+      if (!response.ok) {
+        setEmailNotice(payload.error ?? "Unable to load lead emails.");
+        setEmailThreads([]);
+        setSelectedEmailThreadId(null);
+        return;
+      }
+
+      const nextThreads = payload.threads ?? [];
+      setEmailThreads(nextThreads);
+      setSelectedEmailThreadId((current) => {
+        if (current && nextThreads.some((thread) => thread.id === current)) {
+          return current;
+        }
+        return nextThreads[0]?.id ?? null;
+      });
+    } catch {
+      setEmailNotice("Unable to load lead emails.");
+      setEmailThreads([]);
+      setSelectedEmailThreadId(null);
+    } finally {
+      setEmailLoading(false);
+    }
+  }, [activeLeadId]);
+
+  const prepareEmail = useCallback(async (mode: "outreach" | "proposal") => {
+    if (!lead) return;
+    setEmailNotice(null);
+
+    if (mode === "proposal") {
+      setEmailOutreachActive(false);
+      setEmailSubject(buildProposalSubject(lead));
+      setEmailBody(buildProposalBody(lead));
+      setEmailAttachments((current) => withoutFoundationOutreachAttachments(current));
+    } else {
+      setEmailOutreachActive(true);
+      setEmailSubject(buildOutreachSubject());
+      setEmailBody(buildOutreachBody(lead));
+      try {
+        const outreachAttachments = await buildFoundationOutreachAttachments();
+        setEmailAttachments((current) => [
+          ...withoutFoundationOutreachAttachments(current),
+          ...outreachAttachments,
+        ]);
+      } catch {
+        setEmailNotice("Unable to load the outreach brochure.");
+      }
+    }
+
+    window.requestAnimationFrame(() => {
+      document.getElementById("lead-communication")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }, [lead]);
+
+  const addEmailAttachments = async (incoming: FileList | null) => {
+    if (!incoming) return;
+    const files = Array.from(incoming);
+    if (files.length === 0) return;
+
+    try {
+      const attachments = await Promise.all(files.map((file) => fileToComposeAttachment(file)));
+      setEmailAttachments((current) => {
+        const next = [...current];
+        for (const attachment of attachments) {
+          if (!next.some((existing) => existing.filename === attachment.filename && existing.size === attachment.size)) {
+            next.push(attachment);
+          }
+        }
+        return next;
+      });
+      setEmailNotice(null);
+    } catch {
+      setEmailNotice("Unable to read the selected attachment.");
+    }
+  };
+
+  const removeEmailAttachment = (index: number) => {
+    setEmailAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  };
+
+  const sendLeadEmail = async () => {
+    if (!lead) return;
+    if (!lead.userProfile.email.trim()) {
+      setEmailNotice("This lead needs an email address before outreach can be sent.");
+      return;
+    }
+    if (!emailSubject.trim() || !emailBody.trim()) {
+      setEmailNotice("Subject and body are required.");
+      return;
+    }
+
+    setEmailSending(true);
+    setEmailNotice(null);
+    try {
+      let attachmentsToSend = emailAttachments;
+      if (emailOutreachActive) {
+        try {
+          const hasBrochure = attachmentsToSend.some(
+            (attachment) => attachment.filename === FOUNDATION_BROCHURE_FILENAME,
+          );
+          if (!hasBrochure) {
+            const outreachAttachments = await buildFoundationOutreachAttachments();
+            attachmentsToSend = [
+              ...withoutFoundationOutreachAttachments(attachmentsToSend),
+              ...outreachAttachments,
+            ];
+          }
+        } catch {
+          setEmailNotice("Unable to load the outreach brochure.");
+          return;
+        }
+      }
+
+      const response = await fetch("/api/email/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: isAdminActor ? emailFrom : null,
+          to: lead.userProfile.email,
+          subject: emailSubject,
+          body: emailBody,
+          html: emailOutreachActive
+            ? buildEmailHtmlWithFoundationBanner({ bodyText: emailBody })
+            : undefined,
+          leadId: lead.id,
+          clientProfileId: lead.clientProfileId,
+          threadId: selectedEmailThreadId,
+          attachments: attachmentsToSend,
+        }),
+      });
+      const payload = (await response.json()) as { error?: string; thread?: EmailThread };
+      if (!response.ok) {
+        setEmailNotice(payload.error ?? "Unable to send email.");
+        return;
+      }
+
+      setEmailNotice("Email sent and saved to this lead profile.");
+      setEmailAttachments([]);
+      setEmailOutreachActive(false);
+      if (payload.thread?.id) {
+        setSelectedEmailThreadId(payload.thread.id);
+      }
+      await refreshLeadThreads();
+    } catch {
+      setEmailNotice("Unable to send email.");
+    } finally {
+      setEmailSending(false);
+    }
+  };
 
   const handleDownloadSingleDocument = async (documentId: string) => {
     if (!lead) {
@@ -431,9 +774,16 @@ export function AdminLeadProfileRoute({
   };
 
   const handleGenerateEoi = async () => {
+    if (!canGenerateEoi) {
+      setWorkflowNotice(
+        `Complete registration before generating the EOI: ${missingRegistrationFields.slice(0, 5).join(", ")}${missingRegistrationFields.length > 5 ? "…" : ""}.`,
+      );
+      return;
+    }
+
     const uploaded = await uploadGeneratedEoiDocument();
     if (uploaded) {
-      setWorkflowNotice("EOI generated from the template and signing link is active.");
+      setWorkflowNotice("EOI generated from the template and client copy link is active.");
     }
   };
 
@@ -497,17 +847,25 @@ export function AdminLeadProfileRoute({
     }
   };
 
-  const handleCopyUtilityBillLink = async () => {
-    if (!utilityBillUploadUnlocked || !utilityBillUploadUrl || typeof window === "undefined") {
-      return;
-    }
-
+  const handleCopyRegistrationLink = async () => {
+    if (!registrationLinkUrl || typeof window === "undefined") return;
     try {
-      await navigator.clipboard.writeText(utilityBillUploadUrl);
-      setCopiedUtilityBillLink(true);
-      window.setTimeout(() => setCopiedUtilityBillLink(false), 2000);
+      await navigator.clipboard.writeText(registrationLinkUrl);
+      setCopiedRegistrationLink(true);
+      window.setTimeout(() => setCopiedRegistrationLink(false), 2000);
     } catch {
-      setCopiedUtilityBillLink(false);
+      setCopiedRegistrationLink(false);
+    }
+  };
+
+  const handleCopyDocumentUploadLink = async () => {
+    if (!documentUploadUrl || typeof window === "undefined") return;
+    try {
+      await navigator.clipboard.writeText(documentUploadUrl);
+      setCopiedDocumentUploadLink(true);
+      window.setTimeout(() => setCopiedDocumentUploadLink(false), 2000);
+    } catch {
+      setCopiedDocumentUploadLink(false);
     }
   };
 
@@ -522,6 +880,26 @@ export function AdminLeadProfileRoute({
 
     setActiveLeadId(lead.id);
     setNextActionDraft(lead.nextAction);
+    setProfileDraft({
+      company: lead.company,
+      businessRegistrationNumber: lead.businessRegistrationNumber,
+      industry: lead.industry,
+      contactFirstName: lead.contactFirstName ?? "",
+      contactSurname: lead.contactSurname ?? "",
+      contactPosition: lead.contactPosition ?? lead.userProfile.role,
+      contactEmail: lead.userProfile.email,
+      contactNumber: lead.userProfile.phone,
+      monthlyElectricitySpendEstimateZar:
+        lead.monthlyElectricitySpendEstimateZar > 0
+          ? String(lead.monthlyElectricitySpendEstimateZar)
+          : "",
+      isBusinessRegistered: lead.isBusinessRegistered,
+      isBusinessOperational: lead.isBusinessOperational,
+      hasSixMonthUtilityBill: lead.hasSixMonthUtilityBill,
+      physicalAddress: lead.physicalAddress,
+      city: lead.city,
+      province: lead.province,
+    });
     setNoteDraft("");
     setTaskTitleDraft("");
     setTaskDueDraft("Tomorrow");
@@ -535,14 +913,105 @@ export function AdminLeadProfileRoute({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead?.id, setActiveLeadId]);
 
+  useEffect(() => {
+    if (!lead) {
+      setEmailSubject("");
+      setEmailBody("");
+      setEmailThreads([]);
+      setSelectedEmailThreadId(null);
+      setEmailMessages([]);
+      setEmailAttachments([]);
+      setEmailOutreachActive(false);
+      return;
+    }
+
+    setEmailSubject(buildOutreachSubject());
+    setEmailBody(buildOutreachBody(lead));
+    setEmailOutreachActive(true);
+    setEmailAttachments([]);
+    setEmailNotice(null);
+    setEmailMessages([]);
+    buildFoundationOutreachAttachments()
+      .then((outreachAttachments) => setEmailAttachments(outreachAttachments))
+      .catch(() => setEmailNotice("Unable to load the outreach brochure."));
+    void refreshLeadThreads();
+    // Composer defaults should reset only when navigating to another lead.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLeadId, refreshLeadThreads]);
+
+  useEffect(() => {
+    if (!selectedEmailThreadId) {
+      setEmailMessages([]);
+      return;
+    }
+
+    let cancelled = false;
+    const threadId = selectedEmailThreadId;
+    async function loadMessages() {
+      setEmailLoading(true);
+      try {
+        const response = await fetch(`/api/email/threads/${encodeURIComponent(threadId)}`, {
+          cache: "no-store",
+        });
+        const payload = (await response.json()) as { messages?: EmailMessage[]; error?: string };
+        if (cancelled) return;
+        if (!response.ok) {
+          setEmailNotice(payload.error ?? "Unable to load email thread.");
+          setEmailMessages([]);
+          return;
+        }
+        setEmailMessages(payload.messages ?? []);
+      } catch {
+        if (!cancelled) {
+          setEmailNotice("Unable to load email thread.");
+          setEmailMessages([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setEmailLoading(false);
+        }
+      }
+    }
+
+    void loadMessages();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedEmailThreadId]);
+
+  const handleSaveProfile = () => {
+    if (!lead) return;
+    updateLeadProfile(lead.id, {
+      company: profileDraft.company,
+      businessRegistrationNumber: profileDraft.businessRegistrationNumber,
+      industry: profileDraft.industry,
+      contactFirstName: profileDraft.contactFirstName,
+      contactSurname: profileDraft.contactSurname,
+      contactPosition: profileDraft.contactPosition,
+      contactEmail: profileDraft.contactEmail,
+      contactNumber: profileDraft.contactNumber,
+      monthlyElectricitySpendEstimateZar:
+        Number.parseFloat(
+          profileDraft.monthlyElectricitySpendEstimateZar.replace(/[^0-9.]/g, ""),
+        ) || 0,
+      isBusinessRegistered: profileDraft.isBusinessRegistered,
+      isBusinessOperational: profileDraft.isBusinessOperational,
+      hasSixMonthUtilityBill: profileDraft.hasSixMonthUtilityBill,
+      physicalAddress: profileDraft.physicalAddress,
+      city: profileDraft.city,
+      province: profileDraft.province,
+      source: lead.source,
+    });
+  };
+
   if (!lead) {
     return (
       <div className="flex flex-col gap-4">
         <section className="app-surface rounded-[1.6rem] px-5 py-5 lg:px-6 lg:py-6">
           <AdminHeader
-            eyebrow="Client Profile"
+            eyebrow="Profile"
             title="Profile not found."
-            description="The selected client profile does not exist or was removed."
+            description="The selected lead profile does not exist or was removed."
             actions={
               <Link
                 href={backHref}
@@ -561,9 +1030,9 @@ export function AdminLeadProfileRoute({
     <div className="flex w-full flex-col gap-4 lg:gap-5">
       <section className="app-surface rounded-[1.6rem] px-5 py-5 lg:px-6 lg:py-6">
         <AdminHeader
-          eyebrow="Client Profile"
+          eyebrow="Profile"
           title={`${lead.company} • ${lead.clientProfileId}`}
-          description="Dedicated onboarding profile with stage control, file vault, and sales actions."
+          description="One profile for outreach history, onboarding stage control, file vault, and sales actions."
           actions={
             <Link
               href={backHref}
@@ -607,13 +1076,439 @@ export function AdminLeadProfileRoute({
             <AdminBadge label={lead.priority} tone={lead.priority === "Standard" ? "muted" : "neutral"} />
             {lead.disqualification ? <AdminBadge label="Disqualified" tone="bright" /> : null}
             {lead.userProfile.email ? (
-              <Link
-                href={`/${actorRole}/inbox?lead=${encodeURIComponent(lead.id)}&to=${encodeURIComponent(lead.userProfile.email)}&subject=${encodeURIComponent(`Foundation-1 — ${lead.company}`)}`}
+              <button
+                type="button"
+                onClick={() => void prepareEmail("outreach")}
                 className="rounded-[0.7rem] border border-white/16 px-2.5 py-1.5 text-[0.64rem] uppercase tracking-[0.2em] text-white/82 transition hover:border-white/30 hover:text-white"
               >
                 Email client
-              </Link>
+              </button>
             ) : null}
+          </div>
+        </div>
+      </section>
+
+      <section className="app-surface rounded-[1.4rem] p-4">
+        <div className="grid gap-3 lg:grid-cols-2">
+          <div className="rounded-[1.15rem] border border-white/10 bg-black/30 p-4">
+            <p className="line-label">Unique Registration Link</p>
+            <p className="mt-2 text-sm leading-6 text-white/56">
+              Send this to the lead to complete the missing profile blocks. Submissions update this exact profile.
+            </p>
+            <p className="mt-3 break-all rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2 text-sm text-white/72">
+              {registrationLinkUrl ?? "Loading registration link..."}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {registrationLinkUrl ? (
+                <Link
+                  href={registrationLinkUrl}
+                  target="_blank"
+                  className="rounded-[0.75rem] border border-white/14 px-3 py-2 text-[0.64rem] uppercase tracking-[0.18em] text-white/76 transition hover:border-white/26 hover:text-white"
+                >
+                  Open
+                </Link>
+              ) : null}
+              <button
+                type="button"
+                onClick={handleCopyRegistrationLink}
+                disabled={!registrationLinkUrl}
+                className="rounded-[0.75rem] border border-white/14 px-3 py-2 text-[0.64rem] uppercase tracking-[0.18em] text-white/76 transition hover:border-white/26 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {copiedRegistrationLink ? "Copied" : "Copy Link"}
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-[1.15rem] border border-white/10 bg-black/30 p-4">
+            <p className="line-label">Document Upload Link</p>
+            <p className="mt-2 text-sm leading-6 text-white/56">
+              Send this for EOI files, signed EOI, 6-month utility bills, and signed proposal uploads.
+            </p>
+            <p className="mt-3 break-all rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2 text-sm text-white/72">
+              {documentUploadUrl ?? "Loading document upload link..."}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {documentUploadUrl ? (
+                <Link
+                  href={documentUploadUrl}
+                  target="_blank"
+                  className="rounded-[0.75rem] border border-white/14 px-3 py-2 text-[0.64rem] uppercase tracking-[0.18em] text-white/76 transition hover:border-white/26 hover:text-white"
+                >
+                  Open
+                </Link>
+              ) : null}
+              <button
+                type="button"
+                onClick={handleCopyDocumentUploadLink}
+                disabled={!documentUploadUrl}
+                className="rounded-[0.75rem] border border-white/14 px-3 py-2 text-[0.64rem] uppercase tracking-[0.18em] text-white/76 transition hover:border-white/26 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {copiedDocumentUploadLink ? "Copied" : "Copy Link"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {isAdminActor ? (
+        <section className="app-surface rounded-[1.4rem] p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="line-label">Lead Details</p>
+              <p className="mt-2 text-sm text-white/56">
+                {canGenerateEoi
+                  ? "Registration profile complete. EOI generation is unlocked."
+                  : `Complete registration before EOI: ${missingRegistrationFields.slice(0, 4).join(", ")}${missingRegistrationFields.length > 4 ? "…" : ""}.`}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleSaveProfile}
+              className="rounded-[0.8rem] border border-white/16 bg-white/[0.08] px-3 py-2 text-xs uppercase tracking-[0.2em] text-white/84 transition hover:border-white/28 hover:bg-white/[0.14]"
+            >
+              Save Details
+            </button>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <input
+              value={profileDraft.company}
+              onChange={(event) => setProfileDraft((draft) => ({ ...draft, company: event.target.value }))}
+              placeholder="Company"
+              className="admin-input rounded-[0.8rem] px-3 py-2 text-sm"
+            />
+            <input
+              value={profileDraft.businessRegistrationNumber}
+              onChange={(event) => setProfileDraft((draft) => ({ ...draft, businessRegistrationNumber: event.target.value }))}
+              placeholder="Registration number"
+              className="admin-input rounded-[0.8rem] px-3 py-2 text-sm"
+            />
+            <input
+              value={profileDraft.industry}
+              onChange={(event) => setProfileDraft((draft) => ({ ...draft, industry: event.target.value }))}
+              placeholder="Industry"
+              className="admin-input rounded-[0.8rem] px-3 py-2 text-sm"
+            />
+            <input
+              value={profileDraft.monthlyElectricitySpendEstimateZar}
+              onChange={(event) => setProfileDraft((draft) => ({ ...draft, monthlyElectricitySpendEstimateZar: event.target.value }))}
+              placeholder="Monthly electricity spend"
+              className="admin-input rounded-[0.8rem] px-3 py-2 text-sm"
+            />
+            <input
+              value={profileDraft.contactFirstName}
+              onChange={(event) => setProfileDraft((draft) => ({ ...draft, contactFirstName: event.target.value }))}
+              placeholder="First name"
+              className="admin-input rounded-[0.8rem] px-3 py-2 text-sm"
+            />
+            <input
+              value={profileDraft.contactSurname}
+              onChange={(event) => setProfileDraft((draft) => ({ ...draft, contactSurname: event.target.value }))}
+              placeholder="Surname"
+              className="admin-input rounded-[0.8rem] px-3 py-2 text-sm"
+            />
+            <input
+              value={profileDraft.contactPosition}
+              onChange={(event) => setProfileDraft((draft) => ({ ...draft, contactPosition: event.target.value }))}
+              placeholder="Position"
+              className="admin-input rounded-[0.8rem] px-3 py-2 text-sm"
+            />
+            <input
+              value={profileDraft.contactEmail}
+              onChange={(event) => setProfileDraft((draft) => ({ ...draft, contactEmail: event.target.value }))}
+              placeholder="Email"
+              className="admin-input rounded-[0.8rem] px-3 py-2 text-sm"
+            />
+            <input
+              value={profileDraft.contactNumber}
+              onChange={(event) => setProfileDraft((draft) => ({ ...draft, contactNumber: event.target.value }))}
+              placeholder="Phone"
+              className="admin-input rounded-[0.8rem] px-3 py-2 text-sm"
+            />
+            <input
+              value={profileDraft.physicalAddress}
+              onChange={(event) => setProfileDraft((draft) => ({ ...draft, physicalAddress: event.target.value }))}
+              placeholder="Address"
+              className="admin-input rounded-[0.8rem] px-3 py-2 text-sm xl:col-span-2"
+            />
+            <input
+              value={profileDraft.city}
+              onChange={(event) => setProfileDraft((draft) => ({ ...draft, city: event.target.value }))}
+              placeholder="City"
+              className="admin-input rounded-[0.8rem] px-3 py-2 text-sm"
+            />
+            <input
+              value={profileDraft.province}
+              onChange={(event) => setProfileDraft((draft) => ({ ...draft, province: event.target.value }))}
+              placeholder="Province"
+              className="admin-input rounded-[0.8rem] px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <label className="inline-flex items-center gap-2 rounded-[0.8rem] border border-white/10 px-3 py-2 text-sm text-white/72">
+              <input
+                type="checkbox"
+                checked={profileDraft.isBusinessRegistered}
+                onChange={(event) => setProfileDraft((draft) => ({ ...draft, isBusinessRegistered: event.target.checked }))}
+              />
+              CIPC registered
+            </label>
+            <label className="inline-flex items-center gap-2 rounded-[0.8rem] border border-white/10 px-3 py-2 text-sm text-white/72">
+              <input
+                type="checkbox"
+                checked={profileDraft.isBusinessOperational}
+                onChange={(event) => setProfileDraft((draft) => ({ ...draft, isBusinessOperational: event.target.checked }))}
+              />
+              Operational
+            </label>
+            <label className="inline-flex items-center gap-2 rounded-[0.8rem] border border-white/10 px-3 py-2 text-sm text-white/72">
+              <input
+                type="checkbox"
+                checked={profileDraft.hasSixMonthUtilityBill}
+                onChange={(event) => setProfileDraft((draft) => ({ ...draft, hasSixMonthUtilityBill: event.target.checked }))}
+              />
+              Has utility bills
+            </label>
+          </div>
+        </section>
+      ) : null}
+
+      <section id="lead-communication" className="app-surface scroll-mt-4 rounded-[1.4rem] p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="line-label">Communication</p>
+            <p className="mt-2 text-sm text-white/58">
+              {lead.userProfile.email || "No email address saved for this lead."}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void prepareEmail("outreach")}
+              className="rounded-[0.7rem] border border-white/14 px-2.5 py-1.5 text-[0.64rem] uppercase tracking-[0.18em] text-white/76 transition hover:border-white/26 hover:text-white"
+            >
+              Outreach
+            </button>
+            <button
+              type="button"
+              onClick={() => void prepareEmail("proposal")}
+              className="rounded-[0.7rem] border border-white/14 px-2.5 py-1.5 text-[0.64rem] uppercase tracking-[0.18em] text-white/76 transition hover:border-white/26 hover:text-white"
+            >
+              Proposal
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedEmailThreadId(null);
+                void prepareEmail("outreach");
+              }}
+              className="rounded-[0.7rem] border border-white/14 px-2.5 py-1.5 text-[0.64rem] uppercase tracking-[0.18em] text-white/76 transition hover:border-white/26 hover:text-white"
+            >
+              New Email
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+          <div className="rounded-[0.9rem] border border-white/10 bg-black/30 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs uppercase tracking-[0.2em] text-white/45">
+                Email History
+              </p>
+              <button
+                type="button"
+                onClick={refreshLeadThreads}
+                disabled={emailLoading}
+                className="rounded-[0.65rem] border border-white/12 px-2.5 py-1 text-[0.64rem] uppercase tracking-[0.16em] text-white/72 transition hover:border-white/26 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                Refresh
+              </button>
+            </div>
+
+            {emailThreads.length > 0 ? (
+              <div className="mt-3 flex max-h-40 flex-col gap-2 overflow-y-auto pr-1">
+                {emailThreads.map((thread) => (
+                  <button
+                    key={thread.id}
+                    type="button"
+                    onClick={() => setSelectedEmailThreadId(thread.id)}
+                    className={`rounded-[0.75rem] border px-3 py-2 text-left transition ${
+                      thread.id === selectedEmailThreadId
+                        ? "border-white/26 bg-white/[0.08]"
+                        : "border-white/8 bg-black/35 hover:border-white/18"
+                    }`}
+                  >
+                    <span className="block truncate text-sm text-white/82">
+                      {thread.subject ?? "No subject"}
+                    </span>
+                    <span className="mt-1 block text-[0.62rem] uppercase tracking-[0.16em] text-white/42">
+                      {thread.lastDirection ?? "email"} • {formatDateTime(thread.lastMessageAt)}
+                      {thread.unreadCount > 0 ? ` • ${thread.unreadCount} unread` : ""}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-white/54">
+                {emailLoading ? "Loading emails." : "No email history for this lead yet."}
+              </p>
+            )}
+
+            <div className="mt-4 flex max-h-72 flex-col gap-2 overflow-y-auto pr-1">
+              {emailMessages.length > 0 ? (
+                emailMessages.map((message) => (
+                  <article
+                    key={message.id}
+                    className={`rounded-[0.8rem] border px-3 py-2 ${
+                      message.direction === "outbound"
+                        ? "border-emerald-300/16 bg-emerald-300/[0.05]"
+                        : "border-sky-300/16 bg-sky-300/[0.05]"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs uppercase tracking-[0.16em] text-white/50">
+                        {message.direction === "outbound" ? "Sent" : "Received"}
+                      </p>
+                      <p className="text-xs text-white/42">{formatDateTime(message.sentAt)}</p>
+                    </div>
+                    <p className="mt-1 text-sm text-white/78">
+                      {message.direction === "outbound" ? `To: ${message.toAddresses.join(", ")}` : `From: ${message.fromAddress}`}
+                    </p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/68">
+                      {message.bodyText ?? ""}
+                    </p>
+                    {message.attachments.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {message.attachments.map((attachment) => (
+                          <span
+                            key={attachment.id}
+                            className="rounded-[0.55rem] border border-white/10 px-2 py-1 text-[0.62rem] text-white/58"
+                          >
+                            {attachment.filename}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                  </article>
+                ))
+              ) : (
+                <p className="text-sm text-white/54">
+                  {selectedEmailThread ? "No messages found in this thread." : "Select a thread or send a new email."}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-[0.9rem] border border-white/10 bg-black/30 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs uppercase tracking-[0.2em] text-white/45">
+                {selectedEmailThread ? "Reply" : "Compose"}
+              </p>
+              {selectedEmailThread ? (
+                <button
+                  type="button"
+                  onClick={() => setSelectedEmailThreadId(null)}
+                  className="rounded-[0.65rem] border border-white/12 px-2.5 py-1 text-[0.64rem] uppercase tracking-[0.16em] text-white/72 transition hover:border-white/26 hover:text-white"
+                >
+                  Detach Thread
+                </button>
+              ) : null}
+            </div>
+
+            {isAdminActor ? (
+              <label className="mt-3 flex flex-col gap-1">
+                <span className="text-[0.62rem] font-medium uppercase tracking-[0.2em] text-white/46">
+                  From
+                </span>
+                <select
+                  value={emailFrom}
+                  onChange={(event) => setEmailFrom(event.target.value)}
+                  className="admin-input admin-select rounded-[0.8rem] px-3 py-2 text-sm"
+                >
+                  {senderOptions.map((sender) => (
+                    <option key={sender.email} value={sender.value}>
+                      {sender.label} ({sender.email})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+
+            <label className="mt-3 flex flex-col gap-1">
+              <span className="text-[0.62rem] font-medium uppercase tracking-[0.2em] text-white/46">
+                To
+              </span>
+              <input
+                value={lead.userProfile.email}
+                readOnly
+                className="admin-input rounded-[0.8rem] px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="mt-3 flex flex-col gap-1">
+              <span className="text-[0.62rem] font-medium uppercase tracking-[0.2em] text-white/46">
+                Subject
+              </span>
+              <input
+                value={emailSubject}
+                onChange={(event) => setEmailSubject(event.target.value)}
+                className="admin-input rounded-[0.8rem] px-3 py-2 text-sm"
+              />
+            </label>
+            <textarea
+              rows={9}
+              value={emailBody}
+              onChange={(event) => setEmailBody(event.target.value)}
+              className="admin-input mt-3 w-full rounded-[0.8rem] px-3 py-2 text-sm leading-6"
+            />
+
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+              <label className="inline-flex cursor-pointer items-center rounded-[0.7rem] border border-white/14 px-3 py-1.5 text-[0.64rem] uppercase tracking-[0.16em] text-white/76 transition hover:border-white/26 hover:text-white">
+                <input
+                  type="file"
+                  multiple
+                  onChange={(event) => {
+                    void addEmailAttachments(event.target.files);
+                    event.target.value = "";
+                  }}
+                  className="hidden"
+                />
+                Attach File
+              </label>
+              <button
+                type="button"
+                onClick={sendLeadEmail}
+                disabled={emailSending || !lead.userProfile.email.trim()}
+                className="rounded-[0.75rem] border border-white/14 bg-white/[0.08] px-4 py-2 text-[0.64rem] uppercase tracking-[0.16em] text-white/86 transition hover:border-white/26 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {emailSending ? "Sending" : selectedEmailThread ? "Send Reply" : "Send Email"}
+              </button>
+            </div>
+
+            {emailAttachments.length > 0 ? (
+              <ul className="mt-3 space-y-1.5">
+                {emailAttachments.map((attachment, index) => (
+                  <li
+                    key={`${attachment.filename}-${attachment.size}-${index}`}
+                    className="flex items-center justify-between gap-3 rounded-[0.7rem] border border-white/10 bg-black/35 px-3 py-1.5 text-sm text-white/78"
+                  >
+                    <span className="truncate">
+                      {attachment.filename}{" "}
+                      <span className="text-xs text-white/44">
+                        ({Math.max(1, Math.round(attachment.size / 1024))} KB)
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeEmailAttachment(index)}
+                      className="text-[0.62rem] uppercase tracking-[0.16em] text-white/52 hover:text-rose-200"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
+            {emailNotice ? <p className="mt-3 text-sm text-white/68">{emailNotice}</p> : null}
           </div>
         </div>
       </section>
@@ -621,17 +1516,23 @@ export function AdminLeadProfileRoute({
       <section className="app-surface rounded-[1.4rem] p-4">
         <p className="line-label">Onboarding Workflow</p>
         <p className="mt-2 text-sm text-white/60">
-          Sequence: Client signs EOI via signing link → Client uploads 6-month utility bills → Admin uploads proposal → Admin uploads term sheet → Mark onboarding complete.
+          Flow: Client copies EOI onto letterhead and sends back signed EOI{" -> "}Client uploads 6-month utility bills{" -> "}Admin uploads proposal{" -> "}Admin uploads term sheet{" -> "}Mark onboarding complete.
         </p>
+        {!canGenerateEoi ? (
+          <p className="mt-2 rounded-[0.8rem] border border-amber-300/20 bg-amber-300/[0.06] px-3 py-2 text-sm text-amber-100/82">
+            EOI locked until registration is complete: {missingRegistrationFields.slice(0, 6).join(", ")}
+            {missingRegistrationFields.length > 6 ? "…" : ""}.
+          </p>
+        ) : null}
         {workflowNotice ? (
           <p className="mt-2 text-sm text-white/72">{workflowNotice}</p>
         ) : null}
         <div className="mt-3 rounded-[0.9rem] border border-white/10 bg-black/35 p-3">
           <p className="text-xs uppercase tracking-[0.2em] text-white/45">
-            Client EOI Signing Link
+            Client EOI Template Link
           </p>
           <p className="mt-2 text-sm text-white/70">
-            {eoiSigningUrl ?? "Generate EOI to create the digital signing link."}
+            {eoiSigningUrl ?? "Generate EOI to create the client template link."}
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             {eoiSigningUrl ? (
@@ -640,7 +1541,7 @@ export function AdminLeadProfileRoute({
                 target="_blank"
                 className="rounded-[0.7rem] border border-white/14 px-2.5 py-1.5 text-[0.64rem] uppercase tracking-[0.18em] text-white/76 transition hover:border-white/26 hover:text-white"
               >
-                Open Client Signing Page
+                Open Client Template Page
               </Link>
             ) : null}
             <button
@@ -655,53 +1556,11 @@ export function AdminLeadProfileRoute({
           <p className="mt-2 text-xs text-white/48">
             {lead.eoiSignedAt ? (
               <>
-                Signed by {lead.eoiSignedBy ?? "Client"} • Terms accepted • {new Date(lead.eoiSignedAt).toLocaleString("en-ZA")}
-                <br />
-                Signature ID: {lead.eoiSignatureId ?? "Not recorded"}
+                Signed EOI received from {lead.eoiSignedBy ?? "Client"} • {new Date(lead.eoiSignedAt).toLocaleString("en-ZA")}
               </>
             ) : (
-              "Awaiting client digital signature and terms acceptance."
+              "Awaiting signed EOI by email or document upload."
             )}
-          </p>
-        </div>
-        <div className="mt-3 rounded-[0.9rem] border border-white/10 bg-black/35 p-3">
-          <p className="text-xs uppercase tracking-[0.2em] text-white/45">
-            Client Utility Bills Upload Link
-          </p>
-          <p className="mt-2 break-all text-sm text-white/70">
-            {utilityBillUploadUrl ?? "Generate the EOI first to create this client-specific upload link."}
-          </p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {utilityBillUploadUrl ? (
-              <Link
-                href={utilityBillUploadUrl}
-                target="_blank"
-                className="rounded-[0.7rem] border border-white/14 px-2.5 py-1.5 text-[0.64rem] uppercase tracking-[0.18em] text-white/76 transition hover:border-white/26 hover:text-white"
-              >
-                Open Upload Page
-              </Link>
-            ) : null}
-            <button
-              type="button"
-              onClick={handleCopyUtilityBillLink}
-              disabled={!utilityBillUploadUnlocked}
-              className="rounded-[0.7rem] border border-white/14 px-2.5 py-1.5 text-[0.64rem] uppercase tracking-[0.18em] text-white/76 transition hover:border-white/26 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              {copiedUtilityBillLink ? "Copied" : "Copy Link"}
-            </button>
-            {lead.userProfile.email && utilityBillUploadUnlocked ? (
-              <Link
-                href={`/${actorRole}/inbox?lead=${encodeURIComponent(lead.id)}&to=${encodeURIComponent(lead.userProfile.email)}&subject=${encodeURIComponent(`Upload utility bills — ${lead.company}`)}&body=${encodeURIComponent(utilityBillEmailBody)}`}
-                className="rounded-[0.7rem] border border-white/14 px-2.5 py-1.5 text-[0.64rem] uppercase tracking-[0.18em] text-white/76 transition hover:border-white/26 hover:text-white"
-              >
-                Email Upload Link
-              </Link>
-            ) : null}
-          </div>
-          <p className="mt-2 text-xs text-white/48">
-            {lead.eoiSignedAt
-              ? "Unlocked. Send this secure profile-specific link so the client can upload the last 6 months of utility bills."
-              : "Locked until the client approves the EOI."}
           </p>
         </div>
         <div className="mt-3 grid gap-2 md:grid-cols-2">
@@ -757,7 +1616,7 @@ export function AdminLeadProfileRoute({
               <button
                 type="button"
                 onClick={handleGenerateEoi}
-                disabled={isWorkflowUploading || lead.stage === "Disqualified" || lead.stage === "Onboarding Complete"}
+                disabled={!canGenerateEoi || isWorkflowUploading || lead.stage === "Disqualified" || lead.stage === "Onboarding Complete"}
                 className="rounded-[0.8rem] border border-white/12 bg-white/[0.04] px-3 py-2 text-xs uppercase tracking-[0.2em] text-white/72 transition hover:border-white/24 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
               >
                 {isWorkflowUploading ? "Working" : "Generate EOI"}
@@ -851,6 +1710,19 @@ export function AdminLeadProfileRoute({
               {agents.map((agent) => (
                 <option key={agent.id} value={agent.id}>
                   {agent.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={lead.contactStatus}
+              onChange={(event) =>
+                updateLeadContactStatus(lead.id, event.target.value as AdminLeadContactStatus)
+              }
+              className="admin-input admin-select rounded-[0.8rem] px-3 py-2 text-sm"
+            >
+              {contactStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {status}
                 </option>
               ))}
             </select>

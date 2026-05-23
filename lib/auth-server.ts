@@ -48,7 +48,7 @@ export async function getServerAuthSession(): Promise<AuthSession | null> {
       };
     }
 
-    // No profile row — treat as a client/workspace tenant.
+    // No profile row — keep the user out of admin-only routes.
     return {
       userId: null,
       email,

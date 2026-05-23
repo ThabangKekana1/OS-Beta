@@ -3,8 +3,7 @@ import { LoginForm } from "@/components/auth/LoginForm";
 function loginVariantForPath(nextPath: string | null) {
   if (nextPath?.startsWith("/admin")) return "admin" as const;
   if (nextPath?.startsWith("/sales")) return "sales" as const;
-  if (nextPath?.startsWith("/partner")) return "partner" as const;
-  return "client" as const;
+  return "admin" as const;
 }
 
 export default async function LoginPage({
@@ -13,8 +12,7 @@ export default async function LoginPage({
   searchParams: Promise<{ next?: string; error?: string }>;
 }) {
   // Intentionally do NOT redirect already-authed users. Visiting /login should
-  // always show the form so a user can switch accounts (e.g. log out of CRM
-  // and back in as a client / Dawn user).
+  // always show the form so an admin can switch accounts cleanly.
   const { next, error } = await searchParams;
   const nextPath = next && next.startsWith("/") ? next : null;
   const initialError = error?.trim() ? error.trim() : null;

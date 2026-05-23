@@ -1,5 +1,4 @@
 import { ADMIN_AGENTS } from "@/lib/admin-mock-data";
-import { DEAL_VALUE_ZAR } from "@/lib/admin-kpis";
 import {
   isValidSouthAfricanCompanyRegistration,
 } from "@/lib/company-registration";
@@ -10,6 +9,8 @@ import type {
   AdminLeadPartner,
   AdminLeadRegistrationSource,
 } from "@/lib/admin-types";
+
+const DEAL_VALUE_ZAR = 480_000;
 
 export type ClientRegistrationInput = {
   businessName: string;
@@ -215,7 +216,7 @@ export function buildAdminLeadFromClientRegistration(
     readinessScore: input.hasSixMonthUtilityBill ? 45 : 40,
     estimatedValueZar: DEAL_VALUE_ZAR,
     lastTouched: "Just now",
-    nextAction: "Submit signed EOI for this client to begin onboarding.",
+    nextAction: "Send the EOI template link and request the signed EOI on company letterhead.",
     migrateAccountName,
     migrateAccountId,
     userProfile: {
@@ -470,6 +471,60 @@ export function promoteSignupLeadToClientRegistration(
     lead: upgradedLead,
     leadId: upgradedLead.id,
     clientProfileId: upgradedLead.clientProfileId,
+  };
+}
+
+export function completeExistingLeadFromClientRegistration(
+  existingLead: AdminLead,
+  input: ClientRegistrationInput,
+): ClientRegistrationResult | null {
+  const created = buildAdminLeadFromClientRegistration({
+    ...input,
+    ownerId: existingLead.ownerId || input.ownerId,
+    origin: existingLead.origin,
+    partner: existingLead.partner,
+    partnerOrgId: existingLead.partnerOrgId ?? input.partnerOrgId ?? null,
+  });
+
+  if (!created) {
+    return null;
+  }
+
+  const completedLead: AdminLead = {
+    ...created.lead,
+    id: existingLead.id,
+    clientProfileId: existingLead.clientProfileId,
+    ownerId: existingLead.ownerId || created.lead.ownerId,
+    linkedSalesLeadId: existingLead.linkedSalesLeadId,
+    contactStatus: existingLead.contactStatus,
+    priority: existingLead.priority,
+    partnerOrgId: existingLead.partnerOrgId ?? created.lead.partnerOrgId ?? null,
+    registrationSource: input.registrationSource ?? existingLead.registrationSource ?? null,
+    lastTouched: "Just now",
+    userProfile: {
+      ...created.lead.userProfile,
+      id: existingLead.userProfile.id,
+      joinedAt: existingLead.userProfile.joinedAt || created.lead.userProfile.joinedAt,
+    },
+    tasks: mergeLeadTasks(created.lead.tasks, existingLead.tasks),
+    documents: existingLead.documents,
+    notes: existingLead.notes,
+    events: [
+      {
+        id: makeId("event"),
+        title: "Client registration completed",
+        detail: buildRegistrationEventDetail(input.registrationSource),
+        createdAt: timelineLabel(),
+        tone: "client",
+      },
+      ...existingLead.events,
+    ],
+  };
+
+  return {
+    lead: completedLead,
+    leadId: completedLead.id,
+    clientProfileId: completedLead.clientProfileId,
   };
 }
 

@@ -99,7 +99,7 @@ export function LiveNotificationsPanel() {
           </p>
         ) : items.length === 0 ? (
           <p className="rounded-xl border border-white/8 bg-black/20 p-4 text-sm text-white/58">
-            No notifications yet. EOI signatures, customer uploads, and admin uploads will appear here in real time.
+            No notifications yet. Signed EOIs, customer uploads, and admin uploads will appear here in real time.
           </p>
         ) : (
           items.map((n) => {

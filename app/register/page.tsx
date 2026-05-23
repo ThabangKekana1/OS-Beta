@@ -1,9 +1,10 @@
-import { redirect } from "next/navigation";
+import { PublicClientRegistrationRoute } from "@/components/registration/PublicClientRegistrationRoute";
 
 export const metadata = {
-  title: "Create your 1OS account",
+  title: "Business Registration | Foundation-1",
+  description: "Register your business for Foundation-1 zero-cost solar assessment.",
 };
 
 export default function PublicRegistrationPage() {
-  redirect("/signup");
+  return <PublicClientRegistrationRoute />;
 }

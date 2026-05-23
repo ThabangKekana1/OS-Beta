@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
-type LoginVariant = "admin" | "sales" | "partner" | "client";
+type LoginVariant = "admin" | "sales";
 
 const LOGIN_COPY: Record<
   LoginVariant,
@@ -21,37 +21,19 @@ const LOGIN_COPY: Record<
     heroEyebrow: "Admin access",
     heroTitle: "Log in to the 1OS admin portal.",
     heroDescription:
-      "Use your admin credentials to manage leads, businesses, partners, and internal workflow operations.",
+      "Use your admin credentials to manage leads, client profiles, and inbox workflow operations.",
     formEyebrow: "Admin sign in",
     formTitle: "Continue to admin portal",
     footer: "Need admin access? Ask an existing administrator to provision your role.",
   },
   sales: {
     heroEyebrow: "Sales access",
-    heroTitle: "Log in to the 1OS sales workspace.",
+    heroTitle: "Log in to the 1OS sales portal.",
     heroDescription:
-      "Use your sales credentials to manage pipeline, outreach, and client progression inside the 1OS CRM.",
+      "Use your sales credentials to manage your lead book, outreach, and inbox workflow.",
     formEyebrow: "Sales sign in",
-    formTitle: "Continue to sales workspace",
-    footer: "Need sales access? Ask an administrator to provision your role.",
-  },
-  partner: {
-    heroEyebrow: "Partner access",
-    heroTitle: "Log in to the 1OS partner portal.",
-    heroDescription:
-      "Use your partner credentials to track referred leads, commissions, and onboarding progress.",
-    formEyebrow: "Partner sign in",
-    formTitle: "Continue to partner portal",
-    footer: "Need partner access? Ask a 1OS administrator to provision your role.",
-  },
-  client: {
-    heroEyebrow: "Welcome back",
-    heroTitle: "Log in to continue your migration with Dawn.",
-    heroDescription:
-      "Pick up right where you left off. Your case, documents, and migration plan are waiting in your private workspace.",
-    formEyebrow: "Sign in",
-    formTitle: "Continue to dashboard",
-    footer: "New to 1OS?",
+    formTitle: "Continue to sales portal",
+    footer: "Need sales access? Ask an administrator to provision your profile.",
   },
 };
 
@@ -70,23 +52,12 @@ export function LoginForm({
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(initialError ?? null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
   const copy = LOGIN_COPY[variant];
 
   useEffect(() => {
-    const signupFlag = searchParams.get("signup");
     const signupEmail = searchParams.get("email");
     if (signupEmail) {
       setEmail(signupEmail);
-    }
-    if (signupFlag === "check-email") {
-      setNotice(
-        signupEmail
-          ? `Account created. We sent a confirmation link to ${signupEmail}. Confirm it, then sign in here.`
-          : "Account created. Check your inbox for the confirmation link, then sign in here.",
-      );
-    } else if (signupFlag === "success") {
-      setNotice("Account created. You can sign in now.");
     }
   }, [searchParams]);
 
@@ -104,6 +75,16 @@ export function LoginForm({
         });
 
       if (supabaseData?.session) {
+        await fetch("/api/auth/login-event", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-1os-api-client": "dashboard",
+          },
+          body: JSON.stringify({ eventType: "login" }),
+        }).catch((auditError) => {
+          console.error("[auth] login audit failed", auditError);
+        });
         router.replace(nextPath ?? "/");
         router.refresh();
         return;
@@ -121,8 +102,13 @@ export function LoginForm({
       }
 
       setError(supabaseError?.message ?? "Login failed. Please try again.");
-    } catch {
-      setError("Unable to reach login service. Please try again.");
+    } catch (loginError) {
+      console.error("[auth] login request failed", loginError);
+      const message =
+        loginError instanceof Error && loginError.message.trim()
+          ? loginError.message
+          : "Unknown browser or network error";
+      setError(`Unable to reach login service: ${message}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -184,12 +170,6 @@ export function LoginForm({
               />
             </div>
 
-            {notice ? (
-              <p className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
-                {notice}
-              </p>
-            ) : null}
-
             {error ? (
               <p className="rounded-lg border border-rose-500/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
                 {error}
@@ -205,16 +185,7 @@ export function LoginForm({
             </button>
           </form>
 
-          {variant === "client" ? (
-            <p className="mt-6 text-center text-xs text-white/55">
-              {copy.footer}{" "}
-              <a href="/signup" className="text-white underline-offset-4 hover:underline">
-                Create an account
-              </a>
-            </p>
-          ) : (
-            <p className="mt-6 text-center text-xs text-white/55">{copy.footer}</p>
-          )}
+          <p className="mt-6 text-center text-xs text-white/55">{copy.footer}</p>
         </div>
       </section>
     </div>

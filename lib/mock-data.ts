@@ -608,7 +608,7 @@ const INITIAL_CASES: MigrationCase[] = [
     },
     stage: "New",
     owner: "Sipho T.",
-    nextAction: "Complete, digitally sign, and submit your Expression of Interest (EOI).",
+    nextAction: "Copy the Expression of Interest (EOI), place it on letterhead, sign it, and send it back.",
     lastUpdated: "2 hours ago",
     priority: "Priority",
     productRecommendation: null,
@@ -634,7 +634,7 @@ const INITIAL_CASES: MigrationCase[] = [
         type: "assistant",
         timestamp: "08:34",
         content:
-          "Welcome to 1OS migration. First step is completing and digitally signing your Expression of Interest (EOI), then submitting it in this workspace.",
+          "Welcome to 1OS migration. First step is copying your Expression of Interest (EOI), placing it on letterhead, signing it, and sending it back.",
       },
       {
         id: "clover-message-2",
@@ -642,7 +642,7 @@ const INITIAL_CASES: MigrationCase[] = [
         mode: "Onboarding",
         timestamp: "08:39",
         content:
-          "Please guide me through creating and signing the EOI first.",
+          "Please guide me through creating the EOI for our letterhead first.",
       },
     ],
     documents: [
@@ -681,7 +681,7 @@ const INITIAL_CASES: MigrationCase[] = [
     tasks: [
       {
         id: "clover-task-1",
-        title: "Complete and digitally sign Expression of Interest",
+        title: "Copy Expression of Interest onto letterhead",
         owner: "Client",
         dueLabel: "Today",
         status: "open",

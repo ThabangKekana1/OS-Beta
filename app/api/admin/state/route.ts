@@ -9,8 +9,6 @@ import {
   type AdminStateBackend,
 } from "@/lib/admin-state-store";
 import { getServerAuthSession } from "@/lib/auth-server";
-import { getPartnerClientLeads } from "@/lib/partner-client-access";
-import { listRegistrationDrafts, type RegistrationDraft } from "@/lib/registration-agent";
 
 export const runtime = "nodejs";
 
@@ -18,7 +16,7 @@ type StateResponseBody = {
   ok: true;
   backend: AdminStateBackend;
   snapshot: AdminStateSnapshot;
-  registrationDrafts: RegistrationDraft[];
+  registrationDrafts: [];
 };
 
 async function requireSession() {
@@ -31,7 +29,7 @@ async function requireSession() {
   return session;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await requireSession();
 
   if (!session) {
@@ -39,38 +37,19 @@ export async function GET() {
   }
 
   try {
-    const [result, registrationDrafts] = await Promise.all([
-      readAdminStateSnapshot(),
-      listRegistrationDrafts("in_progress"),
-    ]);
-    const snapshot =
-      session.role === "partner"
-        ? session.partnerOrgId
-          ? {
-              ...result.snapshot,
-              leads: getPartnerClientLeads(result.snapshot, session.partnerOrgId),
-              salesLeads: result.snapshot.salesLeads.filter(
-                (lead) => lead.partnerOrgId === session.partnerOrgId,
-              ),
-              partnerOrgs: (result.snapshot.partnerOrgs ?? []).filter(
-                (org) => org.id === session.partnerOrgId,
-              ),
-              activeLeadId: null,
-            }
-          : {
-              ...result.snapshot,
-              leads: [],
-              salesLeads: [],
-              partnerOrgs: [],
-              activeLeadId: null,
-            }
-        : result.snapshot;
+    const isSalesSession = session.role === "sales";
+    const includeSalesLeads =
+      !isSalesSession && request.nextUrl.searchParams.get("includeSalesLeads") !== "0";
+    const result = await readAdminStateSnapshot({
+      includeSalesLeads,
+      leadOwnerId: isSalesSession ? session.agentId : null,
+    });
 
     return NextResponse.json<StateResponseBody>({
       ok: true,
       backend: result.backend,
-      snapshot,
-      registrationDrafts: session.role === "partner" ? [] : registrationDrafts,
+      snapshot: result.snapshot,
+      registrationDrafts: [],
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown Supabase error";
@@ -93,7 +72,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
-  if (session.role === "partner" || session.role === "client") {
+  if (session.role !== "admin") {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 

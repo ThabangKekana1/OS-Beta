@@ -68,10 +68,7 @@ export async function GET(request: Request) {
 
   const session = await getServerAuthSession();
   const fallback = session ? resolveDefaultRouteForRole(session.role) : "/";
-  const next =
-    nextParam === "/" || (nextParam === "/workspace" && session?.role !== "client")
-      ? fallback
-      : nextParam;
+  const next = nextParam === "/" ? fallback : nextParam;
 
   return NextResponse.redirect(new URL(next, origin));
 }

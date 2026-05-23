@@ -4,24 +4,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Bell,
-  Building2,
-  ChartColumnIncreasing,
-  CircleUserRound,
+  Activity,
   ClipboardList,
-  Database,
-  FileUp,
-  FolderDown,
-  Handshake,
-  Inbox,
-  Kanban,
   Mail,
-  MessagesSquare,
-  Settings2,
-  Send,
-  ShieldCheck,
-  UserPlus2,
-  Users,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { BrandMarkOneOS } from "@/components/sidebar/BrandMarkOneOS";
@@ -30,134 +17,72 @@ import { cn } from "@/lib/utils";
 
 type NotificationSummary = {
   unreadInboxCount: number;
-  unreadNotificationCount: number;
 };
 
-const navItems = [
-  {
-    id: "overview",
-    label: "Overview",
-    href: "/admin",
-    icon: ChartColumnIncreasing,
-  },
+function navItemsFor(rootPath: "/admin" | "/sales", showSales: boolean) {
+  return [
   {
     id: "leads",
-    label: "My Leads",
-    href: "/admin/leads",
+    label: "Leads",
+    href: `${rootPath}/leads`,
     icon: ClipboardList,
   },
-  {
-    id: "sequences",
-    label: "Sequences",
-    href: "/admin/sequences",
-    icon: Send,
-  },
-  {
-    id: "repository",
-    label: "Repository",
-    href: "/admin/repository",
-    icon: Database,
-  },
-  {
-    id: "businesses",
-    label: "Businesses",
-    href: "/admin/businesses",
-    icon: Building2,
-  },
-  {
-    id: "registration",
-    label: "Register Client",
-    href: "/admin/registration",
-    icon: UserPlus2,
-  },
-  {
-    id: "clients",
-    label: "Clients",
-    href: "/admin/clients",
-    icon: Users,
-  },
-  {
-    id: "kpis",
-    label: "KPIs",
-    href: "/admin/kpis",
-    icon: ChartColumnIncreasing,
-  },
-  {
-    id: "pipeline",
-    label: "Pipeline",
-    href: "/admin/pipeline",
-    icon: Kanban,
-  },
-  {
-    id: "sales-reps",
-    label: "Sales Reps",
-    href: "/admin/sales-reps",
-    icon: CircleUserRound,
-  },
-  {
-    id: "partners",
-    label: "Partners",
-    href: "/admin/partners",
-    icon: Handshake,
-  },
-  {
-    id: "partner-leads",
-    label: "Partner Leads",
-    href: "/admin/partner-leads",
-    icon: Inbox,
-  },
+  ...(showSales
+    ? [
+        {
+          id: "sales",
+          label: "Sales",
+          href: "/admin/sales",
+          icon: Activity,
+        },
+      ]
+    : []),
   {
     id: "inbox",
     label: "Inbox",
-    href: "/admin/inbox",
+    href: `${rootPath}/inbox`,
     icon: Mail,
   },
-  {
-    id: "notifications",
-    label: "Notifications",
-    href: "/admin/notifications",
-    icon: Bell,
-  },
-  {
-    id: "resources",
-    label: "Resources",
-    href: "/admin/resources",
-    icon: FolderDown,
-  },
-  {
-    id: "transcripts",
-    label: "AI Transcripts",
-    href: "/admin/transcripts",
-    icon: MessagesSquare,
-  },
-  {
-    id: "agent-guardrails",
-    label: "Agent Guardrails",
-    href: "/admin/agent-guardrails",
-    icon: ShieldCheck,
-  },
-  {
-    id: "case-documents",
-    label: "Case Documents",
-    href: "/admin/case-documents",
-    icon: FileUp,
-  },
-  {
-    id: "settings",
-    label: "Settings",
-    href: "/admin/settings",
-    icon: Settings2,
-  },
-] as const;
+  ] as const;
+}
+
+const SIDEBAR_STORAGE_KEY = "oneos:admin-sidebar";
+
+function isActivePath(pathname: string, href: string) {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function hasValidLeadEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
 
 export function AdminSidebar({
-}: Record<string, never>) {
+  mobile = false,
+  rootPath = "/admin",
+  portalRole = "admin",
+  showSales = true,
+}: {
+  mobile?: boolean;
+  rootPath?: "/admin" | "/sales";
+  portalRole?: "admin" | "sales";
+  showSales?: boolean;
+}) {
   const pathname = usePathname();
   const { leads } = useAdminPortal();
+  const navItems = navItemsFor(rootPath, showSales);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === "undefined" || mobile) return false;
+    return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "collapsed";
+  });
   const [summary, setSummary] = useState<NotificationSummary>({
     unreadInboxCount: 0,
-    unreadNotificationCount: 0,
   });
+
+  useEffect(() => {
+    if (mobile) return;
+    window.localStorage.setItem(SIDEBAR_STORAGE_KEY, collapsed ? "collapsed" : "expanded");
+    document.documentElement.dataset.adminSidebar = collapsed ? "collapsed" : "expanded";
+  }, [collapsed, mobile]);
 
   useEffect(() => {
     let cancelled = false;
@@ -170,7 +95,6 @@ export function AdminSidebar({
         if (!cancelled) {
           setSummary({
             unreadInboxCount: Number(json.unreadInboxCount ?? 0),
-            unreadNotificationCount: Number(json.unreadNotificationCount ?? 0),
           });
         }
       } catch {
@@ -186,25 +110,42 @@ export function AdminSidebar({
     };
   }, []);
 
-  const openLeads = leads.filter(
+  const emailLeads = leads.filter((lead) => hasValidLeadEmail(lead.userProfile.email));
+  const openLeads = emailLeads.filter(
     (lead) => !["Onboarding Complete", "Disqualified"].includes(lead.stage),
   ).length;
-  const highPriority = leads.filter((lead) => lead.priority !== "Standard").length;
+  const highPriority = emailLeads.filter((lead) => lead.priority !== "Standard").length;
 
   return (
-    <aside className="hidden lg:block">
-      <div className="sticky top-4 flex h-[calc(100vh-2rem)] flex-col gap-5 overflow-y-auto rounded-[2rem] border border-white/10 bg-black p-4 shadow-[0_30px_90px_rgba(0,0,0,0.5)]">
-        <div className="border-b border-white/10 px-1 pb-4 pt-2">
-          <BrandMarkOneOS />
+    <aside className={mobile ? "block" : "hidden lg:block"}>
+      <div className={cn(
+        "flex flex-col gap-5 overflow-y-auto rounded-[2rem] border border-white/10 bg-black p-4 shadow-[0_30px_90px_rgba(0,0,0,0.5)]",
+        mobile ? "max-h-[calc(100vh-5rem)]" : "sticky top-4 h-[calc(100vh-2rem)]",
+      )}>
+        <div className="flex items-center justify-between gap-2 border-b border-white/10 px-1 pb-4 pt-2">
+          <div className={cn(collapsed && !mobile ? "hidden" : "block")}>
+            <BrandMarkOneOS />
+          </div>
+          {!mobile ? (
+            <button
+              type="button"
+              onClick={() => setCollapsed((value) => !value)}
+              className="inline-flex size-9 items-center justify-center rounded-full border border-white/12 bg-white/[0.04] text-white/70 transition hover:border-white/24 hover:text-white"
+              aria-label={collapsed ? "Maximise sidebar" : "Minimise sidebar"}
+              title={collapsed ? "Maximise sidebar" : "Minimise sidebar"}
+            >
+              {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+            </button>
+          ) : null}
         </div>
 
-        <div className="rounded-[1.2rem] border border-white/10 bg-white/[0.03] p-4">
-          <p className="line-label">Admin Portal</p>
+        <div className={cn("rounded-[1.2rem] border border-white/10 bg-white/[0.03] p-4", collapsed && !mobile ? "hidden" : "block")}>
+          <p className="line-label">{portalRole === "sales" ? "Sales Portal" : "Admin Portal"}</p>
           <h2 className="mt-2 text-lg font-medium tracking-[-0.03em] text-white">
-            Sales Command
+            Lead Desk
           </h2>
           <p className="mt-2 text-sm leading-6 text-white/56">
-            Independent CRM for the 1OS sales team managing migrate portal leads.
+            One lead lifecycle from outreach through onboarding and client handover.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <span className="rounded-full border border-white/14 px-2.5 py-1 text-[0.62rem] uppercase tracking-[0.22em] text-white/58">
@@ -218,13 +159,9 @@ export function AdminSidebar({
 
         <nav className="flex flex-col gap-1.5">
           {navItems.map((item) => {
-            const active = item.href === "/admin"
-              ? pathname === "/admin"
-              : pathname === item.href || pathname.startsWith(`${item.href}/`);
+            const active = isActivePath(pathname, item.href);
             const Icon = item.icon;
-            const showDot =
-              (item.id === "inbox" && summary.unreadInboxCount > 0) ||
-              (item.id === "notifications" && summary.unreadNotificationCount > 0);
+            const showDot = item.id === "inbox" && summary.unreadInboxCount > 0;
 
             return (
               <Link
@@ -236,6 +173,7 @@ export function AdminSidebar({
                     ? "border-white/20 bg-white/[0.06] text-white"
                     : "border-transparent bg-transparent text-white/62 hover:border-white/12 hover:bg-white/[0.03] hover:text-white/92",
                 )}
+                title={item.label}
               >
                 <span
                   className={cn(
@@ -250,17 +188,18 @@ export function AdminSidebar({
                     <span className="absolute right-0.5 top-0.5 size-2.5 rounded-full border border-black bg-red-500" />
                   ) : null}
                 </span>
-                <span className="text-sm">{item.label}</span>
+                <span className={cn("text-sm", collapsed && !mobile ? "sr-only" : "")}>{item.label}</span>
               </Link>
             );
           })}
         </nav>
 
-        <div className="mt-auto rounded-[1.2rem] border border-white/10 bg-white/[0.02] p-4">
+        <div className={cn("mt-auto rounded-[1.2rem] border border-white/10 bg-white/[0.02] p-4", collapsed && !mobile ? "hidden" : "block")}>
           <p className="line-label">Session</p>
           <p className="mt-2 text-sm leading-6 text-white/58">
-            Internal admin session active. This portal is isolated from the migration client
-            workspace and built for internal sales operations.
+            {portalRole === "sales"
+              ? "Sales session active. Your workspace is scoped to your own lead book and inbox."
+              : "Internal admin session active. This portal is isolated from the migration client workspace and built for internal sales operations."}
           </p>
           <div className="mt-4">
             <SignOutButton />

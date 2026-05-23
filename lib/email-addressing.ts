@@ -1,15 +1,15 @@
-const DEFAULT_OUTBOUND_EMAIL_DOMAIN = "replies.1os.co.za";
+const DEFAULT_OUTBOUND_EMAIL_DOMAIN = "foundation-1.co.za";
 
 function normalizeEnv(value: string | undefined) {
   return value?.trim().replace(/^["']|["']$/g, "") ?? "";
 }
 
 export function getOutboundEmailDomain() {
-  return (
-    normalizeEnv(process.env.EMAIL_OUTBOUND_DOMAIN) ||
-    normalizeEnv(process.env.EMAIL_REPLY_DOMAIN) ||
-    DEFAULT_OUTBOUND_EMAIL_DOMAIN
-  ).replace(/^@/, "");
+  const configured = normalizeEnv(process.env.EMAIL_OUTBOUND_DOMAIN).replace(/^@/, "").toLowerCase();
+  if (configured && !configured.startsWith("replies.")) {
+    return configured;
+  }
+  return DEFAULT_OUTBOUND_EMAIL_DOMAIN;
 }
 
 export function emailOnOutboundDomain(email: string) {

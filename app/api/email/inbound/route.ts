@@ -412,7 +412,7 @@ export async function POST(request: Request) {
         kind: "system",
         title: `New email reply from ${fromAddress.name ?? fromAddress.email}`,
         body: subject,
-        link: `/sales/inbox?thread=${recorded.thread.id}`,
+        link: `/admin/inbox?thread=${recorded.thread.id}`,
         metadata: { threadId: recorded.thread.id, leadId },
       }).catch((err) => console.error("[email/inbound] sales notification failed", err));
     }

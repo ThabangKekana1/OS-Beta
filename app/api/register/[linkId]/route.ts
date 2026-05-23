@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readAdminStateSnapshot, writeAdminStateSnapshot } from "@/lib/admin-state-store";
+import {
+  findLeadByRegistrationLinkFromDatabase,
+  findLeadsByEmailFromDatabase,
+  upsertSingleLeadToDatabase,
+} from "@/lib/supabase-db-store";
 import { ADMIN_AGENTS } from "@/lib/admin-mock-data";
 import {
   buildAdminLeadFromClientRegistration,
+  completeExistingLeadFromClientRegistration,
   defaultOwnerIdForRegistration,
   findSignupShellLeadByEmail,
   promoteSignupLeadToClientRegistration,
 } from "@/lib/client-registration";
-import { registrationLinkIdForProfile } from "@/lib/registration-links";
+import { registrationLinkIdForLead, registrationLinkIdForProfile } from "@/lib/registration-links";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
-import type { AdminLeadRegistrationSource } from "@/lib/admin-types";
+import type { AdminLead, AdminLeadRegistrationSource } from "@/lib/admin-types";
 
 export const runtime = "nodejs";
 
@@ -111,12 +116,59 @@ async function resolveRegistrationSource(linkId: string): Promise<AdminLeadRegis
   return (await resolveDatabaseRegistrationSource(linkId)) ?? resolveStaticRegistrationSource(linkId);
 }
 
+function leadRegistrationSource(lead: AdminLead, linkId: string): AdminLeadRegistrationSource {
+  return {
+    linkId,
+    profileName: lead.company || lead.contactName || lead.userProfile.email,
+    profileRole: "sales",
+    profileAgentId: lead.ownerId,
+    partnerOrgId: lead.partnerOrgId ?? null,
+    channel: "public_link",
+  };
+}
+
+function findLeadByRegistrationLink(leads: AdminLead[], linkId: string): AdminLead | null {
+  return (
+    leads.find(
+      (lead) =>
+        registrationLinkIdForLead({
+          leadId: lead.id,
+          clientProfileId: lead.clientProfileId,
+          email: lead.userProfile.email,
+        }) === linkId,
+    ) ?? null
+  );
+}
+
+function publicLeadDefaults(lead: AdminLead) {
+  return {
+    businessName: lead.company === "Business details pending" ? "" : lead.company,
+    businessRegistrationNumber: lead.businessRegistrationNumber,
+    industry: lead.industry,
+    contactFirstName: lead.contactFirstName ?? "",
+    contactSurname: lead.contactSurname ?? "",
+    contactPosition: lead.contactPosition ?? lead.userProfile.role,
+    contactEmail: lead.userProfile.email,
+    contactNumber: lead.userProfile.phone,
+    monthlyElectricitySpendEstimateZar: lead.monthlyElectricitySpendEstimateZar,
+    isBusinessRegistered: lead.isBusinessRegistered,
+    isBusinessOperational: lead.isBusinessOperational,
+    hasSixMonthUtilityBill: lead.hasSixMonthUtilityBill,
+    physicalAddress: lead.physicalAddress,
+    city: lead.city,
+    province: lead.province,
+    source: lead.source,
+    ownerId: lead.ownerId,
+  };
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ linkId: string }> },
 ) {
   const { linkId } = await params;
-  const source = await resolveRegistrationSource(linkId);
+  const targetLead = await findLeadByRegistrationLinkFromDatabase(linkId);
+  const source = targetLead ? leadRegistrationSource(targetLead, linkId) : await resolveRegistrationSource(linkId);
 
   if (!source) {
     return NextResponse.json({ ok: false, error: "Registration link not found." }, { status: 404 });
@@ -128,6 +180,7 @@ export async function GET(
       profileName: source.profileName,
       profileRole: source.profileRole,
     },
+    lead: targetLead ? publicLeadDefaults(targetLead) : null,
   });
 }
 
@@ -153,7 +206,8 @@ export async function POST(
   }
 
   const { linkId } = await params;
-  const source = await resolveRegistrationSource(linkId);
+  const targetLead = await findLeadByRegistrationLinkFromDatabase(linkId);
+  const source = targetLead ? leadRegistrationSource(targetLead, linkId) : await resolveRegistrationSource(linkId);
 
   if (!source) {
     return NextResponse.json({ ok: false, error: "Registration link not found." }, { status: 404 });
@@ -214,14 +268,14 @@ export async function POST(
     registrationSource: source,
   } as const;
 
-  const { snapshot } = await readAdminStateSnapshot();
-  const existingSignupShell = findSignupShellLeadByEmail(
-    snapshot.leads,
-    typeof payload.contactEmail === "string" ? payload.contactEmail : "",
-  );
-  const created = existingSignupShell
-    ? promoteSignupLeadToClientRegistration(existingSignupShell, registrationInput)
-    : buildAdminLeadFromClientRegistration(registrationInput);
+  const contactEmail = typeof payload.contactEmail === "string" ? payload.contactEmail : "";
+  const emailLeads = targetLead ? [] : await findLeadsByEmailFromDatabase(contactEmail);
+  const existingSignupShell = findSignupShellLeadByEmail(emailLeads, contactEmail);
+  const created = targetLead
+    ? completeExistingLeadFromClientRegistration(targetLead, registrationInput)
+    : existingSignupShell
+      ? promoteSignupLeadToClientRegistration(existingSignupShell, registrationInput)
+      : buildAdminLeadFromClientRegistration(registrationInput);
 
   if (!created) {
     return NextResponse.json(
@@ -230,18 +284,11 @@ export async function POST(
     );
   }
 
-  const nextSnapshot = {
-    ...snapshot,
-    leads: existingSignupShell
-      ? [created.lead, ...snapshot.leads.filter((lead) => lead.id !== existingSignupShell.id)]
-      : [created.lead, ...snapshot.leads],
-    activeLeadId: created.leadId,
-  };
-  const backend = await writeAdminStateSnapshot(nextSnapshot, `public-registration:${linkId}`);
+  const persisted = await upsertSingleLeadToDatabase(created.lead, `public-registration:${linkId}`);
 
   return NextResponse.json({
     ok: true,
-    backend,
+    backend: persisted ? "supabase" : "local",
     clientProfileId: created.clientProfileId,
   });
 }

@@ -1,8 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import type { EoiTemplateLead } from "@/lib/eoi-template";
+import { useMemo, useState } from "react";
+import {
+  buildEoiTemplateFilename,
+  buildEoiTemplateText,
+  type EoiTemplateLead,
+} from "@/lib/eoi-template";
+import { downloadTextFile } from "@/lib/download-utils";
+
+const EOI_RETURN_EMAIL = "karman@foundation-1.co.za";
 
 type EoiLeadView = EoiTemplateLead & {
   stage: string;
@@ -13,19 +19,14 @@ type EoiLeadView = EoiTemplateLead & {
 };
 
 type EoiSigningFormProps = {
-  token: string;
   initialLead: EoiLeadView;
 };
 
 function signedAtLabel(value: string | null) {
-  if (!value) {
-    return null;
-  }
+  if (!value) return null;
 
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
+  if (Number.isNaN(parsed.getTime())) return value;
 
   return new Intl.DateTimeFormat("en-ZA", {
     dateStyle: "medium",
@@ -33,173 +34,74 @@ function signedAtLabel(value: string | null) {
   }).format(parsed);
 }
 
-function EoiDocument({ lead }: { lead: EoiLeadView }) {
-  const signer = lead.eoiSignedBy ?? lead.contactName;
-  const approvedAt = signedAtLabel(lead.eoiSignedAt);
-  const signatureId = lead.eoiSignatureId?.trim() || null;
-
+function EoiTemplatePreview({ templateText }: { templateText: string }) {
   return (
-    <article className="mx-auto aspect-[210/297] w-full max-w-[210mm] overflow-hidden bg-white px-7 py-10 text-black shadow-[0_30px_120px_rgba(0,0,0,0.48)] sm:px-[24mm] sm:py-[24mm]">
-      <div className="flex h-full flex-col">
-        <h1 className="text-[clamp(1rem,2.3vw,1.55rem)] font-bold uppercase leading-tight">
-          Expression of Interest: Renewable Energy Supply
-        </h1>
-
-        <p className="mt-[9%] text-[clamp(0.86rem,1.65vw,1.18rem)] leading-8">
-          <strong>To Whom It May Concern:</strong> Green Share VPP
-        </p>
-
-        <p className="mt-[6%] text-[clamp(0.86rem,1.65vw,1.18rem)] leading-8">
-          <em>{lead.company}</em> has been approached by Green Share VPP, to supply Renewable Energy to{" "}
-          <em>{lead.company}</em> sites for operation of its facilities.
-        </p>
-
-        <p className="mt-[5%] text-[clamp(0.86rem,1.65vw,1.18rem)] leading-8">
-          Subject to the receipt of the relevant approvals, we hereby confirm our interest to procure
-          renewable energy from Green Share VPP and would like to enter into an information sharing
-          and terms formulation period with the intent of reaching commercial and technical alignment.
-          We hereby request you to commence your engagement with the relevant stakeholder in order to
-          procure the approvals required to make the said terms available.
-        </p>
-
-        <p className="mt-[5%] text-[clamp(0.86rem,1.65vw,1.18rem)] leading-8">
-          Should we reach commercial and technical alignment, <em>{lead.company}</em> would want to
-          explore entering into a comprehensive Zero-Capex Solar agreement.
-        </p>
-
-        <p className="mt-[5%] text-[clamp(0.86rem,1.65vw,1.18rem)] leading-8">
-          This letter is a non-binding expression of interest, and remains subject to a contract
-          between the parties. There is no intention that the content of this letter shall create
-          legal relations between <em>{lead.company}</em> and Green Share VPP.
-        </p>
-
-        <div className="mt-auto space-y-2 pt-8 text-[clamp(0.82rem,1.45vw,1.02rem)] leading-6">
-          <p>Kind Regards,</p>
-          <div className="pt-4">
-            <p>{signer}</p>
-            <p>{lead.userProfile.role}</p>
-            <p>{lead.company}</p>
-            <p>{lead.businessRegistrationNumber}</p>
-            <p>1OS Profile Number: {lead.clientProfileId}</p>
-          </div>
-        </div>
-
-        <div className="mt-8 border-t border-black/18 pt-4 text-[clamp(0.72rem,1.25vw,0.88rem)] leading-6">
-          <p>
-            <strong>Digital approval:</strong>{" "}
-            {lead.isSigned ? `Approved by ${signer}${approvedAt ? ` on ${approvedAt}` : ""}.` : "Pending client approval."}
-          </p>
-          <p>
-            <strong>Signature ID:</strong>{" "}
-            {lead.isSigned ? signatureId ?? "Not recorded" : "Assigned when you approve"}
-          </p>
-          <p>
-            <strong>Timestamp:</strong>{" "}
-            {lead.isSigned ? approvedAt ?? lead.eoiSignedAt ?? "Not recorded" : "Assigned when you approve"}
-          </p>
-        </div>
-      </div>
+    <article className="mx-auto w-full max-w-[210mm] bg-white px-7 py-10 text-black shadow-[0_30px_120px_rgba(0,0,0,0.48)] sm:px-[24mm] sm:py-[24mm]">
+      <pre className="whitespace-pre-wrap break-words font-sans text-[clamp(0.82rem,1.45vw,1.05rem)] leading-7 text-black">
+        {templateText}
+      </pre>
     </article>
   );
 }
 
-export function EoiSigningForm({ token, initialLead }: EoiSigningFormProps) {
-  const router = useRouter();
-  const [lead, setLead] = useState(initialLead);
-  const [approved, setApproved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [redirectIn, setRedirectIn] = useState<number | null>(null);
-  const signedAt = signedAtLabel(lead.eoiSignedAt);
+function copyTextWithTextarea(value: string) {
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.style.top = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  document.body.removeChild(textarea);
+  if (!copied) {
+    throw new Error("Copy command failed");
+  }
+}
 
-  useEffect(() => {
-    if (!lead.isSigned) return;
-    setRedirectIn(3);
-    const tick = setInterval(() => {
-      setRedirectIn((current) => {
-        if (current === null) return null;
-        if (current <= 1) {
-          clearInterval(tick);
-          router.push("/workspace");
-          return 0;
-        }
-        return current - 1;
-      });
-    }, 1000);
-    return () => clearInterval(tick);
-  }, [lead.isSigned, router]);
+export function EoiSigningForm({ initialLead }: EoiSigningFormProps) {
+  const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
+  const signedAt = signedAtLabel(initialLead.eoiSignedAt);
+  const templateText = useMemo(
+    () => buildEoiTemplateText(initialLead),
+    [initialLead],
+  );
+  const filename = useMemo(
+    () => buildEoiTemplateFilename(initialLead.company),
+    [initialLead.company],
+  );
+  const mailtoHref = `mailto:${EOI_RETURN_EMAIL}?subject=${encodeURIComponent(
+    `Signed Expression of Interest - ${initialLead.company}`,
+  )}`;
 
-  const submit = async () => {
-    setError(null);
-    setIsSubmitting(true);
+  const copyTemplate = async () => {
+    setCopyError(null);
 
     try {
-      const response = await fetch(`/api/eoi/${token}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          signedBy: lead.contactName,
-          acceptedTerms: approved,
-        }),
-      });
-
-      const payload = (await response.json()) as {
-        ok?: boolean;
-        error?: string;
-        lead?: EoiLeadView;
-      };
-
-      if (!response.ok || !payload.ok || !payload.lead) {
-        setError(payload.error ?? "Unable to submit approval.");
-        return;
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(templateText);
+      } else {
+        copyTextWithTextarea(templateText);
       }
-
-      setLead(payload.lead);
-      setApproved(false);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2200);
     } catch {
-      setError("Unable to reach the approval service. Please try again.");
-    } finally {
-      setIsSubmitting(false);
+      try {
+        copyTextWithTextarea(templateText);
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 2200);
+      } catch {
+        setCopied(false);
+        setCopyError("Clipboard access failed. Download the text file and copy it from there.");
+      }
     }
   };
 
-  if (lead.isSigned) {
-    return (
-      <div className="w-full max-w-5xl">
-        <section className="mb-5 rounded-[1.4rem] border border-emerald-400/25 bg-emerald-400/10 px-5 py-4 text-center">
-          <p className="text-[0.66rem] uppercase tracking-[0.26em] text-emerald-100/72">
-            Expression of Interest
-          </p>
-          <h1 className="mt-3 text-3xl font-medium tracking-[-0.04em] text-white">
-            EOI approved
-          </h1>
-          <p className="mt-3 text-sm leading-7 text-white/68">
-            Signed Expression of Interest is saved to the client profile documents.
-          </p>
-          <p className="mt-2 text-sm text-white/62">
-            Approved by {lead.eoiSignedBy ?? lead.contactName}
-            {signedAt ? ` on ${signedAt}` : ""}
-          </p>
-          <p className="mt-2 break-all text-xs text-emerald-100/70">
-            Signature ID: {lead.eoiSignatureId ?? "Not recorded"}
-          </p>
-          <p className="mt-3 text-sm text-emerald-100/80">
-            {redirectIn !== null && redirectIn > 0
-              ? `Redirecting you to your workspace in ${redirectIn}\u2026`
-              : "Redirecting you to your workspace\u2026"}
-          </p>
-          <button
-            type="button"
-            onClick={() => router.push("/workspace")}
-            className="mt-3 inline-flex items-center justify-center rounded-xl border border-white/18 bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-white/90"
-          >
-            Go to workspace now
-          </button>
-        </section>
-        <EoiDocument lead={lead} />
-      </div>
-    );
-  }
+  const downloadTemplate = () => {
+    downloadTextFile(filename, templateText);
+  };
 
   return (
     <div className="w-full max-w-5xl">
@@ -208,39 +110,73 @@ export function EoiSigningForm({ token, initialLead }: EoiSigningFormProps) {
           Expression of Interest
         </p>
         <h1 className="mt-3 text-3xl font-medium tracking-[-0.04em] text-white">
-          Review EOI for {lead.company}
+          Copy EOI template for {initialLead.company}
         </h1>
-        <div className="mt-4 rounded-xl border border-white/10 bg-black/30 p-3">
-          <label className="flex items-start gap-3 text-sm leading-6 text-white/72">
-            <input
-              type="checkbox"
-              checked={approved}
-              onChange={(event) => setApproved(event.target.checked)}
-              className="mt-1"
-            />
-            <span>
-              Approve Expression of Interest and attach a digital approval UUID with a timestamp.
-            </span>
-          </label>
+        <p className="mt-3 max-w-3xl text-sm leading-7 text-white/68">
+          The template below is already filled with the registered client information. Copy it onto
+          your company letterhead, sign it through your normal internal process, then email the
+          signed letter back to Foundation-1.
+        </p>
 
-          {error ? (
-            <p className="mt-3 rounded-lg border border-rose-500/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
-              {error}
+        {initialLead.isSigned ? (
+          <p className="mt-3 rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100/78">
+            Signed EOI already recorded{signedAt ? ` on ${signedAt}` : ""}. You can still copy the
+            template if it needs to be reissued.
+          </p>
+        ) : null}
+
+        <div className="mt-4 grid gap-3 rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-white/70 md:grid-cols-3">
+          <div>
+            <p className="text-[0.62rem] uppercase tracking-[0.2em] text-white/42">Step 1</p>
+            <p className="mt-1">Copy the filled EOI text.</p>
+          </div>
+          <div>
+            <p className="text-[0.62rem] uppercase tracking-[0.2em] text-white/42">Step 2</p>
+            <p className="mt-1">Paste it onto company letterhead and sign it.</p>
+          </div>
+          <div>
+            <p className="text-[0.62rem] uppercase tracking-[0.2em] text-white/42">Step 3</p>
+            <p className="mt-1">
+              Email the signed letter to{" "}
+              <a className="text-white underline-offset-4 hover:underline" href={mailtoHref}>
+                {EOI_RETURN_EMAIL}
+              </a>
+              .
             </p>
-          ) : null}
+          </div>
+        </div>
 
+        {copyError ? (
+          <p className="mt-3 rounded-lg border border-rose-500/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+            {copyError}
+          </p>
+        ) : null}
+
+        <div className="mt-4 flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={submit}
-            disabled={isSubmitting || !approved}
-            className="mt-4 w-full rounded-xl border border-white/18 bg-white px-3 py-2.5 text-sm font-medium text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={copyTemplate}
+            className="rounded-xl border border-white/18 bg-white px-4 py-2.5 text-sm font-medium text-black transition hover:bg-white/90"
           >
-            {isSubmitting ? "Submitting..." : "Submit"}
+            {copied ? "Copied" : "Copy Template"}
           </button>
+          <button
+            type="button"
+            onClick={downloadTemplate}
+            className="rounded-xl border border-white/14 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white/78 transition hover:border-white/26 hover:text-white"
+          >
+            Download Text
+          </button>
+          <a
+            href={mailtoHref}
+            className="rounded-xl border border-white/14 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white/78 transition hover:border-white/26 hover:text-white"
+          >
+            Email Signed EOI
+          </a>
         </div>
       </section>
 
-      <EoiDocument lead={lead} />
+      <EoiTemplatePreview templateText={templateText} />
     </div>
   );
 }

@@ -1,13 +1,5 @@
-import { AdminOverviewRoute } from "@/components/admin/routes/AdminOverviewRoute";
-import { requireServerAuthSession } from "@/lib/auth-server";
+import { redirect } from "next/navigation";
 
-export default async function AdminPage() {
-  const session = await requireServerAuthSession("admin");
-
-  return (
-    <AdminOverviewRoute
-      email={session.email}
-      agentId={session.agentId}
-    />
-  );
+export default function AdminPage() {
+  redirect("/admin/leads");
 }

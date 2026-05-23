@@ -14,16 +14,42 @@ const ADMIN_STATE_BUCKET = "oneos-internal-state";
 const ADMIN_STATE_PATH = "admin/state-v1.json";
 
 export type AdminStateBackend = "supabase" | "local";
+export type ReadAdminStateOptions = {
+  includeSalesLeads?: boolean;
+  leadOwnerId?: string | null;
+};
 
-export async function readAdminStateSnapshot(): Promise<{
+function filterSnapshotForOptions(
+  snapshot: AdminStateSnapshot,
+  options: ReadAdminStateOptions,
+): AdminStateSnapshot {
+  const leadOwnerId = options.leadOwnerId?.trim() || null;
+  const leads = leadOwnerId
+    ? snapshot.leads.filter((lead) => lead.ownerId === leadOwnerId)
+    : snapshot.leads;
+  const activeLeadId = leads.some((lead) => lead.id === snapshot.activeLeadId)
+    ? snapshot.activeLeadId
+    : leads[0]?.id ?? null;
+
+  return {
+    ...snapshot,
+    leads,
+    activeLeadId,
+    salesLeads: options.includeSalesLeads === false ? [] : snapshot.salesLeads,
+  };
+}
+
+export async function readAdminStateSnapshot(
+  options: ReadAdminStateOptions = {},
+): Promise<{
   backend: AdminStateBackend;
   snapshot: AdminStateSnapshot;
 }> {
-  const databaseState = await readAdminStateFromDatabase();
+  const databaseState = await readAdminStateFromDatabase(options);
   if (databaseState.snapshot) {
     return {
       backend: "supabase",
-      snapshot: databaseState.snapshot,
+      snapshot: filterSnapshotForOptions(databaseState.snapshot, options),
     };
   }
 
@@ -40,7 +66,7 @@ export async function readAdminStateSnapshot(): Promise<{
 
     return {
       backend: "supabase",
-      snapshot,
+      snapshot: filterSnapshotForOptions(snapshot, options),
     };
   }
 
@@ -55,7 +81,7 @@ export async function readAdminStateSnapshot(): Promise<{
 
   return {
     backend: "local",
-    snapshot: seeded,
+    snapshot: filterSnapshotForOptions(seeded, options),
   };
 }
 

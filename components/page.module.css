@@ -1,0 +1,135 @@
+/* Shared public legal page styles used by the restored original legal pages. */
+.page {
+    min-height: 100vh;
+    background: #000;
+    color: #fff;
+    padding: var(--space-16) 0;
+}
+
+.heroTitle {
+    font-size: clamp(2.75rem, 7vw, 5.75rem);
+    font-weight: 400;
+    line-height: 0.98;
+    letter-spacing: -0.055em;
+    color: #fff;
+}
+
+/* ===== FEATURE GRID ===== */
+.featureGrid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
+    padding: var(--space-4) var(--page-padding);
+    margin-bottom: var(--space-4);
+}
+
+.block {
+    position: relative;
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    background-color: var(--color-bg-surface);
+    min-height: 480px;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--color-border-light);
+    transition: transform 0.4s cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+.block:hover {
+    transform: scale(1.005);
+}
+
+.fullWidth {
+    grid-column: 1 / -1;
+    min-height: 560px;
+}
+
+.blockImage {
+    flex: 1;
+    background-color: var(--color-border-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--text-sm);
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.blockContent {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    padding: var(--space-12);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    pointer-events: none;
+    z-index: 2;
+}
+
+/* For full-width blocks with background images, we might want content at the bottom */
+.contentBottom {
+    justify-content: flex-end;
+}
+
+.blockTitle {
+    font-size: var(--text-2xl);
+    font-weight: var(--weight-semibold);
+    color: var(--color-black);
+    margin-bottom: var(--space-2);
+    pointer-events: auto;
+}
+
+.blockSubtitle {
+    font-size: var(--text-base);
+    color: var(--color-text-secondary);
+    max-width: 480px;
+    margin-bottom: var(--space-8);
+    pointer-events: auto;
+}
+
+.blockActions {
+    display: flex;
+    gap: var(--space-4);
+    pointer-events: auto;
+}
+
+/* Specific styling for the half-width top blocks in the image */
+.compactRow {
+    min-height: 380px;
+    flex-direction: row;
+}
+
+.compactRow .blockContent {
+    position: relative;
+    width: 50%;
+    height: auto;
+    padding: var(--space-10);
+}
+
+.compactRow .blockImage {
+    width: 50%;
+}
+
+/* RESPONSIVE */
+@media (max-width: 1024px) {
+    .featureGrid {
+        grid-template-columns: 1fr;
+    }
+
+    .compactRow {
+        flex-direction: column;
+    }
+
+    .compactRow .blockContent,
+    .compactRow .blockImage {
+        width: 100%;
+    }
+
+    .block {
+        min-height: 400px;
+    }
+}

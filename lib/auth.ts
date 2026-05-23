@@ -6,8 +6,8 @@
  * - `resolveDefaultRouteForRole()` for post-login redirects.
  *
  * Roles are resolved by looking up the authenticated email in `oneos_users`
- * (see `lib/users-db.ts`). If no profile row exists, the user is treated as
- * a `client` (workspace tenant).
+ * (see `lib/users-db.ts`). Admins and sales users have separate dashboard
+ * roots so sales users only enter the scoped sales workspace.
  */
 
 export type UserRole = "admin" | "sales" | "partner" | "client";
@@ -23,7 +23,6 @@ export type AuthSession = {
 
 export function resolveDefaultRouteForRole(role: UserRole) {
   if (role === "admin") return "/admin";
-  if (role === "partner") return "/partner";
-  if (role === "client") return "/workspace";
-  return "/sales";
+  if (role === "sales") return "/sales";
+  return "/";
 }

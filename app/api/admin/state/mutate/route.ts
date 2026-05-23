@@ -4,21 +4,14 @@ import {
   writeAdminStateSnapshot,
 } from "@/lib/admin-state-store";
 import { getServerAuthSession } from "@/lib/auth-server";
-import {
-  normalizeAdminLead,
-  normalizeSalesLead,
-} from "@/lib/admin-storage";
-import { buildAdminLeadStubFromSalesLead } from "@/lib/client-registration";
-import { getPartnerClientLeads, partnerCanAccessClientLead } from "@/lib/partner-client-access";
-import type { AdminLead, SalesLead } from "@/lib/admin-types";
+import { normalizeAdminLead } from "@/lib/admin-storage";
+import type { AdminLead } from "@/lib/admin-types";
 
 export const runtime = "nodejs";
 
 type MutationPayload = {
   leadUpserts?: AdminLead[];
   leadDeletes?: string[];
-  salesLeadUpserts?: SalesLead[];
-  salesLeadDeletes?: string[];
 };
 
 function asArray<T>(value: unknown): T[] {
@@ -52,47 +45,39 @@ export async function POST(request: NextRequest) {
     }
   }).filter((lead): lead is AdminLead => lead !== null && typeof lead?.id === "string" && lead.id.length > 0);
 
-  const salesLeadUpserts = asArray<SalesLead>(payload.salesLeadUpserts).map((lead) => {
-    try {
-      return normalizeSalesLead(lead);
-    } catch {
-      return null;
-    }
-  }).filter(
-    (lead): lead is SalesLead =>
-      lead !== null && typeof lead?.id === "string" && lead.id.length > 0,
-  );
-
   const leadDeletes = new Set(asStringArray(payload.leadDeletes));
-  const salesLeadDeletes = new Set(asStringArray(payload.salesLeadDeletes));
 
   const { snapshot } = await readAdminStateSnapshot();
 
-  if (session.role === "client") {
+  const isAdmin = session.role === "admin";
+  const isSales = session.role === "sales";
+  const actorAgentId = session.agentId;
+
+  if (!isAdmin && !isSales) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
-  if (session.role === "partner") {
-    if (!session.partnerOrgId) {
-      return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
-    }
-
-    if (leadDeletes.size > 0 || salesLeadDeletes.size > 0 || salesLeadUpserts.length > 0) {
-      return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
-    }
-
-    const hasForbiddenLead = leadUpserts.some((lead) => {
-      const currentLead = snapshot.leads.find((entry) => entry.id === lead.id);
-      return !currentLead || !partnerCanAccessClientLead(snapshot, currentLead, session.partnerOrgId!);
-    });
-
-    if (hasForbiddenLead) {
-      return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
-    }
+  if (isSales && !actorAgentId) {
+    return NextResponse.json({ ok: false, error: "Sales profile is not linked to an agent." }, { status: 403 });
   }
 
-  const leadUpsertById = new Map(leadUpserts.map((lead) => [lead.id, lead]));
-  const salesUpsertById = new Map(salesLeadUpserts.map((lead) => [lead.id, lead]));
+  if (isSales && leadDeletes.size > 0) {
+    return NextResponse.json({ ok: false, error: "Sales users cannot delete leads." }, { status: 403 });
+  }
+
+  const existingLeadOwnerById = new Map(snapshot.leads.map((lead) => [lead.id, lead.ownerId]));
+  const scopedLeadUpserts = isSales
+    ? leadUpserts.filter((lead) => {
+        const existingOwner = existingLeadOwnerById.get(lead.id);
+        return lead.ownerId === actorAgentId && (!existingOwner || existingOwner === actorAgentId);
+      })
+    : leadUpserts;
+
+  if (isSales && scopedLeadUpserts.length !== leadUpserts.length) {
+    return NextResponse.json({ ok: false, error: "Sales users can only mutate their own leads." }, { status: 403 });
+  }
+
+  const leadUpsertById = new Map(scopedLeadUpserts.map((lead) => [lead.id, lead]));
 
   const mergedLeads: AdminLead[] = [];
   const seenLeadIds = new Set<string>();
@@ -110,97 +95,30 @@ export async function POST(request: NextRequest) {
     }
   }
   // 2. Append brand-new upserts at the front (preserves "newest first" UX).
-  const newLeads = leadUpserts.filter((lead) => !seenLeadIds.has(lead.id));
+  const newLeads = scopedLeadUpserts.filter((lead) => !seenLeadIds.has(lead.id));
   const finalLeads = [...newLeads, ...mergedLeads];
-
-  const mergedSalesLeads: SalesLead[] = [];
-  const seenSalesIds = new Set<string>();
-  for (const lead of snapshot.salesLeads) {
-    if (salesLeadDeletes.has(lead.id)) continue;
-    const replacement = salesUpsertById.get(lead.id);
-    if (replacement) {
-      mergedSalesLeads.push(replacement);
-      seenSalesIds.add(lead.id);
-    } else {
-      mergedSalesLeads.push(lead);
-      seenSalesIds.add(lead.id);
-    }
-  }
-  const newSalesLeads = salesLeadUpserts.filter((lead) => !seenSalesIds.has(lead.id));
-  const finalSalesLeads = [...newSalesLeads, ...mergedSalesLeads];
-
-  // Auto-handover: any partner-originated sales lead at "Qualifies" without a
-  // linked admin lead spawns a stub admin lead so Ops can pick it up.
-  const handoverAdminLeads: AdminLead[] = [];
-  const handoverLinks = new Map<string, string>(); // salesLeadId -> adminLeadId
-  for (const lead of finalSalesLeads) {
-    if (lead.createdByRole !== "partner") continue;
-    if (lead.qualificationStage !== "Qualifies") continue;
-    if (lead.linkedAdminLeadId) continue;
-    if (!lead.ownerId) continue;
-
-    const stub = buildAdminLeadStubFromSalesLead({
-      contactName: lead.contactName,
-      company: lead.company,
-      email: lead.email,
-      ownerId: lead.ownerId,
-    });
-    if (!stub) continue;
-
-    const stamped: AdminLead = {
-      ...stub.lead,
-      partnerOrgId: lead.partnerOrgId ?? null,
-      linkedSalesLeadId: lead.id,
-      events: [
-        ...stub.lead.events,
-        {
-          id: `${stub.lead.id}-handover`,
-          title: "Lead qualified by sales",
-          detail: "Auto-created from partner referral on qualification.",
-          createdAt: new Date().toLocaleString(),
-          tone: "system",
-        },
-      ],
-    };
-    handoverAdminLeads.push(stamped);
-    handoverLinks.set(lead.id, stamped.id);
-  }
-
-  const finalSalesLeadsWithLinks =
-    handoverLinks.size > 0
-      ? finalSalesLeads.map((lead) =>
-          handoverLinks.has(lead.id)
-            ? { ...lead, linkedAdminLeadId: handoverLinks.get(lead.id)! }
-            : lead,
-        )
-      : finalSalesLeads;
-
-  const finalLeadsWithHandover =
-    handoverAdminLeads.length > 0 ? [...handoverAdminLeads, ...finalLeads] : finalLeads;
 
   const nextSnapshot = {
     ...snapshot,
-    leads: finalLeadsWithHandover,
-    salesLeads: finalSalesLeadsWithLinks,
+    leads: finalLeads,
   };
 
   try {
     const backend = await writeAdminStateSnapshot(nextSnapshot, session.email);
     const responseSnapshot =
-      session.role === "partner" && session.partnerOrgId
+      isSales && actorAgentId
         ? {
             ...nextSnapshot,
-            leads: getPartnerClientLeads(nextSnapshot, session.partnerOrgId),
-            salesLeads: nextSnapshot.salesLeads.filter(
-              (lead) => lead.partnerOrgId === session.partnerOrgId,
-            ),
-            partnerOrgs: (nextSnapshot.partnerOrgs ?? []).filter(
-              (org) => org.id === session.partnerOrgId,
-            ),
-            activeLeadId: null,
+            leads: nextSnapshot.leads.filter((lead) => lead.ownerId === actorAgentId),
+            activeLeadId:
+              nextSnapshot.activeLeadId &&
+              nextSnapshot.leads.some(
+                (lead) => lead.id === nextSnapshot.activeLeadId && lead.ownerId === actorAgentId,
+              )
+                ? nextSnapshot.activeLeadId
+                : nextSnapshot.leads.find((lead) => lead.ownerId === actorAgentId)?.id ?? null,
           }
         : nextSnapshot;
-
     return NextResponse.json({ ok: true, backend, snapshot: responseSnapshot });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

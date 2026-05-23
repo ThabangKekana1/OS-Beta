@@ -1,0 +1,152 @@
+.page {
+    min-height: 100vh;
+    background-color: #000;
+    color: #fff;
+    padding: var(--space-20) 0;
+    font-family: var(--font-primary);
+}
+
+.container {
+    max-width: 650px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+.topBanner {
+    text-align: center;
+    margin-bottom: var(--space-8);
+    font-size: var(--text-lg);
+    font-weight: 400;
+    color: #fff;
+}
+
+.bannerLink {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    transition: opacity var(--transition-fast);
+}
+
+.bannerLink:hover {
+    opacity: 0.8;
+}
+
+.form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.label {
+    font-size: var(--text-base);
+    font-weight: 500;
+    color: #fff;
+}
+
+.input,
+.select,
+.textarea {
+    background-color: transparent;
+    border: 1px solid #333;
+    border-radius: 4px;
+    padding: var(--space-3) var(--space-4);
+    color: #fff;
+    font-size: var(--text-base);
+    outline: none;
+    transition: border-color var(--transition-fast);
+    width: 100%;
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+    border-color: #555;
+}
+
+.textarea {
+    min-height: 200px;
+    resize: vertical;
+}
+
+.select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='white' viewBox='0 0 16 16'%3E%3Cpath d='M8 11.5l-5-5h10l-5 5z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 40px;
+    cursor: pointer;
+}
+
+.row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-6);
+}
+
+.checkboxWrapper {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+}
+
+.checkbox {
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    accent-color: #fff;
+    cursor: pointer;
+}
+
+.checkboxLabel {
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    color: #ccc;
+    cursor: pointer;
+}
+
+.submitBtn {
+    background-color: #222;
+    color: #fff;
+    border: none;
+    padding: var(--space-3) var(--space-10);
+    border-radius: 9999px;
+    font-size: var(--text-base);
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+    align-self: flex-start;
+    margin-top: var(--space-4);
+}
+
+.submitBtn:hover {
+    background-color: #333;
+}
+
+.successMessage {
+    text-align: center;
+    padding: var(--space-16) 0;
+}
+
+.successTitle {
+    font-size: var(--text-3xl);
+    font-weight: 600;
+    margin-bottom: var(--space-4);
+}
+
+.successText {
+    color: #ccc;
+    font-size: var(--text-lg);
+    margin-bottom: var(--space-8);
+}
+
+@media (max-width: 768px) {
+    .row {
+        grid-template-columns: 1fr;
+    }
+}

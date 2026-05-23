@@ -1,4 +1,13 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { UserRole } from "@/lib/auth";
+import {
+  KARMAN_EMAIL_SIGNATURE_TEXT,
+  SYSTEM_SIGNATURE_EMAILS,
+  SYSTEM_SIGNATURE_TEXTS,
+  splitSignatureForBanner,
+  systemSignatureTextForSender,
+} from "@/lib/email-signature-copy";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 
 export type EmailSignatureRole = Extract<UserRole, "admin" | "sales" | "partner">;
@@ -60,6 +69,12 @@ type DbSignatureRow = {
 
 const TABLE = "oneos_email_signatures";
 
+export const SYSTEM_EMAIL_SIGNATURE_TEXT = KARMAN_EMAIL_SIGNATURE_TEXT;
+export const SYSTEM_EMAIL_FOOTER_CONTENT_ID = "foundation1-system-email-footer";
+export const SYSTEM_EMAIL_FOOTER_FILENAME = "Email Banner 1-3.png";
+const SYSTEM_EMAIL_FOOTER_MIME_TYPE = "image/png";
+let cachedSystemFooterImage: EmailSignatureFooterImage | null | undefined;
+
 function isMissingRelationError(error: { code?: string; message?: string } | null) {
   const message = error?.message?.toLowerCase() ?? "";
   return error?.code === "42P01" || message.includes("does not exist");
@@ -107,6 +122,43 @@ export function emptyEmailSignature(input: {
     createdAt: now,
     updatedAt: now,
   };
+}
+
+export function buildSystemEmailSignature(input: {
+  ownerUserId?: string | null;
+  ownerEmail?: string | null;
+  ownerRole?: EmailSignatureRole | null;
+  footerImage?: EmailSignatureFooterImage | null;
+}): EmailSignature {
+  const now = new Date().toISOString();
+  return {
+    ownerUserId: input.ownerUserId ?? "system",
+    ownerEmail: input.ownerEmail ?? "karman@foundation-1.co.za",
+    ownerRole: input.ownerRole ?? "admin",
+    signatureText: systemSignatureTextForSender(input) ?? SYSTEM_EMAIL_SIGNATURE_TEXT,
+    footerImage: input.footerImage ?? null,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+export async function getSystemEmailFooterImage(): Promise<EmailSignatureFooterImage | null> {
+  if (cachedSystemFooterImage !== undefined) return cachedSystemFooterImage;
+  try {
+    const bytes = await readFile(join(process.cwd(), "public", "resources", "email-banner-1-3.png"));
+    const base64 = bytes.toString("base64");
+    cachedSystemFooterImage = {
+      filename: SYSTEM_EMAIL_FOOTER_FILENAME,
+      mimeType: SYSTEM_EMAIL_FOOTER_MIME_TYPE,
+      sizeBytes: bytes.byteLength,
+      base64,
+      dataUrl: `data:${SYSTEM_EMAIL_FOOTER_MIME_TYPE};base64,${base64}`,
+    };
+  } catch (error) {
+    console.error("[email-signatures] system footer image read failed", error);
+    cachedSystemFooterImage = null;
+  }
+  return cachedSystemFooterImage;
 }
 
 export async function getEmailSignature(ownerUserId: string): Promise<EmailSignature | null> {
@@ -176,13 +228,58 @@ function hasSignatureContent(signature: EmailSignature | null | undefined): bool
   return Boolean(signature?.signatureText.trim() || signature?.footerImage);
 }
 
+function signatureEmails(signature: EmailSignature | null | undefined): string[] {
+  const emails = new Set<string>();
+  const ownerEmail = signature?.ownerEmail.trim().toLowerCase();
+  if (ownerEmail) emails.add(ownerEmail);
+  for (const match of signature?.signatureText.matchAll(/[^\s<>]+@[^\s<>]+/g) ?? []) {
+    emails.add(match[0].toLowerCase());
+  }
+  return Array.from(emails);
+}
+
+function bodyAlreadyHasSignature(
+  signature: EmailSignature | null | undefined,
+  ...values: Array<string | null | undefined>
+): boolean {
+  const emails = signatureEmails(signature);
+  if (emails.length === 0) return false;
+  return values.some((value) => {
+    const lower = (value ?? "").toLowerCase();
+    return emails.some((email) => lower.includes(email));
+  });
+}
+
+function replaceKnownSystemSignature(bodyText: string, signatureText: string): string {
+  for (const knownSignatureText of SYSTEM_SIGNATURE_TEXTS) {
+    if (knownSignatureText === signatureText) continue;
+    if (bodyText.includes(knownSignatureText)) {
+      return bodyText.replace(knownSignatureText, signatureText);
+    }
+  }
+  return bodyText;
+}
+
+export function shouldRebuildHtmlForSystemSignature(
+  bodyHtml: string | null | undefined,
+  signature: EmailSignature | null | undefined,
+): boolean {
+  if (!bodyHtml?.trim() || !signature) return false;
+  if (bodyAlreadyHasSignature(signature, bodyHtml)) return false;
+  const lower = bodyHtml.toLowerCase();
+  return SYSTEM_SIGNATURE_EMAILS.some((email) => lower.includes(email));
+}
+
 export function appendSignatureToText(
   bodyText: string,
   signature: EmailSignature | null | undefined,
 ): string {
   const signatureText = signature?.signatureText.trim();
   if (!signatureText) return bodyText;
-  return `${bodyText.trimEnd()}\n\n-- \n${signatureText}`;
+  if (bodyAlreadyHasSignature(signature, bodyText)) return bodyText;
+  const bodyWithCorrectKnownSignature = replaceKnownSystemSignature(bodyText, signatureText);
+  if (bodyWithCorrectKnownSignature !== bodyText) return bodyWithCorrectKnownSignature;
+  return `${bodyText.trimEnd()}\n\n${signatureText}`;
 }
 
 export function buildEmailHtmlWithSignature({
@@ -200,16 +297,63 @@ export function buildEmailHtmlWithSignature({
     return bodyHtml?.trim() ? bodyHtml : null;
   }
 
-  const messageHtml = bodyHtml?.trim()
-    ? bodyHtml
-    : `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#111827;">${textToHtml(bodyText)}</div>`;
   const signatureText = signature?.signatureText.trim();
-  const signatureTextHtml = signatureText
-    ? `<div>${textToHtml(signatureText)}</div>`
+  const bodyHtmlHasSignature = bodyAlreadyHasSignature(signature, bodyHtml);
+  const bodyTextHasSignature = bodyAlreadyHasSignature(signature, bodyText);
+  const hasProvidedHtml = Boolean(bodyHtml?.trim());
+  const shouldRenderSignatureText = Boolean(
+    signatureText && (hasProvidedHtml ? !bodyHtmlHasSignature : !bodyTextHasSignature),
+  );
+  const imageAlreadyEmbedded = Boolean(footerImageContentId && bodyHtml?.includes(`cid:${footerImageContentId}`));
+  const imageHtml = signature?.footerImage && footerImageContentId && !imageAlreadyEmbedded
+    ? `<div style="margin-top:12px;"><img src="cid:${escapeHtml(footerImageContentId)}" alt="Foundation-1 email banner" style="display:block;max-width:764px;width:100%;height:auto;border:0;" /></div>`
     : "";
-  const imageHtml = signature?.footerImage && footerImageContentId
-    ? `<div style="margin-top:12px;"><img src="cid:${escapeHtml(footerImageContentId)}" alt="Email footer" style="display:block;max-width:520px;width:100%;height:auto;border:0;" /></div>`
-    : "";
+  const signatureAlreadyInMessage = hasProvidedHtml
+    ? bodyHtmlHasSignature
+    : Boolean(signatureText && bodyText.includes(signatureText));
+  const imageInsertedInMessage = Boolean(imageHtml && signatureAlreadyInMessage && !hasProvidedHtml);
+  const messageHtml = hasProvidedHtml
+    ? bodyHtml!
+    : `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#111827;">${
+        imageInsertedInMessage && signatureText
+          ? textToHtmlWithBannerInSignature(bodyText, signatureText, imageHtml)
+          : textToHtml(bodyText)
+      }</div>`;
+  const splitSignature = signatureText ? splitSignatureForBanner(signatureText) : null;
+  const standaloneImageHtml = imageInsertedInMessage ? "" : imageHtml;
+  const signatureTextHtml = shouldRenderSignatureText && splitSignature
+    ? [
+        `<div>${textToHtml(splitSignature.beforeBanner)}</div>`,
+        standaloneImageHtml,
+        splitSignature.afterBanner
+          ? `<div style="margin-top:12px;">${textToHtml(splitSignature.afterBanner)}</div>`
+          : "",
+      ].join("")
+    : standaloneImageHtml;
 
-  return `${messageHtml}<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb;font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#111827;">${signatureTextHtml}${imageHtml}</div>`;
+  if (!signatureTextHtml && !imageHtml) {
+    return messageHtml;
+  }
+
+  return `${messageHtml}<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb;font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#111827;">${signatureTextHtml}</div>`;
+}
+
+function textToHtmlWithBannerInSignature(
+  bodyText: string,
+  signatureText: string,
+  imageHtml: string,
+): string {
+  const signatureIndex = bodyText.indexOf(signatureText);
+  if (signatureIndex === -1) return textToHtml(bodyText);
+
+  const splitSignature = splitSignatureForBanner(signatureText);
+  const beforeSignature = bodyText.slice(0, signatureIndex);
+  const afterSignature = bodyText.slice(signatureIndex + signatureText.length);
+  return [
+    textToHtml(beforeSignature),
+    textToHtml(splitSignature.beforeBanner),
+    imageHtml,
+    splitSignature.afterBanner ? `<div style="margin-top:12px;">${textToHtml(splitSignature.afterBanner)}</div>` : "",
+    textToHtml(afterSignature),
+  ].join("");
 }

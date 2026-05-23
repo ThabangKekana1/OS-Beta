@@ -1,5 +1,4 @@
 import { cn } from "@/lib/utils";
-import { BetaCapsule } from "./BetaCapsule";
 
 type BrandMarkOneOSProps = {
   className?: string;
@@ -16,7 +15,6 @@ export function BrandMarkOneOS({ className, withMark = true }: BrandMarkOneOSPro
         </span>
       ) : null}
       <span className="wordmark-centauri text-[1.02rem] text-white">1OS</span>
-      <BetaCapsule />
     </div>
   );
 }

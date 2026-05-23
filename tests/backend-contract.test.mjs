@@ -9,238 +9,183 @@ function read(path) {
   return readFileSync(join(root, path), "utf8");
 }
 
-test("Supabase migration defines the durable backend schema", () => {
-  const sql = read("supabase/migrations/20260418123000_create_oneos_backend.sql");
-  const tables = [
-    "oneos_admin_state",
-    "oneos_admin_leads",
-    "oneos_sales_leads",
-    "oneos_client_documents",
-    "oneos_workspace_states",
-  ];
+function exists(path) {
+  return existsSync(join(root, path));
+}
 
-  for (const table of tables) {
-    assert.match(sql, new RegExp(`create table if not exists public\\.${table}`));
-    assert.match(sql, new RegExp(`alter table public\\.${table} enable row level security`));
-    assert.match(sql, new RegExp(`service role manages ${table.replaceAll("_", " ")}`));
-  }
-
-  assert.match(sql, /create index if not exists oneos_admin_leads_owner_idx/);
-  assert.match(sql, /create index if not exists oneos_admin_leads_eoi_token_idx/);
-  assert.match(sql, /create index if not exists oneos_client_documents_profile_idx/);
-});
-
-test("backend API routes exist for workspace, CRM, sales leads, documents, and EOI", () => {
+test("approved public and admin routes exist", () => {
   const routeFiles = [
-    "app/api/workspace/state/route.ts",
+    "app/page.tsx",
+    "app/register/page.tsx",
+    "app/register/[linkId]/page.tsx",
+    "app/upload/[token]/page.tsx",
+    "app/eoi/[token]/page.tsx",
+    "app/admin/layout.tsx",
+    "app/admin/page.tsx",
+    "app/admin/leads/page.tsx",
+    "app/admin/sales/page.tsx",
+    "app/admin/leads/[id]/page.tsx",
+    "app/admin/inbox/page.tsx",
+    "app/sales/layout.tsx",
+    "app/sales/page.tsx",
+    "app/sales/leads/page.tsx",
+    "app/sales/leads/[id]/page.tsx",
+    "app/sales/inbox/page.tsx",
+    "app/api/register/route.ts",
+    "app/api/register/[linkId]/route.ts",
+    "app/api/upload/[token]/route.ts",
+    "app/api/eoi/[token]/route.ts",
     "app/api/admin/state/route.ts",
+    "app/api/admin/state/mutate/route.ts",
     "app/api/admin/leads/[id]/route.ts",
     "app/api/admin/leads/[id]/documents/route.ts",
-    "app/api/admin/sales-leads/route.ts",
-    "app/api/admin/sales-leads/[id]/route.ts",
-    "app/api/eoi/[token]/route.ts",
-    "app/api/register/[linkId]/route.ts",
+    "app/api/admin/sales/surveillance/route.ts",
+    "app/api/auth/login-event/route.ts",
+    "app/api/email/send/route.ts",
+    "app/api/email/inbound/route.ts",
+    "app/api/email/threads/route.ts",
   ];
 
   for (const routeFile of routeFiles) {
-    assert.equal(existsSync(join(root, routeFile)), true, `${routeFile} missing`);
+    assert.equal(exists(routeFile), true, `${routeFile} missing`);
   }
 });
 
-test("server stores prefer Supabase Postgres before storage fallback", () => {
-  const adminStore = read("lib/admin-state-store.ts");
-  const workspaceStore = read("lib/workspace-state-store.ts");
-  const adminState = read("lib/admin-state.ts");
-  const dbStore = read("lib/supabase-db-store.ts");
-  const agentConfig = read("lib/assistant/agent-config.ts");
+test("deleted legacy systems stay deleted", () => {
+  const deletedPaths = [
+    "app/(workspace)",
+    "app/partner",
+    "app/signup/page.tsx",
+    "app/utility-bills/[token]/page.tsx",
+    "app/api/chat/route.ts",
+    "app/api/workspace/state/route.ts",
+    "app/api/auth/signup/route.ts",
+    "app/api/email/signature/route.ts",
+    "components/workspace",
+    "components/partner",
+    "components/sales",
+    "components/utility-bills",
+    "lib/assistant",
+    "lib/registration-agent.ts",
+    "lib/workspace-state.ts",
+    "lib/utility-bill-upload.ts",
+  ];
 
-  assert.match(adminStore, /readAdminStateFromDatabase/);
-  assert.match(adminStore, /writeAdminStateToDatabase/);
-  assert.match(adminStore, /storage-migration/);
-  assert.match(workspaceStore, /readWorkspaceStateFromDatabase/);
-  assert.match(workspaceStore, /writeWorkspaceStateToDatabase/);
-  assert.match(workspaceStore, /writeWorkspaceStateToDatabase\(workspaceId, snapshot\)/);
-  assert.match(adminState, /value === undefined[\s\S]*return \[\]/);
-  assert.match(dbStore, /oneos_admin_leads/);
-  assert.match(dbStore, /oneos_workspace_states/);
-  assert.match(dbStore, /SUPABASE_PAGE_SIZE = 1000/);
-  assert.match(dbStore, /ADMIN_LEAD_COMPACT_SELECT/);
-  assert.match(dbStore, /payload->industry/);
-  assert.match(dbStore, /readAdminLeadRows\(\)/);
-  assert.doesNotMatch(dbStore, /readPayloadRows\("oneos_admin_leads"\)/);
-  assert.match(dbStore, /\.range\(from, from \+ SUPABASE_PAGE_SIZE - 1\)/);
-  assert.match(agentConfig, /oneos_agent_config/);
-  assert.match(agentConfig, /readJsonObject/);
-  assert.match(agentConfig, /writeJsonObject/);
+  for (const deletedPath of deletedPaths) {
+    assert.equal(exists(deletedPath), false, `${deletedPath} should be deleted`);
+  }
 });
 
-test("admin lead KPI counts only real EOI-stage deals", () => {
-  const adminKpis = read("lib/admin-kpis.ts");
+test("registration is a staged Typeform-style experience with autosave", () => {
+  const form = read("components/registration/ClientRegistrationForm.tsx");
+  const publicRoute = read("components/registration/PublicClientRegistrationRoute.tsx");
 
-  assert.match(adminKpis, /EOI_DEAL_STAGES/);
-  assert.match(adminKpis, /"EOI Signed"/);
-  assert.doesNotMatch(adminKpis, /stage !== "Onboarding Complete"/);
-  assert.doesNotMatch(adminKpis, /stage !== "Disqualified"/);
+  assert.match(form, /Start registration/);
+  assert.match(form, /Installed, maintained, insured by us\.\. You save up to 50%/);
+  assert.match(form, /localStorage\.setItem\(storageKey/);
+  assert.match(form, /continueToNext/);
+  assert.match(form, /Ready to create the profile\?/);
+  assert.match(publicRoute, /storageKey=\{`oneos:registration:\$\{linkId \?\? "generic"\}`\}/);
 });
 
-test("agent guardrails are backed by a durable table and visible save actions", () => {
-  const sql = read("supabase/migrations/20260427183000_add_agent_config.sql");
-  const route = read("components/admin/routes/AgentGuardrailsRoute.tsx");
+test("secure upload portal is a staged designer-grade flow", () => {
+  const uploadPortal = read("components/upload/ClientDocumentUploadPortal.tsx");
+  const uploadApi = read("app/api/upload/[token]/route.ts");
 
-  assert.match(sql, /create table if not exists public\.oneos_agent_config/);
-  assert.match(sql, /alter table public\.oneos_agent_config enable row level security/);
-  assert.match(sql, /service role manages oneos agent config/);
-  assert.match(route, /Unsaved changes/);
-  assert.match(route, /Save changes/);
-  assert.match(route, /Save to apply these rules to the very next customer message\./);
+  assert.match(uploadPortal, /Start upload/);
+  assert.match(uploadPortal, /What are you sending us\?/);
+  assert.match(uploadPortal, /Drop your \{activeOption\.label\.toLowerCase\(\)\} files/);
+  assert.match(uploadPortal, /Clean\. Saved\. Connected\./);
+  assert.match(uploadApi, /expression_of_interest/);
+  assert.match(uploadApi, /signed_eoi/);
+  assert.match(uploadApi, /utility_bills/);
+  assert.match(uploadApi, /signed_proposal/);
+  assert.match(uploadApi, /link: `\/admin\/leads\/\$\{savedLead\.clientProfileId\}`/);
 });
 
-test("documentation lists the backend contract", () => {
-  const docs = read("docs/backend.md");
-
-  assert.match(docs, /oneos_admin_leads/);
-  assert.match(docs, /\/api\/admin\/sales-leads\/:id/);
-  assert.match(docs, /\/api\/eoi\/:token/);
-});
-
-test("auth uses Supabase Auth exclusively (no legacy custom-cookie code)", () => {
+test("auth and EOI no longer point to deleted workspace, partner, or signup routes", () => {
   const auth = read("lib/auth.ts");
-  const authServer = read("lib/auth-server.ts");
-  const proxyTs = read("proxy.ts");
-  const signupRoute = read("app/api/auth/signup/route.ts");
-  const clientRegistration = read("lib/client-registration.ts");
-  const callbackRoute = read("app/auth/callback/route.ts");
-  const confirmPage = read("app/auth/confirm/page.tsx");
-
-  // Legacy symbols must be gone.
-  assert.doesNotMatch(auth, /admin@demo\.localhost/);
-  assert.doesNotMatch(auth, /replace-this-secret-before-going-live/);
-  assert.doesNotMatch(auth, /SESSION_COOKIE_NAME|validateCredentials|readSessionToken|getAuthConfigurationError/);
-  assert.doesNotMatch(authServer, /SESSION_COOKIE_NAME|readActiveSessionToken/);
-  assert.doesNotMatch(proxyTs, /SESSION_COOKIE_NAME|readSessionToken/);
-
-  // Supabase Auth wired in.
-  assert.match(authServer, /createSupabaseServerClient/);
-  assert.match(authServer, /supabase\.auth\.getUser\(\)/);
-  assert.match(proxyTs, /supabase\.auth\.getClaims\(\)/);
-  assert.match(signupRoute, /"\/auth\/confirm"/);
-  assert.match(signupRoute, /buildAdminLeadShellFromSignup/);
-  assert.match(signupRoute, /upsertProfile/);
-  assert.match(clientRegistration, /buildAdminLeadShellFromSignup/);
-  assert.match(clientRegistration, /stage: "Client Registered"/);
-  assert.match(callbackRoute, /verifyOtp/);
-  assert.match(confirmPage, /setSession/);
-  assert.match(confirmPage, /window\.location\.replace\(nextPath\)/);
-});
-
-test("document downloads use stored file bytes instead of generated placeholder text", () => {
-  const documentsRoute = read("app/api/admin/leads/[id]/documents/route.ts");
-  const leadProfileRoute = read("components/admin/routes/AdminLeadProfileRoute.tsx");
-
-  assert.match(documentsRoute, /export async function GET/);
-  assert.match(documentsRoute, /downloadPrivateObject/);
-  assert.doesNotMatch(documentsRoute, /1OS Client Document Export/);
-  assert.match(leadProfileRoute, /api\/admin\/leads\/\$\{lead\.id\}\/documents\?documentId=/);
-});
-
-test("public EOI signing page uses A4 profile-number document without exposing email", () => {
-  const eoiRoute = read("app/api/eoi/[token]/route.ts");
-  const eoiForm = read("components/eoi/EoiSigningForm.tsx");
-  const leadProfileRoute = read("components/admin/routes/AdminLeadProfileRoute.tsx");
-
-  assert.match(eoiRoute, /toPublicEoiLead/);
-  assert.doesNotMatch(eoiRoute, /email:\s*lead\.userProfile\.email/);
-  assert.doesNotMatch(eoiRoute, /email:\s*signedLead\.userProfile\.email/);
-  assert.match(eoiForm, /aspect-\[210\/297\]/);
-  assert.doesNotMatch(eoiForm, /Client email:/);
-  assert.match(eoiForm, /1OS Profile Number:/);
-  assert.match(eoiForm, /Signature ID:/);
-  assert.match(eoiRoute, /randomUUID/);
-  assert.match(leadProfileRoute, /Open Client Signing Page/);
-  assert.match(leadProfileRoute, /Profile No:/);
-});
-
-test("client registration supports profile links and separate contact name fields", () => {
-  const registrationForm = read("components/registration/ClientRegistrationForm.tsx");
-  const registrationApi = read("app/api/register/[linkId]/route.ts");
-  const adminProfile = read("components/admin/routes/AdminLeadProfileRoute.tsx");
-
-  assert.match(registrationForm, /Contact Name/);
-  assert.match(registrationForm, /Contact Surname/);
-  assert.match(registrationForm, /Position in Company/);
-  assert.match(registrationApi, /registrationLinkIdForProfile/);
-  assert.match(registrationApi, /public-registration/);
-  assert.match(adminProfile, /Registered via/);
-});
-
-test("workspace chat and uploads use the durable server workspace id", () => {
-  const workspaceProvider = read("components/providers/WorkspaceProvider.tsx");
-  const workspaceRoute = read("app/api/workspace/state/route.ts");
-  const workspaceState = read("lib/workspace-state.ts");
-
-  assert.match(workspaceRoute, /workspaceId:/);
-  assert.match(workspaceProvider, /workspaceId\?: string/);
-  assert.match(workspaceProvider, /serverWorkspaceId/);
-  assert.match(workspaceProvider, /workspaceId: chatWorkspaceId/);
-  assert.match(workspaceProvider, /formData\.set\("workspaceId", uploadWorkspaceId\)/);
-  assert.match(workspaceState, /function createStarterCase/);
-  assert.match(workspaceState, /ensureWorkspaceCases/);
-  assert.match(workspaceState, /spending at least R10,000 per month on electricity/);
-  assert.match(workspaceState, /utility bills or prepaid receipts/);
-});
-
-test("workspace supports multiple businesses and multiple locations", () => {
-  const workspaceProvider = read("components/providers/WorkspaceProvider.tsx");
-  const profileView = read("components/workspace/ProfileView.tsx");
-  const workspaceSwitcher = read("components/sidebar/WorkspaceSwitcher.tsx");
-  const recentCases = read("components/sidebar/SidebarRecentCases.tsx");
-  const types = read("lib/types.ts");
-
-  assert.match(types, /export interface BusinessLocation/);
-  assert.match(types, /locations: BusinessLocation\[]/);
-  assert.match(workspaceProvider, /createBusinessCase: \(\) => string/);
-  assert.match(workspaceProvider, /const createBusinessCase = \(\) => {/);
-  assert.match(profileView, /Add location/);
-  assert.match(profileView, /Remove location/);
-  assert.match(workspaceSwitcher, /Add business/);
-  assert.match(recentCases, /Businesses/);
-});
-
-test("register mode is handled by the server-backed registration state machine", () => {
-  const chatRoute = read("app/api/chat/route.ts");
-  const registrationAgent = read("lib/registration-agent.ts");
-
-  assert.match(chatRoute, /source:\s*"registration"/);
-  assert.doesNotMatch(chatRoute, /inferConversationMode/);
-  assert.match(chatRoute, /callOpenRouterChat/);
-  assert.match(chatRoute, /OPENROUTER_API_KEY/);
-  assert.doesNotMatch(chatRoute, /GEMINI_API_KEY|GOOGLE_API_KEY|thinkingBudget/);
-  assert.match(chatRoute, /buildRegistrationReply/);
-  assert.match(chatRoute, /buildAuthoritativeClientProfileNote/);
-  assert.match(chatRoute, /isSignupShellLead/);
-  assert.match(chatRoute, /Start pre-qualification with only the first missing question/);
-  assert.match(chatRoute, /Authoritative saved client profile/);
-  assert.match(chatRoute, /company registration number:/);
-  assert.match(chatRoute, /recentHistory:\s*history/);
-  assert.match(chatRoute, /spending at least R10,000 per month on electricity/);
-  assert.match(chatRoute, /Nedbank uses the last 6 months of usage data/);
-  assert.match(chatRoute, /Utility Bills \(last 6 months\)/);
-  assert.match(registrationAgent, /Conversation transcript:/);
-  assert.match(registrationAgent, /const PREQUAL_FIELDS =/);
-  assert.match(registrationAgent, /FIELD_QUESTIONS/);
-  assert.match(registrationAgent, /looksLikeRegistrationConfirmation/);
-  assert.match(registrationAgent, /Reply with `confirm` to submit/);
-  assert.match(registrationAgent, /utility bills or prepaid electricity receipts/);
-  assert.match(registrationAgent, /fallbackNote\?\.trim\(\)/);
-});
-
-test("login page copy changes for admin redirects", () => {
-  const loginPage = read("app/login/page.tsx");
+  const proxy = read("proxy.ts");
   const loginForm = read("components/auth/LoginForm.tsx");
+  const eoiForm = read("components/eoi/EoiSigningForm.tsx");
+  const inbound = read("app/api/email/inbound/route.ts");
 
-  assert.match(loginPage, /loginVariantForPath/);
-  assert.match(loginPage, /variant=\{loginVariantForPath\(nextPath\)\}/);
-  assert.match(loginForm, /LoginVariant/);
-  assert.match(loginForm, /Log in to the 1OS admin portal\./);
-  assert.match(loginForm, /Need admin access\?/);
+  assert.match(auth, /if \(role === "admin"\) return "\/admin"/);
+  assert.match(auth, /if \(role === "sales"\) return "\/sales"/);
+  assert.match(auth, /return "\/"/);
+  assert.match(proxy, /pathname\.startsWith\("\/admin"\) \|\| pathname\.startsWith\("\/sales"\)/);
+  assert.match(loginForm, /sales portal/);
+  assert.doesNotMatch(loginForm, /Create an account|\/signup|sales workspace|partner portal|private workspace/);
+  assert.doesNotMatch(eoiForm, /\/workspace/);
+  assert.match(eoiForm, /Copy Template/);
+  assert.match(eoiForm, /company letterhead/);
+  assert.match(inbound, /\/admin\/inbox\?thread=/);
+});
+
+test("automatic email signature remains while editable signature API is gone", () => {
+  assert.equal(exists("app/api/email/signature/route.ts"), false);
+  const signature = read("lib/email-signatures.ts");
+  const signatureCopy = read("lib/email-signature-copy.ts");
+  const sendRoute = read("app/api/email/send/route.ts");
+  const inboxRoute = read("components/admin/routes/AdminInboxRoute.tsx");
+  const threadsRoute = read("app/api/email/threads/route.ts");
+  const adminMailboxes = read("lib/admin-mailboxes.ts");
+  const emailAddressing = read("lib/email-addressing.ts");
+
+  assert.match(signature, /buildSystemEmailSignature/);
+  assert.match(signatureCopy, /Founder & Platform Engineer/);
+  assert.match(signatureCopy, /Moeketsi Moima/);
+  assert.match(signatureCopy, /Business Development/);
+  assert.match(signatureCopy, /moeketsi@foundation-1\.co\.za/);
+  assert.match(signatureCopy, /No 17 Muswell Road, Wedgefield Office Park/);
+  assert.match(signatureCopy, /CONFIDENTIAL: This email and any files transmitted with it are confidential/);
+  assert.match(sendRoute, /buildSystemEmailSignature/);
+  assert.match(sendRoute, /systemSignatureTextForSender/);
+  assert.match(sendRoute, /shouldAppendSystemSignature/);
+  assert.match(adminMailboxes, /email: "karman@foundation-1\.co\.za"/);
+  assert.match(adminMailboxes, /label: "Support"/);
+  assert.match(adminMailboxes, /email: "support@foundation-1\.co\.za"/);
+  assert.match(adminMailboxes, /label: "Sales"/);
+  assert.match(adminMailboxes, /email: "sales@foundation-1\.co\.za"/);
+  assert.doesNotMatch(adminMailboxes, /email: "karman@replies\.1os\.co\.za"/);
+  assert.doesNotMatch(adminMailboxes, /email: "support@replies\.1os\.co\.za"/);
+  assert.match(emailAddressing, /DEFAULT_OUTBOUND_EMAIL_DOMAIN = "foundation-1\.co\.za"/);
+  assert.match(emailAddressing, /!configured\.startsWith\("replies\."\)/);
+  assert.match(threadsRoute, /mailboxParam/);
+  assert.match(threadsRoute, /resolveAdminSenderOption/);
+  assert.match(threadsRoute, /adminMailbox\?\.email/);
+  assert.match(inboxRoute, /switchMailbox/);
+  assert.match(inboxRoute, /activeMailboxOption/);
+  assert.match(inboxRoute, /Footer added to this email/);
+  assert.match(inboxRoute, /Foundation-1 email banner/);
+});
+
+test("sales surveillance is backed by login audit and email activity", () => {
+  const migration = read("supabase/migrations/20260520120000_add_user_audit_events.sql");
+  const authMigration = read("supabase/migrations/20260421090000_add_auth_and_agents.sql");
+  const loginEvent = read("app/api/auth/login-event/route.ts");
+  const surveillance = read("app/api/admin/sales/surveillance/route.ts");
+  const loginForm = read("components/auth/LoginForm.tsx");
+  const signOut = read("components/auth/SignOutButton.tsx");
+
+  assert.match(migration, /oneos_user_audit_events/);
+  assert.match(authMigration, /last_login_at/);
+  assert.match(migration, /last_logout_at/);
+  assert.match(migration, /service role manages oneos user audit events/);
+  assert.match(loginEvent, /recordUserAuditEvent/);
+  assert.match(loginForm, /\/api\/auth\/login-event/);
+  assert.match(signOut, /eventType: "logout"/);
+  assert.match(surveillance, /oneos_email_messages/);
+  assert.match(surveillance, /oneos_email_threads/);
+  assert.match(surveillance, /recentMessages/);
+  assert.match(surveillance, /recentAuditEvents/);
+});
+
+test("obsolete agent and PDF parsing dependencies are removed", () => {
+  const pkg = read("package.json");
+  assert.doesNotMatch(pkg, /@openrouter\/sdk/);
+  assert.doesNotMatch(pkg, /framer-motion/);
+  assert.doesNotMatch(pkg, /pdf-parse/);
+  assert.doesNotMatch(pkg, /pdf-lib/);
+  assert.match(pkg, /"fflate"/);
 });

@@ -13,4 +13,16 @@ export const ADMIN_AGENTS: AdminAgent[] = [
     role: "Sales Agent",
     region: "National",
   },
+  {
+    id: "agent-tiisetso",
+    name: "Tiisetso",
+    role: "Sales Agent",
+    region: "National",
+  },
+  {
+    id: "agent-fana",
+    name: "Fana",
+    role: "Sales Agent",
+    region: "National",
+  },
 ];

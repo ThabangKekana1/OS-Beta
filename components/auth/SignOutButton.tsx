@@ -12,6 +12,14 @@ export function SignOutButton({ className }: { className?: string }) {
     setIsSubmitting(true);
 
     try {
+      await fetch("/api/auth/login-event", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-1os-api-client": "dashboard",
+        },
+        body: JSON.stringify({ eventType: "logout" }),
+      }).catch(() => undefined);
       await fetch("/api/auth/logout", {
         method: "POST",
       });

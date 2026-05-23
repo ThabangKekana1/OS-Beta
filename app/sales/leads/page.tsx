@@ -1,7 +1,12 @@
-import { SalesLeadsRoute } from "@/components/sales/routes/SalesLeadsRoute";
-import { requireServerAuthSession } from "@/lib/auth-server";
+import { AdminLeadsRoute } from "@/components/admin/routes/AdminLeadsRoute";
 
-export default async function SalesLeadsPage() {
-  const session = await requireServerAuthSession("sales");
-  return <SalesLeadsRoute agentId={session.agentId} showAssignedTo={false} />;
+export default function SalesLeadsPage() {
+  return (
+    <AdminLeadsRoute
+      basePath="/sales"
+      showOwnerControls={false}
+      showPartnerControls={false}
+      allowImport={false}
+    />
+  );
 }

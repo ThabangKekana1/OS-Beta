@@ -11,7 +11,6 @@ import type {
   AdminLead,
   AdminLeadDocument,
 } from "@/lib/admin-types";
-import { getPartnerClientLeads, partnerCanAccessClientLead } from "@/lib/partner-client-access";
 
 export const runtime = "nodejs";
 
@@ -118,18 +117,7 @@ export async function GET(
     return NextResponse.json({ ok: false, error: "Client profile not found." }, { status: 404 });
   }
 
-  if (session.role === "client") {
-    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
-  }
-
-  if (session.role === "sales" && session.agentId !== lead.ownerId) {
-    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
-  }
-
-  if (
-    session.role === "partner" &&
-    (!session.partnerOrgId || !partnerCanAccessClientLead(snapshot, lead, session.partnerOrgId))
-  ) {
+  if (session.role !== "admin") {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
@@ -180,7 +168,7 @@ export async function POST(
 
   const { id } = await params;
 
-  if (session.role !== "admin" && session.role !== "sales" && session.role !== "partner") {
+  if (session.role !== "admin") {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
@@ -210,17 +198,6 @@ export async function POST(
     return NextResponse.json({ ok: false, error: "Client profile not found." }, { status: 404 });
   }
 
-  if (session.role === "sales" && session.agentId !== targetLead.ownerId) {
-    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
-  }
-
-  if (
-    session.role === "partner" &&
-    (!session.partnerOrgId || !partnerCanAccessClientLead(snapshot, targetLead, session.partnerOrgId))
-  ) {
-    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
-  }
-
   let nextLead: AdminLead | null = null;
   let storedPath: string | null = null;
 
@@ -243,14 +220,9 @@ export async function POST(
         status,
         uploadedAt: timelineLabel(),
         uploadedBy: session.name,
-        uploadedByType: session.role === "sales" || session.role === "partner" ? "Sales Team" : "Admin Team",
+        uploadedByType: "Admin Team",
         sourceAccount: lead.migrateAccountId,
-        sourceWorkspace:
-          session.role === "partner"
-            ? `1OS Partner / ${lead.company}`
-            : session.role === "sales"
-            ? `1OS Sales / ${lead.company}`
-            : `1OS Admin / ${lead.company}`,
+        sourceWorkspace: `1OS Admin / ${lead.company}`,
         storagePath: storedPath,
         fileName: file.name,
         contentType: file.type || null,
@@ -268,7 +240,7 @@ export async function POST(
               ? `File stored in secure document storage at ${storedPath}.`
               : "Document metadata captured; configure Supabase to persist file bytes.",
             createdAt: timelineLabel(),
-            tone: session.role === "sales" ? "agent" : "system",
+            tone: "system",
           },
           ...lead.events,
         ],
@@ -289,25 +261,11 @@ export async function POST(
     activeLeadId: uploadedLead.id,
   };
   const backend = await writeAdminStateSnapshot(nextSnapshot, session.email);
-  const responseSnapshot =
-    session.role === "partner" && session.partnerOrgId
-      ? {
-          ...nextSnapshot,
-          leads: getPartnerClientLeads(nextSnapshot, session.partnerOrgId),
-          salesLeads: nextSnapshot.salesLeads.filter(
-            (lead) => lead.partnerOrgId === session.partnerOrgId,
-          ),
-          partnerOrgs: (nextSnapshot.partnerOrgs ?? []).filter(
-            (org) => org.id === session.partnerOrgId,
-          ),
-          activeLeadId: uploadedLead.id,
-        }
-      : nextSnapshot;
 
   return NextResponse.json({
     ok: true,
     backend,
-    snapshot: responseSnapshot,
+    snapshot: nextSnapshot,
     document: uploadedLead.documents[0],
   });
 }

@@ -1,14 +1,5 @@
-import { SalesLeadsRoute } from "@/components/sales/routes/SalesLeadsRoute";
+import { AdminLeadsRoute } from "@/components/admin/routes/AdminLeadsRoute";
 
 export default function AdminLeadsPage() {
-  return (
-    <SalesLeadsRoute
-      agentId={null}
-      registrationHref="/admin/registration"
-      clientHrefBase="/admin/clients"
-      inboxHref="/admin/inbox"
-      showAssignedTo={false}
-      allowDelete
-    />
-  );
+  return <AdminLeadsRoute />;
 }

@@ -4,8 +4,8 @@ import type {
 } from "@/lib/admin-types";
 
 /**
- * Maps an AdminLead contact status (Repository view) to its corresponding
- * SalesLead qualification stage (My Leads view).
+ * Maps an AdminLead contact status (Leads view) to its corresponding
+ * SalesLead qualification stage (Leads view).
  *
  * Returns null if the status has no meaningful sales-side equivalent
  * (caller should treat as "no mirror needed").

@@ -3,7 +3,8 @@ import {
   normalizeAdminStateSnapshot,
   type AdminStateSnapshot,
 } from "@/lib/admin-state";
-import { normalizeWorkspaceStateSnapshot, type WorkspaceStateSnapshot } from "@/lib/workspace-state";
+import { normalizeAdminLeads } from "@/lib/admin-storage";
+import { registrationLinkIdForLead } from "@/lib/registration-links";
 import {
   adminLeadContactStatuses,
   adminLeadOrigins,
@@ -23,6 +24,11 @@ import {
 type StoreReadResult<T> = {
   found: boolean;
   snapshot: T | null;
+};
+
+type ReadAdminStateOptions = {
+  includeSalesLeads?: boolean;
+  leadOwnerId?: string | null;
 };
 
 const SUPABASE_PAGE_SIZE = 1000;
@@ -62,7 +68,8 @@ const ADMIN_LEAD_COMPACT_SELECT = `
   partner_org_id:payload->partnerOrgId,
   source:payload->source,
   last_touched:payload->lastTouched,
-  next_action:payload->nextAction
+  next_action:payload->nextAction,
+  payload
 `;
 const adminLeadStageSet = new Set<string>(adminLeadStages);
 const adminLeadContactStatusSet = new Set<string>(adminLeadContactStatuses);
@@ -108,6 +115,7 @@ type CompactAdminLeadRow = {
   source?: unknown;
   last_touched?: unknown;
   next_action?: unknown;
+  payload?: unknown;
 };
 
 type AdminLeadDocumentRow = {
@@ -195,7 +203,7 @@ function compactAdminLeadFromRow(
   const disqualifiedAt = toIsoOrNull(row.disqualified_at);
   const createdAt = toIsoOrNull(row.created_at) ?? "";
 
-  return {
+  const compactLead: AdminLead = {
     id,
     clientProfileId: stringValue(row.client_profile_id, `profile-${id}`),
     company,
@@ -262,6 +270,18 @@ function compactAdminLeadFromRow(
     notes: [],
     events: [],
   };
+
+  if (row.payload && typeof row.payload === "object") {
+    const [payloadLead] = normalizeAdminLeads([row.payload as AdminLead]);
+    if (payloadLead?.id) {
+      return {
+        ...payloadLead,
+        documents: documents.length > 0 ? documents : payloadLead.documents,
+      };
+    }
+  }
+
+  return compactLead;
 }
 
 function adminLeadRow(lead: AdminLead) {
@@ -326,7 +346,7 @@ function payloadFromRows<T>(rows: Array<{ payload: unknown }>) {
   return rows.map((row) => row.payload) as T[];
 }
 
-async function readAdminLeadRows(): Promise<{
+async function readAdminLeadRows(ownerId?: string | null): Promise<{
   data: CompactAdminLeadRow[] | null;
   error: { code?: string; message?: string } | null;
 }> {
@@ -335,9 +355,14 @@ async function readAdminLeadRows(): Promise<{
     return { data: null, error: null };
   }
 
-  const countResult = await supabase
+  const ownerFilter = ownerId?.trim() || null;
+  let countQuery = supabase
     .from("oneos_admin_leads")
     .select("id", { count: "exact", head: true });
+  if (ownerFilter) {
+    countQuery = countQuery.eq("owner_id", ownerFilter);
+  }
+  const countResult = await countQuery;
   if (countResult.error) {
     return { data: null, error: countResult.error };
   }
@@ -352,10 +377,14 @@ async function readAdminLeadRows(): Promise<{
   const pageResults = await Promise.all(
     Array.from({ length: pageCount }, (_unused, pageIndex) => {
       const from = pageIndex * SUPABASE_PAGE_SIZE;
-      return supabase
+      let pageQuery = supabase
         .from("oneos_admin_leads")
         .select(ADMIN_LEAD_COMPACT_SELECT)
         .range(from, from + SUPABASE_PAGE_SIZE - 1);
+      if (ownerFilter) {
+        pageQuery = pageQuery.eq("owner_id", ownerFilter);
+      }
+      return pageQuery;
     }),
   );
 
@@ -429,11 +458,14 @@ async function readPayloadRows(
   }
 }
 
-export async function readAdminStateFromDatabase(): Promise<StoreReadResult<AdminStateSnapshot>> {
+export async function readAdminStateFromDatabase(
+  options: ReadAdminStateOptions = {},
+): Promise<StoreReadResult<AdminStateSnapshot>> {
   const supabase = getSupabaseAdminClient();
   if (!supabase) {
     return { found: false, snapshot: null };
   }
+  const includeSalesLeads = options.includeSalesLeads ?? true;
 
   const [stateResult, leadsResult, salesLeadsResult] = await Promise.all([
     supabase
@@ -441,8 +473,10 @@ export async function readAdminStateFromDatabase(): Promise<StoreReadResult<Admi
       .select("active_lead_id, partner_orgs")
       .eq("id", "singleton")
       .maybeSingle(),
-    readAdminLeadRows(),
-    readPayloadRows("oneos_sales_leads"),
+    readAdminLeadRows(options.leadOwnerId),
+    includeSalesLeads
+      ? readPayloadRows("oneos_sales_leads")
+      : Promise.resolve({ data: [], error: null }),
   ]);
   const documentRowsResult =
     leadsResult.error || isMissingRelationError(leadsResult.error)
@@ -485,7 +519,9 @@ export async function readAdminStateFromDatabase(): Promise<StoreReadResult<Admi
   const leads = (leadsResult.data ?? [])
     .map((row) => compactAdminLeadFromRow(row, documentsByLeadId.get(row.id ?? "") ?? []))
     .filter((lead): lead is AdminLead => Boolean(lead));
-  const salesLeads = payloadFromRows<SalesLead>(salesLeadsResult.data ?? []);
+  const salesLeads = includeSalesLeads
+    ? payloadFromRows<SalesLead>(salesLeadsResult.data ?? [])
+    : [];
   const partnerOrgsRaw = stateResult.data?.partner_orgs;
   const partnerOrgs: PartnerOrg[] = Array.isArray(partnerOrgsRaw)
     ? (partnerOrgsRaw as PartnerOrg[])
@@ -506,6 +542,115 @@ export async function readAdminStateFromDatabase(): Promise<StoreReadResult<Admi
     found: Boolean(snapshot),
     snapshot,
   };
+}
+
+/**
+ * Targeted lookup: returns all leads matching a contact email (typically 1–2 rows).
+ * Used by public registration routes to check for an existing signup-shell lead.
+ */
+export async function findLeadsByEmailFromDatabase(email: string): Promise<AdminLead[]> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return [];
+
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) return [];
+
+  const { data, error } = await supabase
+    .from("oneos_admin_leads")
+    .select("payload")
+    .eq("contact_email", normalizedEmail)
+    .limit(10);
+
+  if (isMissingRelationError(error)) return [];
+  if (error) throw error;
+
+  return (data ?? []).map((row) => row.payload as AdminLead).filter(Boolean);
+}
+
+/**
+ * Targeted lookup: finds a lead whose registration link hash matches linkId.
+ * Scans only 3 small columns (no payload, no documents) to avoid full-table reads,
+ * then fetches the full payload only for the matching row.
+ */
+export async function findLeadByRegistrationLinkFromDatabase(
+  linkId: string,
+): Promise<AdminLead | null> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return null;
+
+  // Lightweight scan — just 3 varchar columns, no JSON payload, no document join.
+  const rows: Array<{ id: string; client_profile_id: string | null; contact_email: string | null }> = [];
+  for (let from = 0; ; from += SUPABASE_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("oneos_admin_leads")
+      .select("id, client_profile_id, contact_email")
+      .range(from, from + SUPABASE_PAGE_SIZE - 1);
+
+    if (isMissingRelationError(error)) return null;
+    if (error) throw error;
+
+    const page = (data ?? []) as typeof rows;
+    rows.push(...page);
+    if (page.length < SUPABASE_PAGE_SIZE) break;
+  }
+
+  const matchedRow = rows.find(
+    (row) =>
+      registrationLinkIdForLead({
+        leadId: row.id,
+        clientProfileId: row.client_profile_id ?? "",
+        email: row.contact_email ?? "",
+      }) === linkId,
+  );
+
+  if (!matchedRow) return null;
+
+  // Fetch only the matched lead's payload.
+  const { data: fullData, error: fullError } = await supabase
+    .from("oneos_admin_leads")
+    .select("payload")
+    .eq("id", matchedRow.id)
+    .single();
+
+  if (isMissingRelationError(fullError)) return null;
+  if (fullError) throw fullError;
+
+  return (fullData?.payload as AdminLead | null) ?? null;
+}
+
+export async function upsertSingleLeadToDatabase(
+  lead: AdminLead,
+  updatedBy: string,
+): Promise<boolean> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return false;
+
+  const leadResult = await supabase
+    .from("oneos_admin_leads")
+    .upsert(adminLeadRow(lead), { onConflict: "id" });
+
+  if (isMissingRelationError(leadResult.error)) return false;
+  if (leadResult.error) throw leadResult.error;
+
+  const leadDocRows = documentRows(lead);
+  if (leadDocRows.length > 0) {
+    const docResult = await supabase
+      .from("oneos_client_documents")
+      .upsert(leadDocRows, { onConflict: "id" });
+    if (isMissingRelationError(docResult.error)) return false;
+    if (docResult.error) throw docResult.error;
+  }
+
+  const stateResult = await supabase
+    .from("oneos_admin_state")
+    .upsert(
+      { id: "singleton", active_lead_id: lead.id, updated_by: updatedBy },
+      { onConflict: "id" },
+    );
+  if (isMissingRelationError(stateResult.error)) return false;
+  if (stateResult.error) throw stateResult.error;
+
+  return true;
 }
 
 export async function writeAdminStateToDatabase(
@@ -581,71 +726,6 @@ export async function writeAdminStateToDatabase(
     if (result.error) {
       throw result.error;
     }
-  }
-
-  return true;
-}
-
-export async function readWorkspaceStateFromDatabase(
-  workspaceId: string,
-): Promise<StoreReadResult<WorkspaceStateSnapshot>> {
-  const supabase = getSupabaseAdminClient();
-  if (!supabase) {
-    return { found: false, snapshot: null };
-  }
-
-  const result = await supabase
-    .from("oneos_workspace_states")
-    .select("payload")
-    .eq("workspace_id", workspaceId)
-    .maybeSingle();
-
-  if (isMissingRelationError(result.error)) {
-    return { found: false, snapshot: null };
-  }
-
-  if (result.error) {
-    throw result.error;
-  }
-
-  const snapshot = result.data?.payload
-    ? normalizeWorkspaceStateSnapshot(result.data.payload)
-    : null;
-
-  return {
-    found: Boolean(snapshot),
-    snapshot,
-  };
-}
-
-export async function writeWorkspaceStateToDatabase(
-  workspaceId: string,
-  snapshot: WorkspaceStateSnapshot,
-) {
-  const supabase = getSupabaseAdminClient();
-  if (!supabase) {
-    return false;
-  }
-
-  const result = await supabase
-    .from("oneos_workspace_states")
-    .upsert(
-      {
-        workspace_id: workspaceId,
-        active_case_id: snapshot.activeCaseId,
-        active_workspace_id: snapshot.activeWorkspaceId,
-        cases: snapshot.cases,
-        payload: snapshot,
-      },
-      { onConflict: "workspace_id" },
-    );
-
-  if (isMissingRelationError(result.error)) {
-    return false;
-  }
-
-  if (result.error) {
-    throw result.error;
   }
 
   return true;
