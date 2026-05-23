@@ -72,9 +72,6 @@ async function downloadReportPDF(result: MigrationAssessmentResult): Promise<voi
   function r(v: number) { return `R\u00a0${Math.round(v).toLocaleString("en-ZA").replace(/,/g, "\u00a0")}`; }
   function p(v: number) { return `${v.toFixed(2)}%`; }
 
-  const scenarioRows = (rows: { label: string; values: string[] }[]) =>
-    rows.map(row => `<tr><td class="lbl">${row.label}</td>${row.values.map(v => `<td>${v}</td>`).join("")}</tr>`).join("");
-
   const eskomMonthly = currentUtilityProjection.currentMonthlySpend;
   const eskomAnnual = currentUtilityProjection.currentAnnualSpend;
   const eskomTenYear = currentUtilityProjection.tenYearSpend;
@@ -85,104 +82,140 @@ async function downloadReportPDF(result: MigrationAssessmentResult): Promise<voi
   )[0];
 
   const vsRows = [
-    { label: "Eskom (current path)", monthly: r(eskomMonthly), annual: r(eskomAnnual), tenYear: r(eskomTenYear), saving: "—", cls: "eskom" },
-    { label: "UFMS Solar (base estimate)", monthly: r(eskomMonthly - base.monthlySaving), annual: r(eskomAnnual - base.annualSaving), tenYear: r(eskomTenYear - base.tenYearSavingAgainstEskom), saving: r(base.tenYearSavingAgainstEskom), cls: "" },
-    { label: "Wheeling (conservative)", monthly: r(eskomMonthly - wh.monthlySaving), annual: r(eskomAnnual - wh.annualSaving), tenYear: r(eskomTenYear - wh.tenYearSavingAgainstEskom), saving: r(wh.tenYearSavingAgainstEskom), cls: "" },
-    { label: `Best combined (${bestCombined.label})`, monthly: r(eskomMonthly - bestCombined.combinedMonthlySaving), annual: r(eskomAnnual - bestCombined.combinedAnnualSaving), tenYear: r(eskomTenYear - bestCombined.combinedTenYearSavingAgainstEskom), saving: r(bestCombined.combinedTenYearSavingAgainstEskom), cls: "best" },
+    { label: "Eskom (current path)", monthly: r(eskomMonthly), annual: r(eskomAnnual), tenYear: r(eskomTenYear), saving: "-" },
+    { label: "UFMS Solar (base estimate)", monthly: r(eskomMonthly - base.monthlySaving), annual: r(eskomAnnual - base.annualSaving), tenYear: r(eskomTenYear - base.tenYearSavingAgainstEskom), saving: r(base.tenYearSavingAgainstEskom) },
+    { label: "Wheeling (conservative)", monthly: r(eskomMonthly - wh.monthlySaving), annual: r(eskomAnnual - wh.annualSaving), tenYear: r(eskomTenYear - wh.tenYearSavingAgainstEskom), saving: r(wh.tenYearSavingAgainstEskom) },
+    { label: `Best combined (${bestCombined.label})`, monthly: r(eskomMonthly - bestCombined.combinedMonthlySaving), annual: r(eskomAnnual - bestCombined.combinedAnnualSaving), tenYear: r(eskomTenYear - bestCombined.combinedTenYearSavingAgainstEskom), saving: r(bestCombined.combinedTenYearSavingAgainstEskom) },
   ];
 
-  const htmlContent = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
-<style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;color:#111;background:#fff;padding:40px 48px;font-size:12px;line-height:1.5;width:794px}
-  h1{font-size:20px;font-weight:700;margin-bottom:2px;color:#0a0a0a}
-  .sub{color:#666;font-size:11px;margin-bottom:28px}
-  h2{font-size:13px;font-weight:600;margin:24px 0 8px;color:#0a0a0a;border-bottom:1px solid #e5e5e5;padding-bottom:5px}
-  table{width:100%;border-collapse:collapse;margin-bottom:6px}
-  th{text-align:right;font-size:10px;font-weight:600;color:#555;padding:5px 10px;background:#f5f5f5;border:1px solid #e5e5e5}
-  th:first-child{text-align:left}
-  td{padding:6px 10px;border:1px solid #e5e5e5;font-size:11px;vertical-align:middle;text-align:right}
-  td.lbl,td:first-child{text-align:left;font-weight:600;color:#333;background:#fafafa}
-  .exposure{display:flex;gap:10px;margin-bottom:6px}
-  .exp-cell{flex:1;border:1px solid #e5e5e5;border-radius:5px;padding:10px 14px}
-  .exp-cell p{font-size:10px;color:#888;margin-bottom:2px}
-  .exp-cell strong{font-size:14px;font-weight:700;color:#0a0a0a}
-  .eskom td{color:#c0392b}
-  .best td{color:#27ae60;font-weight:600}
-  .saving{font-weight:700 !important;color:#27ae60 !important}
-  .disclaimer{margin-top:28px;padding:12px 14px;border-left:3px solid #d4a017;background:#fffdf0;font-size:10px;color:#555;line-height:1.6}
-  .footer{margin-top:20px;font-size:9px;color:#aaa;text-align:center;border-top:1px solid #e5e5e5;padding-top:10px}
-</style></head><body>
-  <h1>Foundation-1 Energy Migration Report</h1>
-  <p class="sub">Generated ${date} &nbsp;&middot;&nbsp; Indicative estimates only &nbsp;&middot;&nbsp; foundation-1.co.za</p>
-
-  <h2>Current Utility Ten-Year Projection</h2>
-  <div class="exposure">
-    <div class="exp-cell"><p>Monthly spend</p><strong>${r(currentUtilityProjection.currentMonthlySpend)}</strong></div>
-    <div class="exp-cell"><p>Annual spend</p><strong>${r(currentUtilityProjection.currentAnnualSpend)}</strong></div>
-    <div class="exp-cell"><p>Ten-year path with Eskom</p><strong>${r(currentUtilityProjection.tenYearSpend)}</strong></div>
-  </div>
-
-  <h2>Eskom vs Foundation-1</h2>
-  <table>
-    <thead><tr><th>Scenario</th><th>Monthly cost</th><th>Annual cost</th><th>10-year cost</th><th>10-year saving vs Eskom</th></tr></thead>
-    <tbody>${vsRows.map(row => `<tr class="${row.cls}"><td>${row.label}</td><td>${row.monthly}</td><td>${row.annual}</td><td>${row.tenYear}</td><td class="${row.saving !== "—" ? "saving" : ""}">${row.saving}</td></tr>`).join("")}</tbody>
-  </table>
-
-  <h2>UFMS Solar Detail</h2>
-  <table>
-    <thead><tr><th></th>${ufmsSolar.scenarios.map(s => `<th>${s.label}</th>`).join("")}</tr></thead>
-    <tbody>${scenarioRows([
-      { label: "Saving %", values: ufmsSolar.scenarios.map(s => p(s.savingPercentage)) },
-      { label: "Monthly saving", values: ufmsSolar.scenarios.map(s => r(s.monthlySaving)) },
-      { label: "Annual saving", values: ufmsSolar.scenarios.map(s => r(s.annualSaving)) },
-      { label: "10-year saving vs Eskom", values: ufmsSolar.scenarios.map(s => r(s.tenYearSavingAgainstEskom)) },
-    ])}</tbody>
-  </table>
-
-  <h2>Wheeling Detail</h2>
-  <table>
-    <thead><tr><th></th><th>Conservative (R${wheeling.conservative.tariff.toFixed(2)}/kWh)</th><th>PV-only reference (R${wheeling.photovoltaicOnlyReference.tariff.toFixed(2)}/kWh)</th></tr></thead>
-    <tbody>${scenarioRows([
-      { label: "Saving %", values: [p(wheeling.conservative.savingPercentage), p(wheeling.photovoltaicOnlyReference.savingPercentage)] },
-      { label: "Monthly saving", values: [r(wheeling.conservative.monthlySaving), r(wheeling.photovoltaicOnlyReference.monthlySaving)] },
-      { label: "Annual saving", values: [r(wheeling.conservative.annualSaving), r(wheeling.photovoltaicOnlyReference.annualSaving)] },
-      { label: "10-year saving vs Eskom", values: [r(wheeling.conservative.tenYearSavingAgainstEskom), r(wheeling.photovoltaicOnlyReference.tenYearSavingAgainstEskom)] },
-    ])}</tbody>
-  </table>
-
-  <div class="disclaimer"><strong>Important:</strong> ${result.disclaimer}</div>
-  <p class="footer">Foundation-1 (Pty) Ltd &nbsp;&middot;&nbsp; Indicative only &mdash; not a formal proposal or financial advice.</p>
-</body></html>`;
-
   const { jsPDF } = await import("jspdf");
-  const { default: html2canvas } = await import("html2canvas");
+  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const margin = 14;
+  const contentWidth = pageWidth - margin * 2;
+  let y = margin;
 
-  const container = document.createElement("div");
-  container.style.cssText = "position:fixed;left:-9999px;top:0;z-index:-1;";
-  container.innerHTML = htmlContent;
-  document.body.appendChild(container);
-
-  try {
-    const body = container.querySelector("body") as HTMLElement;
-    const canvas = await html2canvas(body, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
-    const imgData = canvas.toDataURL("image/png");
-    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-    const pageW = pdf.internal.pageSize.getWidth();
-    const pageH = pdf.internal.pageSize.getHeight();
-    const ratio = canvas.width / canvas.height;
-    const imgH = pageW / ratio;
-    let y = 0;
-    let remaining = imgH;
-    while (remaining > 0) {
-      pdf.addImage(imgData, "PNG", 0, y === 0 ? 0 : -y, pageW, imgH);
-      remaining -= pageH;
-      if (remaining > 0) { pdf.addPage(); y += pageH; }
-    }
-    pdf.save(`Foundation1-Migration-Report-${new Date().toISOString().slice(0, 10)}.pdf`);
-  } finally {
-    document.body.removeChild(container);
+  function ensureSpace(height: number) {
+    if (y + height <= pageHeight - margin) return;
+    pdf.addPage();
+    y = margin;
   }
+
+  function text(
+    value: string,
+    options: { size?: number; style?: "normal" | "bold"; color?: [number, number, number]; lineGap?: number } = {},
+  ) {
+    const size = options.size ?? 10;
+    const lineGap = options.lineGap ?? 4.8;
+    pdf.setFont("helvetica", options.style ?? "normal");
+    pdf.setFontSize(size);
+    pdf.setTextColor(...(options.color ?? [17, 17, 17]));
+    const lines = pdf.splitTextToSize(value, contentWidth) as string[];
+    ensureSpace(lines.length * lineGap);
+    pdf.text(lines, margin, y);
+    y += lines.length * lineGap;
+  }
+
+  function heading(value: string) {
+    ensureSpace(12);
+    y += y === margin ? 0 : 5;
+    text(value, { size: 13, style: "bold", lineGap: 5.8 });
+    pdf.setDrawColor(225, 225, 225);
+    pdf.line(margin, y - 2, pageWidth - margin, y - 2);
+  }
+
+  function table(headers: string[], rows: string[][], widths: number[]) {
+    const rowHeight = 8;
+    ensureSpace(rowHeight * (rows.length + 2));
+    pdf.setFontSize(8);
+    pdf.setFont("helvetica", "bold");
+    let x = margin;
+    pdf.setFillColor(245, 245, 245);
+    pdf.rect(margin, y - 5, contentWidth, rowHeight, "F");
+    headers.forEach((header, index) => {
+      pdf.setTextColor(65, 65, 65);
+      pdf.text(header, x + 2, y, { maxWidth: widths[index] - 4 });
+      x += widths[index];
+    });
+    y += rowHeight;
+
+    pdf.setFont("helvetica", "normal");
+    rows.forEach((row) => {
+      ensureSpace(rowHeight);
+      x = margin;
+      row.forEach((cell, index) => {
+        pdf.setDrawColor(225, 225, 225);
+        pdf.rect(x, y - 5, widths[index], rowHeight);
+        pdf.setTextColor(index === row.length - 1 && cell !== "-" ? 31 : 35, index === row.length - 1 && cell !== "-" ? 122 : 35, index === row.length - 1 && cell !== "-" ? 58 : 35);
+        pdf.text(cell, x + 2, y, { maxWidth: widths[index] - 4 });
+        x += widths[index];
+      });
+      y += rowHeight;
+    });
+    y += 2;
+  }
+
+  pdf.setProperties({
+    title: "Foundation-1 Energy Migration Report",
+    subject: "Indicative energy migration assessment",
+    creator: "Foundation-1",
+  });
+
+  text("Foundation-1 Energy Migration Report", { size: 18, style: "bold", lineGap: 8 });
+  text(`Generated ${date} | Indicative estimates only | foundation-1.co.za`, {
+    size: 9,
+    color: [100, 100, 100],
+    lineGap: 5,
+  });
+
+  heading("Current Utility Ten-Year Projection");
+  table(
+    ["Monthly spend", "Annual spend", "Ten-year path with Eskom"],
+    [[r(currentUtilityProjection.currentMonthlySpend), r(currentUtilityProjection.currentAnnualSpend), r(currentUtilityProjection.tenYearSpend)]],
+    [contentWidth / 3, contentWidth / 3, contentWidth / 3],
+  );
+
+  heading("Eskom vs Foundation-1");
+  table(
+    ["Scenario", "Monthly", "Annual", "10-year", "Saving"],
+    vsRows.map((row) => [row.label, row.monthly, row.annual, row.tenYear, row.saving]),
+    [52, 32, 32, 32, contentWidth - 148],
+  );
+
+  heading("UFMS Solar Detail");
+  table(
+    ["Metric", ...ufmsSolar.scenarios.map((scenario) => scenario.label)],
+    [
+      ["Saving %", ...ufmsSolar.scenarios.map((scenario) => p(scenario.savingPercentage))],
+      ["Monthly saving", ...ufmsSolar.scenarios.map((scenario) => r(scenario.monthlySaving))],
+      ["Annual saving", ...ufmsSolar.scenarios.map((scenario) => r(scenario.annualSaving))],
+      ["10-year saving", ...ufmsSolar.scenarios.map((scenario) => r(scenario.tenYearSavingAgainstEskom))],
+    ],
+    [44, 44, 44, contentWidth - 132],
+  );
+
+  heading("Wheeling Detail");
+  table(
+    ["Metric", `Conservative R${wheeling.conservative.tariff.toFixed(2)}/kWh`, `PV-only R${wheeling.photovoltaicOnlyReference.tariff.toFixed(2)}/kWh`],
+    [
+      ["Saving %", p(wheeling.conservative.savingPercentage), p(wheeling.photovoltaicOnlyReference.savingPercentage)],
+      ["Monthly saving", r(wheeling.conservative.monthlySaving), r(wheeling.photovoltaicOnlyReference.monthlySaving)],
+      ["Annual saving", r(wheeling.conservative.annualSaving), r(wheeling.photovoltaicOnlyReference.annualSaving)],
+      ["10-year saving", r(wheeling.conservative.tenYearSavingAgainstEskom), r(wheeling.photovoltaicOnlyReference.tenYearSavingAgainstEskom)],
+    ],
+    [44, 66, contentWidth - 110],
+  );
+
+  heading("Important");
+  text(result.disclaimer, { size: 9, color: [85, 85, 85] });
+  y += 4;
+  text("Foundation-1 (Pty) Ltd | Indicative only - not a formal proposal or financial advice.", {
+    size: 8,
+    color: [140, 140, 140],
+  });
+
+  pdf.save(`Foundation1-Migration-Report-${new Date().toISOString().slice(0, 10)}.pdf`);
 }
 
 export function MigrationReport({ result }: { result: MigrationAssessmentResult }) {

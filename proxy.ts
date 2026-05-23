@@ -47,6 +47,14 @@ function applySecurityHeaders(response: NextResponse) {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Subdomain routing: 1os.foundation-1.co.za → /migration
+  const hostname = request.headers.get("host") ?? "";
+  if (hostname.startsWith("1os.") && pathname === "/") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/migration";
+    return NextResponse.redirect(url, { status: 301 });
+  }
+
   // Build a single response we can mutate (cookies for token refresh + redirects).
   let response = NextResponse.next({ request });
 
