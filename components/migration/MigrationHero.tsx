@@ -1,6 +1,7 @@
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import styles from "@/components/migration/migration.module.css";
+import MigrationHeroBg from "@/components/migration/MigrationHeroBg";
 
 const trustIndicators = [
   {
@@ -30,6 +31,7 @@ const trustIndicators = [
 export function MigrationHero() {
   return (
     <section className={styles.hero}>
+      <MigrationHeroBg />
       <div className={styles.shell}>
         <div className={styles.heroGrid}>
           <div>
