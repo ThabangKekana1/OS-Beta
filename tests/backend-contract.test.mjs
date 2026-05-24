@@ -99,7 +99,7 @@ test("migration dashboard is gated by company registration", () => {
 
   assert.match(migrationHero, /Zero Risk/);
   assert.match(migrationHero, /Fully financed by Nedbank/);
-  assert.match(migrationHero, /Insured by Foundation-1 at no cost to you/);
+  assert.match(migrationHero, /Maintained by us, Insured by us, 24 hour support/);
   assert.match(migrationHero, /Immediate Value/);
   assert.match(migrationHero, /Up to 60% cost reduction/);
   assert.match(migrationHero, /Zero Complexity/);

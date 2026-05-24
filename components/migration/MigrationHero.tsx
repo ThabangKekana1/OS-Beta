@@ -7,7 +7,7 @@ const trustIndicators = [
     title: "Zero Risk",
     description: "No capital required, no financial exposure",
     proof: "Fully financed by Nedbank",
-    details: ["Insured by Foundation-1 at no cost to you"],
+    details: ["Maintained by us, Insured by us, 24 hour support"],
   },
   {
     title: "Immediate Value",
