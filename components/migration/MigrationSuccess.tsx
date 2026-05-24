@@ -133,7 +133,7 @@ export function MigrationSuccess() {
               <Download size={15} strokeWidth={2.5} />
               {pdfLoading ? "Generating\u2026" : "Download Report"}
             </button>
-            <button className={styles.secondaryButton} type="button" onClick={() => void shareReport()}>
+            <button className={styles.ghostButton} type="button" onClick={() => void shareReport()}>
               <Share2 size={15} strokeWidth={2.5} />
               Share Report
             </button>
