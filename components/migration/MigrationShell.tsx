@@ -16,6 +16,7 @@ export function MigrationShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const stored = useStoredMigrationAssessment();
   const unlockedProfile = useMigrationDashboardUnlockedProfile();
+  const isSuccessPage = pathname === "/migration/success";
   const hasDashboardSession = Boolean(
     stored?.profileId && stored.registration && unlockedProfile === stored.profileId,
   );
@@ -42,7 +43,7 @@ export function MigrationShell({ children }: { children: React.ReactNode }) {
             <span className={styles.brandPill}>Migration</span>
           </Link>
           <div className={styles.navLinks}>
-            {hasDashboardSession ? (
+            {!isSuccessPage && hasDashboardSession ? (
               <>
                 <Link
                   href="/migration/start"
