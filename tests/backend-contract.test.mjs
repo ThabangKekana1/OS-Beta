@@ -95,6 +95,7 @@ test("migration dashboard is gated by company registration", () => {
   const migrationReport = read("components/migration/MigrationReport.tsx");
   const migrationShell = read("components/migration/MigrationShell.tsx");
   const utilityUpload = read("components/migration/UtilityUpload.tsx");
+  const migrationCalculator = read("lib/calculateMigrationAssessment.ts");
 
   assert.match(migrationHero, /Zero Risk/);
   assert.match(migrationHero, /Fully financed by Nedbank/);
@@ -116,6 +117,10 @@ test("migration dashboard is gated by company registration", () => {
   assert.match(migrationDashboard, /support@foundation-1\.co\.za/);
   assert.match(migrationDashboard, /https:\/\/wa\.me\/27690368243/);
   assert.match(migrationReport, /router\.push\(registrationPath\)/);
+  assert.match(migrationReport, /tariffs increase by/);
+  assert.match(migrationReport, /annual tariff increase/);
+  assert.match(migrationCalculator, /eskom_annual_tariff_escalation_percent/);
+  assert.match(migrationCalculator, /compoundedAnnualSpendFactor/);
   assert.match(migrationShell, /stored\.registration && unlockedProfile === stored\.profileId/);
   assert.match(utilityUpload, /documentUploadLinkIdForLead/);
   assert.match(utilityUpload, /signed_eoi/);

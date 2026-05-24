@@ -1,4 +1,4 @@
-import { MIGRATION_DISCLAIMER } from "@/lib/calculation-config";
+import { CALCULATION_CONFIG, MIGRATION_DISCLAIMER } from "@/lib/calculation-config";
 
 export type MigrationBusinessType =
   | "Factory"
@@ -89,6 +89,7 @@ export type MigrationAssessmentResult = {
     currentAnnualSpend: number;
     tenYearSpend: number;
     tenYearFactorUsed: number;
+    annualTariffEscalationPercentage: number;
   };
   ufmsSolar: {
     scenarios: UfmsScenarioResult[];
@@ -114,12 +115,27 @@ function r(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
+function compoundedAnnualSpendFactor(years: number, annualEscalationRate: number) {
+  return Array.from({ length: years }).reduce<number>(
+    (factor, _unused, yearIndex) => factor + (1 + annualEscalationRate) ** yearIndex,
+    0,
+  );
+}
+
 export function calculateMigrationAssessment(
   input: MigrationAssessmentInput,
 ): MigrationAssessmentResult {
   const MONTHS_PER_YEAR = 12;
-  const ESKOM_PROPOSAL_STYLE_TEN_YEAR_FACTOR = 15.0057;
-  const FOUNDATION_ONE_TEN_YEAR_FACTOR = 13.1808;
+  const PROJECTION_YEARS = CALCULATION_CONFIG.minimum_term_years;
+  const ESKOM_ANNUAL_TARIFF_ESCALATION_PERCENTAGE =
+    CALCULATION_CONFIG.eskom_annual_tariff_escalation_percent;
+  const ESKOM_ANNUAL_TARIFF_ESCALATION_RATE =
+    ESKOM_ANNUAL_TARIFF_ESCALATION_PERCENTAGE / 100;
+  const ESKOM_TEN_YEAR_FACTOR = compoundedAnnualSpendFactor(
+    PROJECTION_YEARS,
+    ESKOM_ANNUAL_TARIFF_ESCALATION_RATE,
+  );
+  const FOUNDATION_ONE_TEN_YEAR_FACTOR = CALCULATION_CONFIG.foundation_one_ten_year_factor;
   const WHEELING_CURRENT_BENCHMARK_TARIFF = 2.38;
   const GREENSHARE_CONSERVATIVE_WHEELING_TARIFF = 1.85;
   const GREENSHARE_PV_ONLY_REFERENCE_TARIFF = 0.98;
@@ -132,8 +148,7 @@ export function calculateMigrationAssessment(
   }
 
   const currentAnnualSpend = monthlyElectricitySpend * MONTHS_PER_YEAR;
-  const currentUtilityTenYearSpend =
-    currentAnnualSpend * ESKOM_PROPOSAL_STYLE_TEN_YEAR_FACTOR;
+  const currentUtilityTenYearSpend = currentAnnualSpend * ESKOM_TEN_YEAR_FACTOR;
 
   const ufmsScenarioInputs = [
     { label: "Low UFMS estimate", currentTariff: 2.69, savingPercentage: 0.74 },
@@ -233,7 +248,8 @@ export function calculateMigrationAssessment(
       currentMonthlySpend: r(monthlyElectricitySpend),
       currentAnnualSpend: r(currentAnnualSpend),
       tenYearSpend: r(currentUtilityTenYearSpend),
-      tenYearFactorUsed: ESKOM_PROPOSAL_STYLE_TEN_YEAR_FACTOR,
+      tenYearFactorUsed: r(ESKOM_TEN_YEAR_FACTOR),
+      annualTariffEscalationPercentage: ESKOM_ANNUAL_TARIFF_ESCALATION_PERCENTAGE,
     },
     ufmsSolar: {
       scenarios: ufmsScenarios,

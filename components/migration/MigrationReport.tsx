@@ -30,6 +30,10 @@ function tariff(value: number) {
   return `R${value.toFixed(2)}/kWh`;
 }
 
+function eskomEscalationPercentage(result: MigrationAssessmentResult) {
+  return result.currentUtilityProjection.annualTariffEscalationPercentage ?? 12;
+}
+
 function emailReport(result: MigrationAssessmentResult) {
   const subject = encodeURIComponent("Foundation-1 Energy Migration Estimate");
   const { currentUtilityProjection, ufmsSolar, wheeling, combinedScenarios } = result;
@@ -38,6 +42,7 @@ function emailReport(result: MigrationAssessmentResult) {
       `Current monthly electricity spend: ${zar(currentUtilityProjection.currentMonthlySpend)}`,
       `Current annual electricity spend: ${zar(currentUtilityProjection.currentAnnualSpend)}`,
       `Estimated ten-year current-utility spend: ${zar(currentUtilityProjection.tenYearSpend)}`,
+      `Eskom current path assumption: tariffs increase by ${eskomEscalationPercentage(result)}% every year.`,
       ``,
       `UFMS Solar Range:`,
       ...ufmsSolar.scenarios.map(
@@ -72,6 +77,7 @@ function emailReport(result: MigrationAssessmentResult) {
 
 async function downloadReportPDF(result: MigrationAssessmentResult): Promise<void> {
   const { currentUtilityProjection, ufmsSolar, wheeling, combinedScenarios } = result;
+  const annualEskomEscalation = eskomEscalationPercentage(result);
   const date = new Date().toLocaleDateString("en-ZA", { year: "numeric", month: "long", day: "numeric" });
 
   function r(v: number) { return `R\u00a0${Math.round(v).toLocaleString("en-ZA").replace(/,/g, "\u00a0")}`; }
@@ -175,6 +181,10 @@ async function downloadReportPDF(result: MigrationAssessmentResult): Promise<voi
   });
 
   heading("Current Utility Ten-Year Projection");
+  text(
+    `The Eskom current path assumes tariffs increase by ${annualEskomEscalation}% every year. The ten-year figure is calculated from that compounding annual escalation.`,
+    { size: 9, color: [85, 85, 85] },
+  );
   table(
     ["Monthly spend", "Annual spend", "Ten-year path with Eskom"],
     [[r(currentUtilityProjection.currentMonthlySpend), r(currentUtilityProjection.currentAnnualSpend), r(currentUtilityProjection.tenYearSpend)]],
@@ -225,6 +235,7 @@ async function downloadReportPDF(result: MigrationAssessmentResult): Promise<voi
 
 export function MigrationReport({ result }: { result: MigrationAssessmentResult }) {
   const { currentUtilityProjection, ufmsSolar, wheeling, combinedScenarios } = result;
+  const annualEskomEscalation = eskomEscalationPercentage(result);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [showCredentials, setShowCredentials] = useState(false);
   const [credentials, setCredentials] = useState<{ profileId: string; accessCode: string } | null>(null);
@@ -251,8 +262,9 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
             <p className={styles.sectionCopy}>
               If you stay on your current utility path, your electricity spend could reach
               approximately <strong>{zar(currentUtilityProjection.tenYearSpend)}</strong> over the
-              next 10 years. This is an estimate based on proposal-style escalation modelling, not
-              an actual bill.
+              next 10 years. This model assumes Eskom tariffs increase by{" "}
+              <strong>{annualEskomEscalation}% every year</strong>, and compounds that increase
+              across the full period. It is not an actual bill.
             </p>
           </div>
           <QualificationBadge status={result.qualificationStatus} />
@@ -275,7 +287,7 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
 
         <div className={`${styles.sectionHeader} ${styles.reportSection}`}>
           <div>
-            <h2 className={styles.sectionTitle}>Indicative UFMS Solar Estimate</h2>
+            <h2 className={styles.sectionTitle}>Indicative utility full maintenance system</h2>
             <p className={styles.sectionCopy}>
               UFMS solar is shown as a range because every customer has a different tariff,
               consumption profile, site economics, and formal partner proposal.
@@ -347,7 +359,7 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
           <div>
             <h2 className={styles.sectionTitle}>Eskom vs Foundation-1</h2>
             <p className={styles.sectionCopy}>
-              What you pay today with Eskom compared to what you could pay with each Foundation-1 solution — and the combined best case.
+              What you pay today with Eskom compared to what you could pay with each Foundation-1 solution — and the combined best case. The Eskom current path is calculated with tariffs increasing by {annualEskomEscalation}% every year.
             </p>
           </div>
         </div>
@@ -365,7 +377,7 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
 
           const rows = [
             {
-              label: "Eskom (current path)",
+              label: `Eskom (current path, ${annualEskomEscalation}% annual tariff increase)`,
               monthly: zar(eskomMonthly),
               annual: zar(eskomAnnual),
               tenYear: zar(eskomTenYear),

@@ -5,7 +5,7 @@ export const CALCULATION_CONFIG = {
   solar_solution_tariff: 2.24,
   solar_reference_tariff: 2.46,
   minimum_term_years: 10,
-  eskom_proposal_style_ten_year_factor: 15.0057,
+  eskom_annual_tariff_escalation_percent: 12,
   foundation_one_ten_year_factor: 13.1808,
   escalation_cap_percent: 6,
   minimum_monthly_spend: 10000,
