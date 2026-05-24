@@ -319,7 +319,7 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
 
         <div className={`${styles.sectionHeader} ${styles.reportSection}`}>
           <div>
-            <h2 className={styles.sectionTitle}>Indicative utility full maintenance system</h2>
+            <h2 className={styles.sectionTitle}>Generocity Utility Full Maintenance System (UFMS)</h2>
             <p className={styles.sectionCopy}>
               UFMS solar is shown as a range because every customer has a different tariff,
               consumption profile, site economics, and formal partner proposal.
@@ -350,7 +350,7 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
 
         <div className={`${styles.sectionHeader} ${styles.reportSection}`}>
           <div>
-            <h2 className={styles.sectionTitle}>Wheeling Estimate</h2>
+            <h2 className={styles.sectionTitle}>Lumen Wheeling Estimates</h2>
             <p className={styles.sectionCopy}>
               Estimated monthly usage for wheeling comparison:{" "}
               <strong>{kwh(wheeling.estimatedMonthlyKilowattHours)}</strong>

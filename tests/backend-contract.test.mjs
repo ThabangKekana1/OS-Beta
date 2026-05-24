@@ -117,6 +117,8 @@ test("migration dashboard is gated by company registration", () => {
   assert.match(migrationDashboard, /support@foundation-1\.co\.za/);
   assert.match(migrationDashboard, /https:\/\/wa\.me\/27690368243/);
   assert.match(migrationReport, /router\.push\(registrationPath\)/);
+  assert.match(migrationReport, /Generocity Utility Full Maintenance System \(UFMS\)/);
+  assert.match(migrationReport, /Lumen Wheeling Estimates/);
   assert.match(migrationReport, /tariffs increase by/);
   assert.match(migrationReport, /annual tariff increase/);
   assert.match(migrationCalculator, /eskom_annual_tariff_escalation_percent/);
