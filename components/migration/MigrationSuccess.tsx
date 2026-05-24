@@ -166,8 +166,6 @@ export function MigrationSuccess() {
           {/* Footer */}
           <div className={styles.successFooterLinks}>
             <Link href="/migration/report">View report again</Link>
-            <span aria-hidden="true">&middot;</span>
-            <Link href="/migration/upload">Upload documents if ready</Link>
           </div>
 
         </div>
