@@ -45,7 +45,7 @@ function zar(value: number) {
 const STATUS_LABELS: Record<string, string> = {
   draft_assessment: "Draft",
   instant_report_generated: "Report Generated",
-  registered: "Registered",
+  registered: "Utility Profile Requested",
   utility_profile_uploaded: "Profile Submitted",
   proposal_pending: "Proposal Pending",
   proposal_ready: "Proposal Ready",
@@ -313,13 +313,13 @@ export function MigrationDashboard() {
       <section className={styles.section}>
         <div className={styles.shell}>
           <div className={`${styles.panel} ${styles.form}`} style={{ maxWidth: 560 }}>
-            <h1 className={styles.sectionTitle} style={{ fontSize: "1.4rem" }}>Complete Business Details</h1>
+            <h1 className={styles.sectionTitle} style={{ fontSize: "1.4rem" }}>Open Client Profile</h1>
             <p className={styles.sectionCopy}>
-              This dashboard is reserved for your migration profile, but it only opens after the company registration form is complete. This is the qualifying stage before uploads and proposal preparation.
+              This dashboard opens once Foundation-1 has opened your client file from the report. Add the short contact details first, then upload the signed EOI and utility bills.
             </p>
             <div className={styles.buttonRow}>
-              <Link href="/migration/register" className={styles.primaryButton}>
-                Complete Business Details
+              <Link href="/migration/report" className={styles.primaryButton}>
+                Open Profile From Report
               </Link>
               <Link href="/migration/report" className={styles.ghostButton}>
                 View Report

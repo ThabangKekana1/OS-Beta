@@ -57,6 +57,12 @@ export function MigrationShell({ children }: { children: React.ReactNode }) {
                   Report
                 </Link>
                 <Link
+                  href="/migration/upload"
+                  className={pathname?.startsWith("/migration/upload") ? styles.navLinkActive : undefined}
+                >
+                  Upload
+                </Link>
+                <Link
                   href="/migration/dashboard"
                   className={pathname?.startsWith("/migration/dashboard") ? styles.navLinkActive : undefined}
                 >

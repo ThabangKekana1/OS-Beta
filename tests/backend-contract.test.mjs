@@ -88,15 +88,18 @@ test("registration is a staged Typeform-style experience with autosave", () => {
   assert.match(publicRoute, /storageKey=\{`oneos:registration:\$\{linkId \?\? "generic"\}`\}/);
 });
 
-test("migration dashboard is gated by company registration", () => {
+test("migration creates a lightweight client profile before document upload", () => {
   const migrationHero = read("components/migration/MigrationHero.tsx");
   const migrationRegister = read("components/migration/MigrationRegister.tsx");
   const migrationDashboard = read("components/migration/MigrationDashboard.tsx");
   const migrationReport = read("components/migration/MigrationReport.tsx");
+  const migrationSuccess = read("components/migration/MigrationSuccess.tsx");
   const migrationShell = read("components/migration/MigrationShell.tsx");
   const utilityUpload = read("components/migration/UtilityUpload.tsx");
   const migrationCalculator = read("lib/calculateMigrationAssessment.ts");
+  const clientRegistration = read("lib/client-registration.ts");
   const migrationAssessmentApi = read("app/api/migration/assessments/route.ts");
+  const migrationIntakeApi = read("app/api/migration/intake/route.ts");
   const migrationDashboardStatusApi = read("app/api/migration/profiles/status/route.ts");
 
   assert.match(migrationHero, /Zero Risk/);
@@ -117,12 +120,22 @@ test("migration dashboard is gated by company registration", () => {
   assert.match(migrationRegister, /leadId: persistedAdminLink/);
   assert.match(migrationRegister, /unlockMigrationDashboard\(credentials\.profileId\)/);
   assert.match(migrationDashboard, /if \(!activeStored\.registration\)/);
-  assert.match(migrationDashboard, /This dashboard is reserved/);
+  assert.match(migrationDashboard, /Open Client Profile/);
+  assert.match(migrationDashboard, /Open Profile From Report/);
   assert.match(migrationDashboard, /\/api\/migration\/profiles\/status/);
   assert.match(migrationDashboard, /adminStatus\?\.migrationStatus/);
   assert.match(migrationDashboard, /support@foundation-1\.co\.za/);
   assert.match(migrationDashboard, /https:\/\/wa\.me\/27690368243/);
-  assert.match(migrationReport, /router\.push\(registrationPath\)/);
+  assert.match(migrationReport, /\/api\/migration\/intake/);
+  assert.match(migrationReport, /Preferred mode of contact/);
+  assert.match(migrationReport, /Choose email, WhatsApp, or phone/);
+  assert.match(migrationReport, /Submit Registration/);
+  assert.match(migrationReport, /\/migration\/success\?p=/);
+  assert.match(migrationSuccess, /Registration successful/);
+  assert.match(migrationSuccess, /Download Report/);
+  assert.match(migrationSuccess, /Share Report/);
+  assert.match(migrationReport, /businessName/);
+  assert.match(migrationReport, /contactName/);
   assert.match(migrationReport, /Generocity Utility Full Maintenance System \(UFMS\)/);
   assert.match(migrationReport, /Lumen Wheeling Estimates/);
   assert.match(migrationReport, /Generocity UFMS Solar \(base estimate\)/);
@@ -132,13 +145,25 @@ test("migration dashboard is gated by company registration", () => {
   assert.match(migrationCalculator, /eskom_annual_tariff_escalation_percent/);
   assert.match(migrationCalculator, /compoundedAnnualSpendFactor/);
   assert.match(migrationShell, /stored\.registration && unlockedProfile === stored\.profileId/);
+  assert.match(migrationShell, /href="\/migration\/upload"/);
   assert.match(utilityUpload, /documentUploadLinkIdForLead/);
+  assert.match(utilityUpload, /buildEoiTemplateText/);
+  assert.match(utilityUpload, /Company registration number for EOI/);
+  assert.match(utilityUpload, /You can still upload utility bills now/);
   assert.match(utilityUpload, /signed_eoi/);
   assert.match(utilityUpload, /utility_bills/);
   assert.match(utilityUpload, /This migration profile is not linked to an admin client profile yet/);
   assert.match(utilityUpload, /\/api\/upload\/\$\{encodeURIComponent\(token\)\}/);
+  assert.match(clientRegistration, /buildAdminLeadFromMigrationIntake/);
+  assert.match(clientRegistration, /updateExistingLeadFromMigrationIntake/);
+  assert.match(clientRegistration, /Complete company registration details/);
   assert.match(migrationAssessmentApi, /profile_id: profileId \|\| null/);
   assert.match(migrationAssessmentApi, /onConflict: "profile_id"/);
+  assert.match(migrationIntakeApi, /buildAdminLeadFromMigrationIntake/);
+  assert.match(migrationIntakeApi, /updateExistingLeadFromMigrationIntake/);
+  assert.match(migrationIntakeApi, /scope: "migration-intake-profile"/);
+  assert.match(migrationIntakeApi, /preferredContactMethod/);
+  assert.match(migrationIntakeApi, /documentUploadLinkIdForLead/);
   assert.match(migrationDashboardStatusApi, /hashMigrationAccessCode/);
   assert.match(migrationDashboardStatusApi, /oneos_admin_leads/);
   assert.match(migrationDashboardStatusApi, /oneos_client_documents/);
@@ -149,6 +174,7 @@ test("migration production hardening covers schema, auth, and throttling", () =>
   const adminState = read("app/api/admin/state/route.ts");
   const adminLead = read("app/api/admin/leads/[id]/route.ts");
   const profileLogin = read("app/api/migration/profiles/login/route.ts");
+  const intakeApi = read("app/api/migration/intake/route.ts");
   const uploadApi = read("app/api/upload/[token]/route.ts");
 
   assert.match(migration, /create table if not exists public\.migration_assessments/);
@@ -161,6 +187,7 @@ test("migration production hardening covers schema, auth, and throttling", () =>
   assert.match(adminLead, /Sales users can only update their own client profiles/);
   assert.match(adminLead, /session\.role === "admin" && typeof payload\.ownerId/);
   assert.match(profileLogin, /scope: "migration-profile-login"/);
+  assert.match(intakeApi, /scope: "migration-intake-profile"/);
   assert.match(uploadApi, /scope: "public-document-upload"/);
 });
 

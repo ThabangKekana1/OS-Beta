@@ -13,8 +13,8 @@ import {
 import { MigrationProgressTracker } from "@/components/migration/MigrationProgressTracker";
 import { downloadTextFile } from "@/lib/download-utils";
 import {
-  buildBlankEoiTemplateFilename,
-  buildBlankEoiTemplateText,
+  buildEoiTemplateFilename,
+  buildEoiTemplateText,
 } from "@/lib/eoi-template";
 import { documentUploadLinkIdForLead } from "@/lib/registration-links";
 import styles from "@/components/migration/migration.module.css";
@@ -60,6 +60,24 @@ function adminDocumentType(documentType: MigrationDocumentType) {
   return documentType === "expression_of_interest" ? "signed_eoi" : "utility_bills";
 }
 
+function eoiLeadFromStoredProfile(stored: StoredMigrationAssessment, registrationNumber: string) {
+  const registration = stored.registration;
+  if (!registration) return null;
+
+  return {
+    clientProfileId: registration.clientProfileId ?? stored.profileId ?? registration.assessmentId,
+    company: registration.businessName,
+    businessRegistrationNumber: registrationNumber,
+    contactName: registration.contactName,
+    physicalAddress: registration.physicalAddress ?? "",
+    monthlyElectricitySpendEstimateZar: registration.monthlyElectricitySpendEstimateZar,
+    userProfile: {
+      phone: registration.phone,
+      role: registration.contactPosition || "Authorised representative",
+    },
+  };
+}
+
 async function syncFileToAdminProfile(
   stored: StoredMigrationAssessment,
   queuedFile: { documentType: MigrationDocumentType; file: File },
@@ -99,6 +117,7 @@ export function UtilityUpload() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [eoiRegistrationNumber, setEoiRegistrationNumber] = useState("");
 
   const stored = localStored ?? externalStored;
 
@@ -134,7 +153,33 @@ export function UtilityUpload() {
   }
 
   function downloadEoiTemplate() {
-    downloadTextFile(buildBlankEoiTemplateFilename(), buildBlankEoiTemplateText());
+    if (!stored) return;
+    const registrationNumber = stored.registration?.companyRegistrationNumber?.trim() || eoiRegistrationNumber.trim();
+    if (!registrationNumber) {
+      setError("Enter the company registration number to generate the prefilled EOI. You can still upload utility bills now.");
+      return;
+    }
+
+    let templateStored = stored;
+    if (stored.registration && !stored.registration.companyRegistrationNumber?.trim()) {
+      templateStored = {
+        ...stored,
+        registration: {
+          ...stored.registration,
+          companyRegistrationNumber: registrationNumber,
+        },
+      };
+      writeStoredMigrationAssessment(templateStored);
+      setLocalStored(templateStored);
+    }
+
+    const eoiLead = eoiLeadFromStoredProfile(templateStored, registrationNumber);
+    if (!eoiLead) return;
+    setError(null);
+    downloadTextFile(
+      buildEoiTemplateFilename(eoiLead.company),
+      buildEoiTemplateText(eoiLead),
+    );
   }
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -231,13 +276,13 @@ export function UtilityUpload() {
       <section className={styles.section}>
         <div className={styles.shell}>
           <div className={`${styles.panel} ${styles.form}`}>
-            <h1 className={styles.sectionTitle}>Complete business details first.</h1>
+            <h1 className={styles.sectionTitle}>Open your client profile first.</h1>
             <p className={styles.sectionCopy}>
-              Your report needs to be connected to a business profile before files can be received.
+              Your report needs to be connected to a lightweight Foundation-1 client file before documents can be attached.
             </p>
             <div className={styles.buttonRow}>
-              <Link href="/migration/register" className={styles.primaryButton}>
-                Register
+              <Link href="/migration/report" className={styles.primaryButton}>
+                Open Profile From Report
               </Link>
             </div>
           </div>
@@ -255,8 +300,8 @@ export function UtilityUpload() {
               {isUtilityProfileComplete ? "Utility Profile Received" : "Upload Utility Profile"}
             </h1>
             <p className={styles.sectionCopy}>
-              Download the EOI template, place it on your company letterhead, sign it, then
-              upload the signed EOI together with your six months of utility bills.
+              Download your prefilled EOI template, place it on your company letterhead, sign it, then
+              upload the signed EOI together with your six months of utility bills. If the EOI is not ready yet, upload the bills now and return to the EOI later.
             </p>
           </div>
         </div>
@@ -267,11 +312,23 @@ export function UtilityUpload() {
               <div className={styles.eoiTemplateCard}>
                 <div>
                   <span className={styles.cardLabel}>EOI template</span>
-                  <h2 className={styles.cardTitle}>Download, place on letterhead, sign, then upload.</h2>
+                  <h2 className={styles.cardTitle}>Download the prefilled EOI, sign, then upload.</h2>
                   <p className={styles.sectionCopy}>
-                    Use this template as the starting point for the signed Expression of Interest.
+                    The template uses the business details already captured for this client profile. Add the registration number only when you generate the EOI.
                   </p>
                 </div>
+                {!stored.registration.companyRegistrationNumber?.trim() ? (
+                  <label className={styles.label}>
+                    Company registration number for EOI
+                    <input
+                      className={styles.input}
+                      type="text"
+                      placeholder="e.g. 2024/123456/07"
+                      value={eoiRegistrationNumber}
+                      onChange={(event) => setEoiRegistrationNumber(event.target.value)}
+                    />
+                  </label>
+                ) : null}
                 <button className={styles.secondaryButton} type="button" onClick={downloadEoiTemplate}>
                   <Download size={14} strokeWidth={2.4} />
                   Download EOI Template

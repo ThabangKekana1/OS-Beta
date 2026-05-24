@@ -20,6 +20,7 @@ export type MigrationRegistration = {
   contactName: string;
   email: string;
   phone: string;
+  preferredContactMethod?: "email" | "whatsapp" | "phone" | string;
   companyRegistrationNumber: string;
   monthlyElectricitySpendEstimateZar?: number;
   isBusinessRegistered?: boolean;

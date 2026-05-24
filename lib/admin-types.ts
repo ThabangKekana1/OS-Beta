@@ -142,6 +142,20 @@ export interface AdminLeadDisqualification {
   at: string;
 }
 
+export interface MigrationAssessmentLeadSummary {
+  profileId?: string | null;
+  qualificationStatus?: string | null;
+  recommendedPathway?: string | null;
+  monthlySpend?: number | null;
+  annualSpend?: number | null;
+  tenYearSpend?: number | null;
+  bestTenYearSaving?: number | null;
+  preferredContactMethod?: "email" | "whatsapp" | "phone" | string | null;
+  sourceCampaign?: string | null;
+  referrer?: string | null;
+  generatedAt?: string | null;
+}
+
 export interface SalesLead {
   id: string;
   ownerId: string;
@@ -188,6 +202,7 @@ export interface AdminLead {
   ownerId: string;
   linkedSalesLeadId: string | null;
   registrationSource?: AdminLeadRegistrationSource | null;
+  migrationAssessment?: MigrationAssessmentLeadSummary | null;
   readinessScore: number;
   estimatedValueZar: number;
   lastTouched: string;

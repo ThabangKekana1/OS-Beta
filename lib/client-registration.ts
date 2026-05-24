@@ -8,6 +8,7 @@ import type {
   AdminLeadOrigin,
   AdminLeadPartner,
   AdminLeadRegistrationSource,
+  MigrationAssessmentLeadSummary,
 } from "@/lib/admin-types";
 
 const DEAL_VALUE_ZAR = 480_000;
@@ -46,6 +47,18 @@ export type ClientSignupShellInput = {
   name: string;
   email: string;
   ownerId: string;
+};
+
+export type MigrationIntakeProfileInput = {
+  businessName: string;
+  contactName: string;
+  contactEmail: string;
+  contactNumber: string;
+  preferredContactMethod: "email" | "whatsapp" | "phone" | string;
+  monthlyElectricitySpendEstimateZar: number;
+  ownerId: string;
+  registrationSource: AdminLeadRegistrationSource | null;
+  assessmentSummary?: MigrationAssessmentLeadSummary | null;
 };
 
 const SIGNUP_PENDING_BUSINESS_NAME = "Business details pending";
@@ -119,6 +132,66 @@ function buildRegistrationEventDetail(
   }
 
   return `Registered through ${registrationSource.profileName}'s unique ${registrationSource.profileRole} link.`;
+}
+
+function assessmentEventDetail(summary: MigrationAssessmentLeadSummary | null | undefined) {
+  if (!summary) {
+    return "Instant migration assessment completed. Utility profile documents requested.";
+  }
+
+  const monthlySpend = Number(summary.monthlySpend ?? 0);
+  const tenYearSpend = Number(summary.tenYearSpend ?? 0);
+  const bestSaving = Number(summary.bestTenYearSaving ?? 0);
+  const parts = [
+    Number.isFinite(monthlySpend) && monthlySpend > 0
+      ? `Monthly spend: R ${Math.round(monthlySpend).toLocaleString("en-ZA")}`
+      : null,
+    Number.isFinite(tenYearSpend) && tenYearSpend > 0
+      ? `10-year current utility path: R ${Math.round(tenYearSpend).toLocaleString("en-ZA")}`
+      : null,
+    Number.isFinite(bestSaving) && bestSaving > 0
+      ? `Best indicative 10-year saving: R ${Math.round(bestSaving).toLocaleString("en-ZA")}`
+      : null,
+    summary.recommendedPathway ? `Recommended pathway: ${summary.recommendedPathway}` : null,
+  ].filter(Boolean);
+
+  return parts.length > 0
+    ? `Instant migration assessment completed. ${parts.join(". ")}. Utility profile documents requested.`
+    : "Instant migration assessment completed. Utility profile documents requested.";
+}
+
+function ensureUtilityProfileTasks(
+  tasks: AdminLead["tasks"],
+  includeCompanyDetailsTask = true,
+): AdminLead["tasks"] {
+  const requiredTasks: AdminLead["tasks"] = [
+    {
+      id: makeId("task"),
+      title: "Submit signed EOI",
+      owner: "Client",
+      dueLabel: "Now",
+      status: "open",
+    },
+    {
+      id: makeId("task"),
+      title: "Upload 6-month utility bill pack",
+      owner: "Client",
+      dueLabel: "Now",
+      status: "open",
+    },
+    {
+      id: makeId("task"),
+      title: "Complete company registration details",
+      owner: "Client",
+      dueLabel: "Before proposal",
+      status: "open",
+    },
+  ];
+  const required = includeCompanyDetailsTask
+    ? requiredTasks
+    : requiredTasks.filter((task) => task.title !== "Complete company registration details");
+  const existingTitles = new Set(tasks.map((task) => task.title));
+  return [...tasks, ...required.filter((task) => !existingTitles.has(task.title))];
 }
 
 export function splitContactName(contactName: string) {
@@ -285,6 +358,192 @@ export function buildAdminLeadFromClientRegistration(
     lead: nextLead,
     leadId: newLeadId,
     clientProfileId,
+  };
+}
+
+export function buildAdminLeadFromMigrationIntake(
+  input: MigrationIntakeProfileInput,
+): ClientRegistrationResult | null {
+  const businessName = input.businessName.trim();
+  const contactName = input.contactName.trim();
+  const contactEmail = normalizeEmail(input.contactEmail);
+  const contactNumber = input.contactNumber.trim();
+  const ownerId = input.ownerId.trim();
+  const monthlyElectricitySpendEstimateZar = Number.isFinite(
+    input.monthlyElectricitySpendEstimateZar,
+  )
+    ? Math.max(0, Math.round(input.monthlyElectricitySpendEstimateZar))
+    : 0;
+
+  if (!businessName || !contactName || !contactEmail || !contactNumber || !ownerId || monthlyElectricitySpendEstimateZar <= 0) {
+    return null;
+  }
+
+  const { contactFirstName, contactSurname } = splitContactName(contactName);
+  const leadId = makeId("lead");
+  const clientProfileId = makeId("profile");
+  const joinedAt = new Date().toISOString().slice(0, 10);
+  const assessmentDetail = assessmentEventDetail(input.assessmentSummary);
+  const preferredContactMethod = input.preferredContactMethod.trim() || "whatsapp";
+  const contactPreferenceDetail = `Preferred contact method: ${preferredContactMethod}. Email: ${contactEmail}. Phone/WhatsApp: ${contactNumber}.`;
+
+  const lead: AdminLead = {
+    id: leadId,
+    clientProfileId,
+    company: businessName,
+    businessRegistrationNumber: "",
+    industry: "",
+    contactFirstName,
+    contactSurname,
+    contactPosition: "Authorised representative",
+    contactName,
+    monthlyElectricitySpendEstimateZar,
+    isBusinessRegistered: false,
+    isClientRegistered: false,
+    isBusinessOperational: true,
+    hasSixMonthUtilityBill: false,
+    physicalAddress: "",
+    city: "",
+    province: "",
+    source: "Migrate Portal",
+    origin: "website",
+    partner: null,
+    partnerOrgId: input.registrationSource?.partnerOrgId ?? null,
+    stage: "Client Registered",
+    contactStatus: "Not Contacted",
+    priority: "Priority",
+    ownerId,
+    linkedSalesLeadId: null,
+    registrationSource: input.registrationSource,
+    migrationAssessment: input.assessmentSummary ?? null,
+    readinessScore: 25,
+    estimatedValueZar: DEAL_VALUE_ZAR,
+    lastTouched: "Just now",
+    nextAction: `Contact client via ${preferredContactMethod} and confirm the next migration steps.`,
+    migrateAccountName: businessName,
+    migrateAccountId: buildAccountIdFromBusinessName(businessName),
+    userProfile: {
+      id: makeId("usr"),
+      fullName: contactName,
+      email: contactEmail,
+      phone: contactNumber,
+      role: "Authorised representative",
+      joinedAt,
+    },
+    eoiSigningToken: buildEoiSigningToken(businessName),
+    eoiSignatureId: null,
+    eoiSignedBy: null,
+    eoiSignedAt: null,
+    eoiAcceptedTermsAt: null,
+    onboardingCompletedAt: null,
+    disqualification: null,
+    tasks: ensureUtilityProfileTasks([]),
+    documents: [],
+    notes: [
+      {
+        id: makeId("note"),
+        body: `${assessmentDetail}\n${contactPreferenceDetail}`,
+        author: "Migration intake",
+        createdAt: timelineLabel(),
+      },
+    ],
+    events: [
+      {
+        id: makeId("event"),
+        title: "Assessment generated",
+        detail: `${assessmentDetail} ${contactPreferenceDetail}`,
+        createdAt: timelineLabel(),
+        tone: "client",
+      },
+    ],
+  };
+
+  return {
+    lead,
+    leadId,
+    clientProfileId,
+  };
+}
+
+export function updateExistingLeadFromMigrationIntake(
+  existingLead: AdminLead,
+  input: MigrationIntakeProfileInput,
+): ClientRegistrationResult | null {
+  const intake = buildAdminLeadFromMigrationIntake({
+    ...input,
+    ownerId: existingLead.ownerId || input.ownerId,
+    registrationSource: input.registrationSource ?? existingLead.registrationSource ?? null,
+  });
+
+  if (!intake) {
+    return null;
+  }
+
+  const contactName = input.contactName.trim() || existingLead.contactName || intake.lead.contactName;
+  const { contactFirstName, contactSurname } = splitContactName(contactName);
+  const businessName = input.businessName.trim() || existingLead.company || intake.lead.company;
+  const monthlyElectricitySpendEstimateZar = Number.isFinite(input.monthlyElectricitySpendEstimateZar)
+    ? Math.max(0, Math.round(input.monthlyElectricitySpendEstimateZar))
+    : existingLead.monthlyElectricitySpendEstimateZar;
+  const assessmentDetail = assessmentEventDetail(input.assessmentSummary);
+  const preferredContactMethod = input.preferredContactMethod.trim() || "whatsapp";
+  const contactPreferenceDetail = `Preferred contact method: ${preferredContactMethod}. Email: ${normalizeEmail(input.contactEmail) || existingLead.userProfile.email}. Phone/WhatsApp: ${input.contactNumber.trim() || existingLead.userProfile.phone}.`;
+
+  const lead: AdminLead = {
+    ...existingLead,
+    company: businessName,
+    contactFirstName: existingLead.contactFirstName?.trim() || contactFirstName,
+    contactSurname: existingLead.contactSurname?.trim() || contactSurname,
+    contactPosition: existingLead.contactPosition?.trim() || existingLead.userProfile.role || "Authorised representative",
+    contactName,
+    monthlyElectricitySpendEstimateZar,
+    isBusinessOperational: existingLead.isBusinessOperational,
+    source: existingLead.source || "Migrate Portal",
+    origin: existingLead.origin || "website",
+    partnerOrgId: existingLead.partnerOrgId ?? input.registrationSource?.partnerOrgId ?? null,
+    registrationSource: existingLead.registrationSource ?? input.registrationSource ?? null,
+    migrationAssessment: input.assessmentSummary ?? existingLead.migrationAssessment ?? null,
+    readinessScore: Math.max(existingLead.readinessScore, existingLead.isClientRegistered ? 40 : 25),
+    estimatedValueZar: Math.max(existingLead.estimatedValueZar, DEAL_VALUE_ZAR),
+    lastTouched: "Just now",
+    nextAction: existingLead.isClientRegistered
+      ? existingLead.nextAction
+      : `Contact client via ${preferredContactMethod} and confirm the next migration steps.`,
+    migrateAccountName: businessName || existingLead.migrateAccountName,
+    eoiSigningToken: existingLead.eoiSigningToken ?? buildEoiSigningToken(businessName),
+    userProfile: {
+      ...existingLead.userProfile,
+      fullName: contactName,
+      email: normalizeEmail(input.contactEmail) || existingLead.userProfile.email,
+      phone: input.contactNumber.trim() || existingLead.userProfile.phone,
+      role: existingLead.userProfile.role || "Authorised representative",
+    },
+    tasks: ensureUtilityProfileTasks(existingLead.tasks, !existingLead.isClientRegistered),
+    notes: [
+      {
+        id: makeId("note"),
+        body: `${assessmentDetail}\n${contactPreferenceDetail}`,
+        author: "Migration intake",
+        createdAt: timelineLabel(),
+      },
+      ...existingLead.notes,
+    ],
+    events: [
+      {
+        id: makeId("event"),
+        title: "Assessment refreshed",
+        detail: `${assessmentDetail} ${contactPreferenceDetail}`,
+        createdAt: timelineLabel(),
+        tone: "client",
+      },
+      ...existingLead.events,
+    ],
+  };
+
+  return {
+    lead,
+    leadId: lead.id,
+    clientProfileId: lead.clientProfileId,
   };
 }
 

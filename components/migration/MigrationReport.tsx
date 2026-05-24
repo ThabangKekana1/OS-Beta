@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Mail, Download, ArrowRight, Copy, Check } from "lucide-react";
+import { Mail, Download, ArrowRight, ChevronDown } from "lucide-react";
 import type { MigrationAssessmentResult } from "@/lib/calculateMigrationAssessment";
 import {
   ensureMigrationProfileCredentials,
   readStoredMigrationAssessment,
+  unlockMigrationDashboard,
   writeStoredMigrationAssessment,
 } from "@/components/migration/MigrationState";
 import { QualificationBadge } from "@/components/migration/QualificationBadge";
@@ -34,39 +35,46 @@ function eskomEscalationPercentage(result: MigrationAssessmentResult) {
   return result.currentUtilityProjection.annualTariffEscalationPercentage ?? 12;
 }
 
-async function copyTextToClipboard(text: string) {
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.setAttribute("readonly", "");
-  textarea.style.position = "fixed";
-  textarea.style.top = "0";
-  textarea.style.left = "-9999px";
-  document.body.appendChild(textarea);
-  textarea.focus();
-  textarea.select();
-  textarea.setSelectionRange(0, text.length);
+type IntakeApiResponse = {
+  ok?: boolean;
+  error?: string;
+  backend?: "supabase" | "local";
+  assessmentBackend?: "supabase" | "local";
+  assessmentId?: string;
+  leadId?: string;
+  clientProfileId?: string;
+};
 
-  try {
-    if (document.execCommand("copy")) {
-      return true;
-    }
-  } finally {
-    document.body.removeChild(textarea);
+type PreferredContactMethod = "email" | "whatsapp" | "phone";
+type PreferredContactSelection = PreferredContactMethod | "";
+
+const contactMethodLabels: Record<PreferredContactMethod, string> = {
+  email: "Email",
+  whatsapp: "WhatsApp",
+  phone: "Phone call",
+};
+
+function sourceCampaignFromLocation() {
+  if (typeof window === "undefined") {
+    return { sourceCampaign: null, referrer: null };
   }
 
-  if (!navigator.clipboard?.writeText) {
-    return false;
-  }
+  const params = new URLSearchParams(window.location.search);
+  const campaign = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"]
+    .map((key) => {
+      const value = params.get(key)?.trim();
+      return value ? `${key}=${value}` : null;
+    })
+    .filter(Boolean)
+    .join("&");
 
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
+  return {
+    sourceCampaign: campaign || null,
+    referrer: document.referrer || null,
+  };
 }
 
-function emailReport(result: MigrationAssessmentResult) {
+export function emailMigrationReport(result: MigrationAssessmentResult) {
   const subject = encodeURIComponent("Foundation-1 Energy Migration Estimate");
   const { currentUtilityProjection, ufmsSolar, wheeling, combinedScenarios } = result;
   const body = encodeURIComponent(
@@ -107,7 +115,7 @@ function emailReport(result: MigrationAssessmentResult) {
   window.location.href = `mailto:?subject=${subject}&body=${body}`;
 }
 
-async function downloadReportPDF(result: MigrationAssessmentResult): Promise<void> {
+export async function downloadMigrationReportPDF(result: MigrationAssessmentResult): Promise<void> {
   const { currentUtilityProjection, ufmsSolar, wheeling, combinedScenarios } = result;
   const annualEskomEscalation = eskomEscalationPercentage(result);
   const date = new Date().toLocaleDateString("en-ZA", { year: "numeric", month: "long", day: "numeric" });
@@ -269,21 +277,107 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
   const { currentUtilityProjection, ufmsSolar, wheeling, combinedScenarios } = result;
   const annualEskomEscalation = eskomEscalationPercentage(result);
   const [pdfLoading, setPdfLoading] = useState(false);
-  const [showCredentials, setShowCredentials] = useState(false);
-  const [credentials, setCredentials] = useState<{ profileId: string; accessCode: string } | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [intakeLoading, setIntakeLoading] = useState(false);
+  const [intakeError, setIntakeError] = useState("");
+  const [intakeValues, setIntakeValues] = useState({
+    businessName: "",
+    contactName: "",
+    email: "",
+    phone: "",
+    preferredContactMethod: "" as PreferredContactSelection,
+  });
   const router = useRouter();
-  const dashboardPath = credentials ? `/migration/dashboard?p=${credentials.profileId}` : "/migration/dashboard";
-  const registrationPath = credentials ? `/migration/register?p=${credentials.profileId}` : "/migration/register";
-  const dashboardUrl = credentials
-    ? `${typeof window === "undefined" ? "https://1os.foundation-1.co.za" : window.location.origin}${dashboardPath}`
-    : "https://1os.foundation-1.co.za/migration/dashboard";
   const bestIllustrativeSaving = Math.max(
     ...ufmsSolar.scenarios.map((scenario) => scenario.tenYearSavingAgainstEskom),
     wheeling.conservative.tenYearSavingAgainstEskom,
     wheeling.photovoltaicOnlyReference.tenYearSavingAgainstEskom,
     ...combinedScenarios.map((scenario) => scenario.combinedTenYearSavingAgainstEskom),
   );
+
+  async function submitIntake(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIntakeError("");
+
+    const stored = readStoredMigrationAssessment();
+    if (!stored) {
+      setIntakeError("Generate the assessment again before opening a client profile.");
+      return;
+    }
+
+    const businessName = intakeValues.businessName.trim();
+    const contactName = intakeValues.contactName.trim();
+    const email = intakeValues.email.trim().toLowerCase();
+    const phone = intakeValues.phone.trim();
+    const preferredContactMethod = intakeValues.preferredContactMethod;
+    if (!businessName || !contactName || !email || !phone) {
+      setIntakeError("Enter business name, contact name, email, and WhatsApp number.");
+      return;
+    }
+    if (!preferredContactMethod) {
+      setIntakeError("Choose how you want Foundation-1 to contact you.");
+      return;
+    }
+
+    setIntakeLoading(true);
+    try {
+      const { assessment, credentials } = ensureMigrationProfileCredentials({
+        ...stored,
+        result,
+      });
+      writeStoredMigrationAssessment(assessment);
+      const campaign = sourceCampaignFromLocation();
+      const response = await fetch("/api/migration/intake", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({
+          input: assessment.input,
+          profileId: credentials.profileId,
+          businessName,
+          contactName,
+          email,
+          phone,
+          preferredContactMethod,
+          ...campaign,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as IntakeApiResponse | null;
+
+      if (!response.ok || !payload?.ok || !payload.assessmentId || !payload.clientProfileId) {
+        setIntakeError(payload?.error ?? "Unable to open the client profile. Try again.");
+        return;
+      }
+
+      const next = {
+        ...assessment,
+        registration: {
+          assessmentId: payload.assessmentId,
+          backend: payload.assessmentBackend ?? payload.backend ?? "local",
+          leadId: payload.leadId,
+          clientProfileId: payload.clientProfileId,
+          businessName,
+          contactName,
+          email,
+          phone,
+          preferredContactMethod,
+          companyRegistrationNumber: "",
+          monthlyElectricitySpendEstimateZar: result.currentUtilityProjection.currentMonthlySpend,
+          source: "Migrate Portal" as const,
+          ownerId: "public-link",
+          registeredAt: new Date().toISOString(),
+        },
+        status: "registered" as const,
+      };
+
+      writeStoredMigrationAssessment(next);
+      unlockMigrationDashboard(credentials.profileId);
+      router.push(`/migration/success?p=${credentials.profileId}`);
+    } catch {
+      setIntakeError("Unable to reach the migration service. Try again.");
+    } finally {
+      setIntakeLoading(false);
+    }
+  }
 
   return (
     <section className={styles.section}>
@@ -483,48 +577,99 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
 
         <p className={styles.sectionCopy} style={{ marginTop: 28, maxWidth: "100%" }}>
           This preliminary model shows potential ten-year savings as high as{" "}
-          <strong style={{ color: "#fff" }}>{zar(bestIllustrativeSaving)}</strong>. Continue to your dashboard to complete the next steps.
+          <strong style={{ color: "#fff" }}>{zar(bestIllustrativeSaving)}</strong>. Continue to open your profile, then upload the documents needed for formal proposal review.
         </p>
 
         <section className={styles.ctaPanel}>
-          <h2 className={styles.cardTitle}>Ready to qualify your business?</h2>
+          <h2 className={styles.cardTitle}>Register your interest</h2>
           <p className={styles.sectionCopy}>
-            Complete the company registration form first. Once the qualifying details are submitted, your dashboard will open so you can download the EOI template and upload your utility bills.
+            Your estimate is ready. Add your contact details and preferred contact method. A Foundation-1 representative will contact you using your selected channel.
           </p>
-          <div className={styles.buttonRow} style={{ marginTop: 16 }}>
-            <button
-              className={styles.primaryButton}
-              type="button"
-              onClick={() => {
-                const stored = readStoredMigrationAssessment();
-                if (!stored) return;
-                const { assessment, credentials } = ensureMigrationProfileCredentials(stored);
-                writeStoredMigrationAssessment(assessment);
-                setCredentials(credentials);
-                setShowCredentials(true);
-              }}
-            >
-              <ArrowRight size={14} strokeWidth={2.5} />
-              Complete Business Details
-            </button>
-            <button
-              className={styles.ghostButton}
-              type="button"
-              disabled={pdfLoading}
-              onClick={async () => {
-                setPdfLoading(true);
-                try { await downloadReportPDF(result); }
-                finally { setPdfLoading(false); }
-              }}
-            >
-              <Download size={14} strokeWidth={2.5} />
-              {pdfLoading ? "Generating…" : "Download Report PDF"}
-            </button>
-            <button className={styles.ghostButton} type="button" onClick={() => emailReport(result)}>
-              <Mail size={14} strokeWidth={2.5} />
-              Email This Report
-            </button>
-          </div>
+          <form className={styles.fieldStack} style={{ marginTop: 18 }} onSubmit={submitIntake}>
+            <label className={styles.label}>
+              Business name
+              <input
+                className={styles.input}
+                type="text"
+                autoComplete="organization"
+                value={intakeValues.businessName}
+                onChange={(event) => setIntakeValues((current) => ({ ...current, businessName: event.target.value }))}
+              />
+            </label>
+            <label className={styles.label}>
+              Contact name
+              <input
+                className={styles.input}
+                type="text"
+                autoComplete="name"
+                value={intakeValues.contactName}
+                onChange={(event) => setIntakeValues((current) => ({ ...current, contactName: event.target.value }))}
+              />
+            </label>
+            <label className={styles.label}>
+              Email
+              <input
+                className={styles.input}
+                type="email"
+                autoComplete="email"
+                value={intakeValues.email}
+                onChange={(event) => setIntakeValues((current) => ({ ...current, email: event.target.value }))}
+              />
+            </label>
+            <label className={styles.label}>
+              WhatsApp / phone
+              <input
+                className={styles.input}
+                type="tel"
+                autoComplete="tel"
+                value={intakeValues.phone}
+                onChange={(event) => setIntakeValues((current) => ({ ...current, phone: event.target.value }))}
+              />
+            </label>
+            <label className={styles.label}>
+              Preferred mode of contact
+              <span className={styles.contactSelectWrap}>
+                <select
+                  className={`${styles.select} ${styles.contactSelect}`}
+                  value={intakeValues.preferredContactMethod}
+                  onChange={(event) => setIntakeValues((current) => ({
+                    ...current,
+                    preferredContactMethod: event.target.value as PreferredContactSelection,
+                  }))}
+                >
+                  <option value="" disabled>Choose email, WhatsApp, or phone</option>
+                  {Object.entries(contactMethodLabels).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+                <ChevronDown className={styles.contactSelectIcon} size={16} strokeWidth={2.5} aria-hidden="true" />
+              </span>
+            </label>
+            {intakeError ? <p className={styles.error}>{intakeError}</p> : null}
+            <div className={styles.buttonRow} style={{ marginTop: 4 }}>
+              <button className={styles.primaryButton} type="submit" disabled={intakeLoading}>
+                <ArrowRight size={14} strokeWidth={2.5} />
+                {intakeLoading ? "Submitting…" : "Submit Registration"}
+              </button>
+              <button
+                className={styles.ghostButton}
+                type="button"
+                disabled={pdfLoading}
+                onClick={async () => {
+                  setPdfLoading(true);
+                  try { await downloadMigrationReportPDF(result); }
+                  finally { setPdfLoading(false); }
+                }}
+              >
+                <Download size={14} strokeWidth={2.5} />
+                {pdfLoading ? "Generating…" : "Download Report PDF"}
+              </button>
+              <button className={styles.ghostButton} type="button" onClick={() => emailMigrationReport(result)}>
+                <Mail size={14} strokeWidth={2.5} />
+                Email This Report
+              </button>
+            </div>
+          </form>
         </section>
 
         <div className={styles.warningBox}>
@@ -533,62 +678,6 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
         </div>
       </div>
 
-      {/* Credential reveal overlay */}
-      {showCredentials && credentials && (
-        <div className={styles.credentialOverlay}>
-          <div className={styles.credentialCard}>
-            <h2 className={styles.credentialTitle}>Save your access details</h2>
-            <p className={styles.credentialCopy}>
-              These are your unique profile credentials. Save them — after the business details form is complete, you&apos;ll need this access code to return to your dashboard from another device.
-            </p>
-            <div className={styles.credentialFields}>
-              <div className={styles.credentialField}>
-                <span className={styles.credentialLabel}>Profile ID</span>
-                <span className={styles.credentialValue}>{credentials.profileId}</span>
-              </div>
-              <div className={styles.credentialField}>
-                <span className={styles.credentialLabel}>Access code</span>
-                <span className={styles.credentialValue} style={{ letterSpacing: "0.2em" }}>
-                  {credentials.accessCode}
-                </span>
-              </div>
-            </div>
-            <div className={styles.credentialDashboardUrl}>
-              <span className={styles.credentialLabel}>Dashboard URL after qualification</span>
-              <span className={styles.credentialUrlText}>
-                {dashboardUrl}
-              </span>
-            </div>
-            <div className={styles.buttonRow} style={{ marginTop: 20 }}>
-              <button
-                className={styles.primaryButton}
-                type="button"
-                onClick={() => {
-                  router.push(registrationPath);
-                }}
-              >
-                <ArrowRight size={14} strokeWidth={2.5} />
-                Continue
-              </button>
-              <button
-                className={`${styles.ghostButton} ${copied ? "" : styles.copyDetailsPulse}`}
-                type="button"
-                onClick={async () => {
-                  const text = `Profile ID: ${credentials.profileId}\nAccess code: ${credentials.accessCode}\nDashboard: ${dashboardUrl}`;
-                  const didCopy = await copyTextToClipboard(text);
-                  if (didCopy) {
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 2000);
-                  }
-                }}
-              >
-                {copied ? <Check size={14} strokeWidth={2.5} /> : <Copy size={14} strokeWidth={2.5} />}
-                {copied ? "Copied!" : "Copy Details"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </section>
   );
 }

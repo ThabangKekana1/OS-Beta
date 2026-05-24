@@ -2,7 +2,7 @@ import styles from "@/components/migration/migration.module.css";
 
 const steps = [
   "Assessment Generated",
-  "Business Details Captured",
+  "Client Profile Opened",
   "Utility Profile Uploaded",
   "Partner Proposal Review",
   "Term Sheet Review",
