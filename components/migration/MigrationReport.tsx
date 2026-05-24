@@ -126,8 +126,8 @@ async function downloadReportPDF(result: MigrationAssessmentResult): Promise<voi
 
   const vsRows = [
     { label: "Eskom (current path)", monthly: r(eskomMonthly), annual: r(eskomAnnual), tenYear: r(eskomTenYear), saving: "-" },
-    { label: "UFMS Solar (base estimate)", monthly: r(eskomMonthly - base.monthlySaving), annual: r(eskomAnnual - base.annualSaving), tenYear: r(eskomTenYear - base.tenYearSavingAgainstEskom), saving: r(base.tenYearSavingAgainstEskom) },
-    { label: "Wheeling (conservative)", monthly: r(eskomMonthly - wh.monthlySaving), annual: r(eskomAnnual - wh.annualSaving), tenYear: r(eskomTenYear - wh.tenYearSavingAgainstEskom), saving: r(wh.tenYearSavingAgainstEskom) },
+    { label: "Generocity UFMS Solar (base estimate)", monthly: r(eskomMonthly - base.monthlySaving), annual: r(eskomAnnual - base.annualSaving), tenYear: r(eskomTenYear - base.tenYearSavingAgainstEskom), saving: r(base.tenYearSavingAgainstEskom) },
+    { label: "Lumen Wheeling (conservative)", monthly: r(eskomMonthly - wh.monthlySaving), annual: r(eskomAnnual - wh.annualSaving), tenYear: r(eskomTenYear - wh.tenYearSavingAgainstEskom), saving: r(wh.tenYearSavingAgainstEskom) },
     { label: `Best combined (${bestCombined.label})`, monthly: r(eskomMonthly - bestCombined.combinedMonthlySaving), annual: r(eskomAnnual - bestCombined.combinedAnnualSaving), tenYear: r(eskomTenYear - bestCombined.combinedTenYearSavingAgainstEskom), saving: r(bestCombined.combinedTenYearSavingAgainstEskom) },
   ];
 
@@ -418,7 +418,7 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
               isBest: false,
             },
             {
-              label: "UFMS Solar (base estimate)",
+              label: "Generocity UFMS Solar (base estimate)",
               monthly: zar(eskomMonthly - base.monthlySaving),
               annual: zar(eskomAnnual - base.annualSaving),
               tenYear: zar(eskomTenYear - base.tenYearSavingAgainstEskom),
@@ -427,7 +427,7 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
               isBest: false,
             },
             {
-              label: "Wheeling (conservative)",
+              label: "Lumen Wheeling (conservative)",
               monthly: zar(eskomMonthly - wh.monthlySaving),
               annual: zar(eskomAnnual - wh.annualSaving),
               tenYear: zar(eskomTenYear - wh.tenYearSavingAgainstEskom),
