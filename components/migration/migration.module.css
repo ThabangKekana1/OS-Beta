@@ -1090,11 +1090,11 @@
 /* ─── Registration success ──────────────────────────────────── */
 .successSection {
   position: relative;
-  min-height: calc(100vh - 90px);
+  height: calc(100vh - 90px);
   display: flex;
   align-items: center;
   overflow: hidden;
-  padding: clamp(72px, 10vw, 130px) 0;
+  padding: 20px 0;
 }
 
 /* Ripple rings sit in the page, not inside a tiny container */
@@ -1145,12 +1145,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 52px;
-  height: 52px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.96);
   color: #050505;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
   box-shadow:
     0 0 0 10px rgba(255, 255, 255, 0.06),
     0 0 0 22px rgba(255, 255, 255, 0.03),
@@ -1161,7 +1161,7 @@
 
 .successKicker {
   display: block;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
   color: rgba(180, 255, 210, 0.9);
   font-size: 0.72rem;
   font-weight: 700;
@@ -1172,22 +1172,22 @@
 }
 
 .successTitle {
-  margin: 0 0 18px;
+  margin: 0 0 12px;
   color: #fff;
-  font-size: clamp(2.8rem, 7.5vw, 5.8rem);
-  line-height: 0.91;
-  font-weight: 700;
-  letter-spacing: -0.055em;
+  font-size: clamp(2rem, 4.2vw, 3.4rem);
+  line-height: 1.0;
+  font-weight: 300;
+  letter-spacing: -0.025em;
   opacity: 0;
   animation: successFadeUp 700ms ease 450ms both;
 }
 
 .successCopy {
   color: rgba(255, 255, 255, 0.46);
-  font-size: clamp(1rem, 2vw, 1.16rem);
-  line-height: 1.65;
-  margin: 0 auto 36px;
-  max-width: 520px;
+  font-size: clamp(0.92rem, 1.6vw, 1.04rem);
+  line-height: 1.6;
+  margin: 0 auto 24px;
+  max-width: 480px;
   opacity: 0;
   animation: successFadeUp 700ms ease 550ms both;
 }
@@ -1212,7 +1212,7 @@
 .successDataStrip {
   display: flex;
   align-items: stretch;
-  margin-top: 40px;
+  margin-top: 24px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 14px;
   overflow: hidden;
@@ -1225,7 +1225,7 @@
 
 .successDataItem {
   flex: 1;
-  padding: 18px 20px;
+  padding: 14px 18px;
   text-align: left;
 }
 
@@ -1259,7 +1259,7 @@
   justify-content: center;
   flex-wrap: wrap;
   gap: 12px;
-  margin-top: 24px;
+  margin-top: 16px;
   color: rgba(255, 255, 255, 0.22);
   font-size: 0.8rem;
   opacity: 0;
