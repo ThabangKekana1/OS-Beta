@@ -3,10 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut } from "lucide-react";
 import {
-  clearMigrationDashboardUnlock,
-  clearStoredMigrationAssessment,
   useMigrationDashboardUnlockedProfile,
   useStoredMigrationAssessment,
 } from "@/components/migration/MigrationState";
@@ -20,12 +17,6 @@ export function MigrationShell({ children }: { children: React.ReactNode }) {
   const hasDashboardSession = Boolean(
     stored?.profileId && stored.registration && unlockedProfile === stored.profileId,
   );
-
-  function logout() {
-    clearStoredMigrationAssessment();
-    clearMigrationDashboardUnlock();
-    window.location.assign("/migration");
-  }
 
   return (
     <main className={styles.page}>
@@ -57,22 +48,6 @@ export function MigrationShell({ children }: { children: React.ReactNode }) {
                 >
                   Report
                 </Link>
-                <Link
-                  href="/migration/upload"
-                  className={pathname?.startsWith("/migration/upload") ? styles.navLinkActive : undefined}
-                >
-                  Upload
-                </Link>
-                <Link
-                  href="/migration/dashboard"
-                  className={pathname?.startsWith("/migration/dashboard") ? styles.navLinkActive : undefined}
-                >
-                  Dashboard
-                </Link>
-                <button className={styles.navLogout} type="button" onClick={logout}>
-                  <LogOut size={13} strokeWidth={2.2} />
-                  Logout
-                </button>
               </>
             ) : (
               (pathname === "/migration/report" || pathname?.startsWith("/migration/dashboard")) && (
