@@ -1332,6 +1332,27 @@
   font-family: "SF Mono", "Fira Code", monospace;
 }
 
+.copyDetailsPulse {
+  animation: copyDetailsPulse 1.8s ease-in-out infinite;
+  border-color: rgba(140, 160, 255, 0.34) !important;
+}
+
+@keyframes copyDetailsPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(140, 160, 255, 0);
+  }
+
+  50% {
+    box-shadow: 0 0 0 5px rgba(140, 160, 255, 0.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .copyDetailsPulse {
+    animation: none;
+  }
+}
+
 /* ─── Nav active link + logout button ────────────────────────── */
 .navLinkActive {
   color: rgba(255, 255, 255, 0.95) !important;

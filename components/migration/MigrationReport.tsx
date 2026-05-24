@@ -34,6 +34,38 @@ function eskomEscalationPercentage(result: MigrationAssessmentResult) {
   return result.currentUtilityProjection.annualTariffEscalationPercentage ?? 12;
 }
 
+async function copyTextToClipboard(text: string) {
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.top = "0";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  textarea.setSelectionRange(0, text.length);
+
+  try {
+    if (document.execCommand("copy")) {
+      return true;
+    }
+  } finally {
+    document.body.removeChild(textarea);
+  }
+
+  if (!navigator.clipboard?.writeText) {
+    return false;
+  }
+
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function emailReport(result: MigrationAssessmentResult) {
   const subject = encodeURIComponent("Foundation-1 Energy Migration Estimate");
   const { currentUtilityProjection, ufmsSolar, wheeling, combinedScenarios } = result;
@@ -536,21 +568,22 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
                 }}
               >
                 <ArrowRight size={14} strokeWidth={2.5} />
-                I&apos;ve saved my details — Complete Business Details
+                Continue
               </button>
               <button
-                className={styles.ghostButton}
+                className={`${styles.ghostButton} ${copied ? "" : styles.copyDetailsPulse}`}
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   const text = `Profile ID: ${credentials.profileId}\nAccess code: ${credentials.accessCode}\nDashboard: ${dashboardUrl}`;
-                  void navigator.clipboard.writeText(text).then(() => {
+                  const didCopy = await copyTextToClipboard(text);
+                  if (didCopy) {
                     setCopied(true);
                     setTimeout(() => setCopied(false), 2000);
-                  });
+                  }
                 }}
               >
                 {copied ? <Check size={14} strokeWidth={2.5} /> : <Copy size={14} strokeWidth={2.5} />}
-                {copied ? "Copied!" : "Copy details"}
+                {copied ? "Copied!" : "Copy Details"}
               </button>
             </div>
           </div>
