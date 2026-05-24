@@ -11,6 +11,14 @@ const priorities = new Set<AdminLeadPriority>(["Standard", "Priority", "Executiv
 const stages = new Set<AdminLeadStage>(adminLeadStages);
 const contactStatuses = new Set<AdminLeadContactStatus>(adminLeadContactStatuses);
 
+function canReadLead(session: NonNullable<Awaited<ReturnType<typeof getServerAuthSession>>>) {
+  return session.role === "admin" || session.role === "sales";
+}
+
+function salesOwnsLead(session: NonNullable<Awaited<ReturnType<typeof getServerAuthSession>>>, ownerId: string) {
+  return session.role === "sales" && Boolean(session.agentId) && ownerId === session.agentId;
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -20,11 +28,19 @@ export async function GET(
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
+  if (!canReadLead(session)) {
+    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  }
+
   const { id } = await params;
   const { backend, snapshot } = await readAdminStateSnapshot();
   const lead = snapshot.leads.find((entry) => entry.id === id || entry.clientProfileId === id);
 
   if (!lead) {
+    return NextResponse.json({ ok: false, error: "Client profile not found." }, { status: 404 });
+  }
+
+  if (session.role === "sales" && !salesOwnsLead(session, lead.ownerId)) {
     return NextResponse.json({ ok: false, error: "Client profile not found." }, { status: 404 });
   }
 
@@ -38,6 +54,10 @@ export async function PATCH(
   const session = await getServerAuthSession();
   if (!session) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!canReadLead(session)) {
+    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
   const { id } = await params;
@@ -56,14 +76,24 @@ export async function PATCH(
   }
 
   const { snapshot } = await readAdminStateSnapshot();
-  let found = false;
+  const currentLead = snapshot.leads.find((lead) => lead.id === id || lead.clientProfileId === id);
+
+  if (!currentLead) {
+    return NextResponse.json({ ok: false, error: "Client profile not found." }, { status: 404 });
+  }
+
+  if (session.role === "sales" && !salesOwnsLead(session, currentLead.ownerId)) {
+    return NextResponse.json(
+      { ok: false, error: "Sales users can only update their own client profiles." },
+      { status: 403 },
+    );
+  }
 
   const nextLeads = snapshot.leads.map((lead) => {
     if (lead.id !== id && lead.clientProfileId !== id) {
       return lead;
     }
 
-    found = true;
     const nextStage = typeof payload.stage === "string" && stages.has(payload.stage as AdminLeadStage)
       ? (payload.stage as AdminLeadStage)
       : lead.stage;
@@ -71,7 +101,7 @@ export async function PATCH(
       typeof payload.priority === "string" && priorities.has(payload.priority as AdminLeadPriority)
         ? (payload.priority as AdminLeadPriority)
         : lead.priority;
-    const nextOwnerId = typeof payload.ownerId === "string" && payload.ownerId.trim()
+    const nextOwnerId = session.role === "admin" && typeof payload.ownerId === "string" && payload.ownerId.trim()
       ? payload.ownerId.trim()
       : lead.ownerId;
     const nextAction = typeof payload.nextAction === "string" && payload.nextAction.trim()
@@ -109,10 +139,6 @@ export async function PATCH(
       ],
     };
   });
-
-  if (!found) {
-    return NextResponse.json({ ok: false, error: "Client profile not found." }, { status: 404 });
-  }
 
   const nextSnapshot = {
     ...snapshot,

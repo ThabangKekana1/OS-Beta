@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { findLeadsByEmailFromDatabase, upsertSingleLeadToDatabase } from "@/lib/supabase-db-store";
 import {
   buildAdminLeadFromClientRegistration,
+  completeExistingLeadFromClientRegistration,
   defaultOwnerIdForRegistration,
   findSignupShellLeadByEmail,
   promoteSignupLeadToClientRegistration,
@@ -18,6 +19,10 @@ const PUBLIC_REGISTRATION_SOURCE: AdminLeadRegistrationSource = {
   partnerOrgId: null,
   channel: "public_link",
 };
+
+function normalize(value: string) {
+  return value.trim().toLowerCase();
+}
 
 export async function POST(request: NextRequest) {
   const { consumeRateLimit } = await import("@/lib/rate-limit");
@@ -90,8 +95,18 @@ export async function POST(request: NextRequest) {
   const contactEmail = typeof payload.contactEmail === "string" ? payload.contactEmail : "";
   const emailLeads = await findLeadsByEmailFromDatabase(contactEmail);
   const existingSignupShell = findSignupShellLeadByEmail(emailLeads, contactEmail);
+  const existingRegisteredLead = emailLeads.find((lead) => {
+    if (existingSignupShell?.id === lead.id) return false;
+    const sameEmail = normalize(lead.userProfile.email) === normalize(contactEmail);
+    const sameRegistrationNumber =
+      normalize(lead.businessRegistrationNumber) === normalize(registrationInput.businessRegistrationNumber);
+    const sameBusinessName = normalize(lead.company) === normalize(registrationInput.businessName);
+    return sameEmail && (sameRegistrationNumber || sameBusinessName);
+  });
   const created = existingSignupShell
     ? promoteSignupLeadToClientRegistration(existingSignupShell, registrationInput)
+    : existingRegisteredLead
+      ? completeExistingLeadFromClientRegistration(existingRegisteredLead, registrationInput)
     : buildAdminLeadFromClientRegistration(registrationInput);
 
   if (!created) {

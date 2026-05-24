@@ -12,7 +12,7 @@ import {
   findSignupShellLeadByEmail,
   promoteSignupLeadToClientRegistration,
 } from "@/lib/client-registration";
-import { registrationLinkIdForLead, registrationLinkIdForProfile } from "@/lib/registration-links";
+import { registrationLinkIdForProfile } from "@/lib/registration-links";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import type { AdminLead, AdminLeadRegistrationSource } from "@/lib/admin-types";
 
@@ -125,19 +125,6 @@ function leadRegistrationSource(lead: AdminLead, linkId: string): AdminLeadRegis
     partnerOrgId: lead.partnerOrgId ?? null,
     channel: "public_link",
   };
-}
-
-function findLeadByRegistrationLink(leads: AdminLead[], linkId: string): AdminLead | null {
-  return (
-    leads.find(
-      (lead) =>
-        registrationLinkIdForLead({
-          leadId: lead.id,
-          clientProfileId: lead.clientProfileId,
-          email: lead.userProfile.email,
-        }) === linkId,
-    ) ?? null
-  );
 }
 
 function publicLeadDefaults(lead: AdminLead) {

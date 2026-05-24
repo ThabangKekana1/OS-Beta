@@ -88,6 +88,11 @@ export function MigrationRegister() {
       monthlySpend: monthlyElectricitySpend,
     };
     const result = calculateMigrationAssessment(input);
+    const { assessment: credentialAssessment, credentials } = ensureMigrationProfileCredentials({
+      ...stored,
+      input,
+      result,
+    });
 
     try {
       const registrationResponse = await fetch("/api/register", {
@@ -106,11 +111,16 @@ export function MigrationRegister() {
         return false;
       }
 
+      const persistedAdminLink = registrationPayload.backend === "supabase";
+
       const assessmentResponse = await fetch("/api/migration/assessments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           input,
+          profileId: credentials.profileId,
+          leadId: persistedAdminLink ? registrationPayload.leadId : undefined,
+          clientProfileId: persistedAdminLink ? registrationPayload.clientProfileId : undefined,
           businessName: values.businessName,
           contactName: contactName(values),
           email: values.contactEmail,
@@ -129,8 +139,8 @@ export function MigrationRegister() {
         return false;
       }
 
-      const { assessment: next, credentials } = ensureMigrationProfileCredentials({
-        ...stored,
+      const next = {
+        ...credentialAssessment,
         input,
         result,
         registration: {
@@ -159,8 +169,8 @@ export function MigrationRegister() {
           businessDetails: values,
           registeredAt: new Date().toISOString(),
         },
-        status: "registered",
-      });
+        status: "registered" as const,
+      };
 
       writeStoredMigrationAssessment(next);
       unlockMigrationDashboard(credentials.profileId);

@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useRef,
@@ -421,7 +422,7 @@ export function AdminPortalProvider({
 
   const activeLead = leads.find((lead) => lead.id === activeLeadId) ?? null;
 
-  const applyLeadScope = (snapshot: {
+  const applyLeadScope = useCallback((snapshot: {
     leads: AdminLead[];
     salesLeads: SalesLead[];
     activeLeadId: string | null;
@@ -440,7 +441,7 @@ export function AdminPortalProvider({
       activeLeadId: scopedActiveLeadId,
       salesLeads: includeSalesLeads ? snapshot.salesLeads : [],
     };
-  };
+  }, [includeSalesLeads, scopedOwnerId]);
 
   const clearSaveStatusIdleTimer = () => {
     if (saveStatusIdleTimerRef.current) {
@@ -576,7 +577,7 @@ export function AdminPortalProvider({
     return () => {
       cancelled = true;
     };
-  }, [includeRegistrationDrafts, includeSalesLeads, scopedOwnerId]);
+  }, [applyLeadScope, includeRegistrationDrafts, includeSalesLeads, scopedOwnerId]);
 
   useEffect(() => {
     if (!isHydrated) {

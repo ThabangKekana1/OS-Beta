@@ -29,11 +29,19 @@ async function requireSession() {
   return session;
 }
 
+function canReadAdminState(session: NonNullable<Awaited<ReturnType<typeof getServerAuthSession>>>) {
+  return session.role === "admin" || session.role === "sales";
+}
+
 export async function GET(request: NextRequest) {
   const session = await requireSession();
 
   if (!session) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!canReadAdminState(session)) {
+    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
   try {

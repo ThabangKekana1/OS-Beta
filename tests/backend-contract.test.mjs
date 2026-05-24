@@ -96,6 +96,8 @@ test("migration dashboard is gated by company registration", () => {
   const migrationShell = read("components/migration/MigrationShell.tsx");
   const utilityUpload = read("components/migration/UtilityUpload.tsx");
   const migrationCalculator = read("lib/calculateMigrationAssessment.ts");
+  const migrationAssessmentApi = read("app/api/migration/assessments/route.ts");
+  const migrationDashboardStatusApi = read("app/api/migration/profiles/status/route.ts");
 
   assert.match(migrationHero, /Zero Risk/);
   assert.match(migrationHero, /Fully financed by Nedbank/);
@@ -111,9 +113,13 @@ test("migration dashboard is gated by company registration", () => {
   assert.match(migrationRegister, /ClientRegistrationForm/);
   assert.match(migrationRegister, /\/api\/register/);
   assert.match(migrationRegister, /\/api\/migration\/assessments/);
+  assert.match(migrationRegister, /profileId: credentials\.profileId/);
+  assert.match(migrationRegister, /leadId: persistedAdminLink/);
   assert.match(migrationRegister, /unlockMigrationDashboard\(credentials\.profileId\)/);
   assert.match(migrationDashboard, /if \(!activeStored\.registration\)/);
   assert.match(migrationDashboard, /This dashboard is reserved/);
+  assert.match(migrationDashboard, /\/api\/migration\/profiles\/status/);
+  assert.match(migrationDashboard, /adminStatus\?\.migrationStatus/);
   assert.match(migrationDashboard, /support@foundation-1\.co\.za/);
   assert.match(migrationDashboard, /https:\/\/wa\.me\/27690368243/);
   assert.match(migrationReport, /router\.push\(registrationPath\)/);
@@ -129,7 +135,33 @@ test("migration dashboard is gated by company registration", () => {
   assert.match(utilityUpload, /documentUploadLinkIdForLead/);
   assert.match(utilityUpload, /signed_eoi/);
   assert.match(utilityUpload, /utility_bills/);
+  assert.match(utilityUpload, /This migration profile is not linked to an admin client profile yet/);
   assert.match(utilityUpload, /\/api\/upload\/\$\{encodeURIComponent\(token\)\}/);
+  assert.match(migrationAssessmentApi, /profile_id: profileId \|\| null/);
+  assert.match(migrationAssessmentApi, /onConflict: "profile_id"/);
+  assert.match(migrationDashboardStatusApi, /hashMigrationAccessCode/);
+  assert.match(migrationDashboardStatusApi, /oneos_admin_leads/);
+  assert.match(migrationDashboardStatusApi, /oneos_client_documents/);
+});
+
+test("migration production hardening covers schema, auth, and throttling", () => {
+  const migration = read("supabase/migrations/20260524163000_harden_migration_portal_linkage.sql");
+  const adminState = read("app/api/admin/state/route.ts");
+  const adminLead = read("app/api/admin/leads/[id]/route.ts");
+  const profileLogin = read("app/api/migration/profiles/login/route.ts");
+  const uploadApi = read("app/api/upload/[token]/route.ts");
+
+  assert.match(migration, /create table if not exists public\.migration_assessments/);
+  assert.match(migration, /create table if not exists public\.migration_documents/);
+  assert.match(migration, /lead_id text/);
+  assert.match(migration, /client_profile_id text/);
+  assert.match(migration, /service role manages migration portal profiles/);
+  assert.match(adminState, /canReadAdminState/);
+  assert.match(adminState, /return session\.role === "admin" \|\| session\.role === "sales"/);
+  assert.match(adminLead, /Sales users can only update their own client profiles/);
+  assert.match(adminLead, /session\.role === "admin" && typeof payload\.ownerId/);
+  assert.match(profileLogin, /scope: "migration-profile-login"/);
+  assert.match(uploadApi, /scope: "public-document-upload"/);
 });
 
 test("secure upload portal is a staged designer-grade flow", () => {

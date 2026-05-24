@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { readAdminStateSnapshot, writeAdminStateSnapshot } from "@/lib/admin-state-store";
 import { createNotification } from "@/lib/notifications";
 import { makeId, timelineLabel } from "@/lib/formatting";
+import { consumeRateLimit } from "@/lib/rate-limit";
 import { documentUploadLinkIdForLead } from "@/lib/registration-links";
 import { uploadPrivateObject } from "@/lib/server-json-store";
 import type { AdminLead, AdminLeadDocument } from "@/lib/admin-types";
@@ -35,6 +36,11 @@ function findLeadByUploadToken(leads: AdminLead[], token: string): AdminLead | n
         }) === token,
     ) ?? null
   );
+}
+
+function requestIp(request: NextRequest) {
+  const forwarded = request.headers.get("x-forwarded-for");
+  return forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
 }
 
 function cleanFileSegment(value: string) {
@@ -163,6 +169,19 @@ export async function POST(
   { params }: { params: Promise<{ token: string }> },
 ) {
   const { token } = await params;
+  const limit = await consumeRateLimit({
+    scope: "public-document-upload",
+    key: `${requestIp(request)}:${token}`,
+    limit: 20,
+    windowSeconds: 60 * 60,
+  });
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { ok: false, error: "Too many upload attempts. Try again later." },
+      { status: 429 },
+    );
+  }
+
   const formData = await request.formData();
   const documentTypeEntry = formData.get("documentType");
   const files = formData.getAll("files").filter((entry): entry is File => entry instanceof File);

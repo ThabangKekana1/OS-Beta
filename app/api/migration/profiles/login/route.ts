@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { consumeRateLimit } from "@/lib/rate-limit";
 import {
   cleanMigrationAccessCode,
   cleanMigrationProfileId,
@@ -16,6 +17,11 @@ type LoginPayload = {
   accessCode?: unknown;
 };
 
+function requestIp(request: NextRequest) {
+  const forwarded = request.headers.get("x-forwarded-for");
+  return forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
+}
+
 export async function POST(request: NextRequest) {
   let payload: LoginPayload;
 
@@ -32,6 +38,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { ok: false, error: "Enter a valid Profile ID and 4-digit access code." },
       { status: 400 },
+    );
+  }
+
+  const limit = await consumeRateLimit({
+    scope: "migration-profile-login",
+    key: `${requestIp(request)}:${profileId}`,
+    limit: 8,
+    windowSeconds: 15 * 60,
+  });
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { ok: false, error: "Too many unlock attempts. Try again later." },
+      { status: 429 },
     );
   }
 

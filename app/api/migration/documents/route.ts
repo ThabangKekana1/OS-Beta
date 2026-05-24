@@ -62,6 +62,9 @@ function isMissingMigrationTable(error: { code?: string; message?: string } | nu
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const assessmentId = cleanString(formData.get("assessmentId"));
+  const profileId = cleanString(formData.get("profileId")) || null;
+  const leadId = cleanString(formData.get("leadId")) || null;
+  const clientProfileId = cleanString(formData.get("clientProfileId")) || null;
   const documentType = cleanString(formData.get("documentType"));
   const file = formData.get("file");
 
@@ -98,6 +101,9 @@ export async function POST(request: NextRequest) {
   const { error } = await supabase.from("migration_documents").insert({
     id: documentId,
     assessment_id: assessmentId,
+    profile_id: profileId,
+    lead_id: leadId,
+    client_profile_id: clientProfileId,
     document_type: documentType,
     file_name: file.name,
     file_url: fileUrl,

@@ -16,6 +16,24 @@ const SUPPORT_EMAIL = "support@foundation-1.co.za";
 const WHATSAPP_PHONE_DISPLAY = "+27 69 036 8243";
 const WHATSAPP_LINK = "https://wa.me/27690368243";
 
+type AdminProfileStatus = {
+  leadId: string;
+  clientProfileId: string;
+  adminStage: string;
+  migrationStatus: string;
+  readinessScore: number;
+  nextAction: string | null;
+  utilityProfileComplete: boolean;
+  documents: Array<{
+    id: string;
+    title: string;
+    status: string;
+    uploadedByType: string;
+    fileName: string | null;
+    createdAt: string | null;
+  }>;
+};
+
 function zar(value: number) {
   return new Intl.NumberFormat("en-ZA", {
     style: "currency",
@@ -38,6 +56,15 @@ const STATUS_LABELS: Record<string, string> = {
 
 function formatStatus(status: string) {
   return STATUS_LABELS[status] ?? status.replaceAll("_", " ").replace(/^\w/, (c) => c.toUpperCase());
+}
+
+function progressIndexForStatus(status: string, utilityProfileComplete: boolean) {
+  if (status === "approved" || status === "declined") return 5;
+  if (status === "term_sheet_pending") return 4;
+  if (status === "proposal_pending" || status === "proposal_ready") return 3;
+  if (status === "utility_profile_uploaded" || utilityProfileComplete) return 2;
+  if (status === "registered") return 1;
+  return 0;
 }
 
 function cleanProfileId(value: string) {
@@ -87,6 +114,8 @@ export function MigrationDashboard() {
   const [codeInput, setCodeInput] = useState("");
   const [codeError, setCodeError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
+  const [adminStatus, setAdminStatus] = useState<AdminProfileStatus | null>(null);
+  const [adminStatusError, setAdminStatusError] = useState("");
 
   useEffect(() => {
     setProfileFromUrl(profileIdFromUrl());
@@ -159,8 +188,65 @@ export function MigrationDashboard() {
   const uploadedTypes = useMemo(() => {
     return new Set(activeStored?.documents.map((document) => document.documentType) ?? []);
   }, [activeStored]);
-  const utilityProfileComplete =
+  const localUtilityProfileComplete =
     uploadedTypes.has("expression_of_interest") && uploadedTypes.has("utility_bill");
+
+  useEffect(() => {
+    if (!unlocked || !activeStored?.registration || !activeStored.profileId || !activeStored.accessCode) {
+      setAdminStatus(null);
+      setAdminStatusError("");
+      return;
+    }
+
+    let cancelled = false;
+    async function loadAdminStatus() {
+      try {
+        const response = await fetch("/api/migration/profiles/status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            profileId: activeStored?.profileId,
+            accessCode: activeStored?.accessCode,
+          }),
+        });
+        const payload = (await response.json().catch(() => null)) as {
+          ok?: boolean;
+          linked?: boolean;
+          error?: string;
+          status?: AdminProfileStatus | null;
+        } | null;
+
+        if (cancelled) return;
+        if (!response.ok || !payload?.ok) {
+          setAdminStatus(null);
+          setAdminStatusError(payload?.error ?? "Unable to load live admin profile status.");
+          return;
+        }
+
+        setAdminStatus(payload.linked && payload.status ? payload.status : null);
+        setAdminStatusError("");
+      } catch {
+        if (!cancelled) {
+          setAdminStatus(null);
+          setAdminStatusError("Unable to load live admin profile status.");
+        }
+      }
+    }
+
+    void loadAdminStatus();
+    const interval = window.setInterval(loadAdminStatus, 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [
+    activeStored?.accessCode,
+    activeStored?.profileId,
+    activeStored?.registration,
+    activeStored?.registration?.leadId,
+    activeStored?.updatedAt,
+    unlocked,
+  ]);
 
   if (stored === undefined || unlocked === null) return null;
 
@@ -254,10 +340,13 @@ export function MigrationDashboard() {
   const utilityBillDocument = activeStored.documents.find(
     (document) => document.documentType === "utility_bill",
   );
+  const utilityProfileComplete = localUtilityProfileComplete || adminStatus?.utilityProfileComplete === true;
+  const displayStatus = adminStatus?.migrationStatus ?? activeStored.status;
+  const progressIndex = progressIndexForStatus(displayStatus, utilityProfileComplete);
   const nextAction = utilityProfileComplete
     ? {
         title: "Proposal Review Pending",
-        copy: "Foundation-1 can now review your utility profile and prepare the Migration Proposal.",
+        copy: adminStatus?.nextAction ?? "Foundation-1 can now review your utility profile and prepare the Migration Proposal.",
         primaryHref: "/migration/proposal-status",
         primaryLabel: "View Proposal Status",
       }
@@ -281,7 +370,7 @@ export function MigrationDashboard() {
           <div className={styles.dashboardHeaderActions}>
             <span className={styles.statusChip}>
               <span className={styles.statusDot} />
-              {formatStatus(activeStored.status)}
+              {formatStatus(displayStatus)}
             </span>
             <div className={styles.supportLinks} aria-label="Foundation-1 support contacts">
               <a href={`mailto:${SUPPORT_EMAIL}`} className={styles.supportLink}>
@@ -324,6 +413,12 @@ export function MigrationDashboard() {
           <section className={styles.form}>
             <span className={styles.cardLabel}>Profile files</span>
             <div className={styles.documentList}>
+              {adminStatus ? (
+                <div className={styles.documentRow}>
+                  <span>Admin profile stage</span>
+                  <strong>{adminStatus.adminStage}</strong>
+                </div>
+              ) : null}
               <div className={styles.documentRow}>
                 <span>Expression of Interest</span>
                 <strong>{eoiDocument?.fileName ?? "Pending"}</strong>
@@ -332,11 +427,18 @@ export function MigrationDashboard() {
                 <span>Six months utility bills</span>
                 <strong>{utilityBillDocument?.fileName ?? "Pending"}</strong>
               </div>
+              {adminStatus?.documents[0] ? (
+                <div className={styles.documentRow}>
+                  <span>Latest admin document</span>
+                  <strong>{adminStatus.documents[0].title}</strong>
+                </div>
+              ) : null}
             </div>
+            {adminStatusError ? <p className={styles.error}>{adminStatusError}</p> : null}
           </section>
           <section className={styles.reportPreview}>
             <span className={styles.cardLabel}>Progress</span>
-            <MigrationProgressTracker activeIndex={utilityProfileComplete ? 2 : 1} />
+            <MigrationProgressTracker activeIndex={progressIndex} />
           </section>
         </div>
 

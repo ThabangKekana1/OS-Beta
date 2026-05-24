@@ -66,7 +66,7 @@ async function syncFileToAdminProfile(
 ) {
   const registration = stored.registration;
   if (!registration?.leadId || !registration.clientProfileId) {
-    return null;
+    throw new Error("This migration profile is not linked to an admin client profile yet.");
   }
 
   const token = documentUploadLinkIdForLead({
@@ -156,6 +156,11 @@ export function UtilityUpload() {
       for (const queuedFile of queuedFiles) {
         const formData = new FormData();
         formData.append("assessmentId", stored.registration.assessmentId);
+        if (stored.profileId) formData.append("profileId", stored.profileId);
+        if (stored.registration.leadId) formData.append("leadId", stored.registration.leadId);
+        if (stored.registration.clientProfileId) {
+          formData.append("clientProfileId", stored.registration.clientProfileId);
+        }
         formData.append("documentType", queuedFile.documentType);
         formData.append("file", queuedFile.file);
 
