@@ -16,6 +16,7 @@ import {
   buildBlankEoiTemplateFilename,
   buildBlankEoiTemplateText,
 } from "@/lib/eoi-template";
+import { documentUploadLinkIdForLead } from "@/lib/registration-links";
 import styles from "@/components/migration/migration.module.css";
 
 const documentTypes: Array<{
@@ -49,6 +50,46 @@ type UploadResponse = {
   error?: string;
   document?: MigrationDocumentRecord;
 };
+
+type AdminUploadResponse = {
+  ok?: boolean;
+  error?: string;
+};
+
+function adminDocumentType(documentType: MigrationDocumentType) {
+  return documentType === "expression_of_interest" ? "signed_eoi" : "utility_bills";
+}
+
+async function syncFileToAdminProfile(
+  stored: StoredMigrationAssessment,
+  queuedFile: { documentType: MigrationDocumentType; file: File },
+) {
+  const registration = stored.registration;
+  if (!registration?.leadId || !registration.clientProfileId) {
+    return null;
+  }
+
+  const token = documentUploadLinkIdForLead({
+    leadId: registration.leadId,
+    clientProfileId: registration.clientProfileId,
+    email: registration.email,
+  });
+  const formData = new FormData();
+  formData.append("documentType", adminDocumentType(queuedFile.documentType));
+  formData.append("files", queuedFile.file);
+
+  const response = await fetch(`/api/upload/${encodeURIComponent(token)}`, {
+    method: "POST",
+    body: formData,
+  });
+  const payload = (await response.json().catch(() => null)) as AdminUploadResponse | null;
+
+  if (!response.ok || !payload?.ok) {
+    throw new Error(payload?.error ?? "Unable to attach this file to the admin client profile.");
+  }
+
+  return payload;
+}
 
 export function UtilityUpload() {
   const externalStored = useStoredMigrationAssessment();
@@ -110,6 +151,7 @@ export function UtilityUpload() {
 
     try {
       const uploadedDocuments: MigrationDocumentRecord[] = [];
+      const adminSyncErrors: string[] = [];
 
       for (const queuedFile of queuedFiles) {
         const formData = new FormData();
@@ -129,6 +171,16 @@ export function UtilityUpload() {
         }
 
         uploadedDocuments.push(payload.document);
+
+        try {
+          await syncFileToAdminProfile(stored, queuedFile);
+        } catch (syncError) {
+          adminSyncErrors.push(
+            syncError instanceof Error
+              ? syncError.message
+              : "Unable to attach a file to the admin client profile.",
+          );
+        }
       }
 
       const existing = stored.documents.filter(
@@ -147,6 +199,12 @@ export function UtilityUpload() {
       writeStoredMigrationAssessment(next);
       setLocalStored(next);
       setSelectedFiles(emptySelectedFiles);
+      if (adminSyncErrors.length > 0) {
+        setError(
+          `${uploadedDocuments.length} file${uploadedDocuments.length === 1 ? "" : "s"} received in the migration dashboard, but ${adminSyncErrors.length} could not be attached to the admin profile. ${adminSyncErrors[0]}`,
+        );
+        return;
+      }
       setSuccess(
         `${uploadedDocuments.length} file${uploadedDocuments.length === 1 ? "" : "s"} uploaded. ${
           next.status === "utility_profile_uploaded"

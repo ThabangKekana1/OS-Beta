@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { Mail, Download, ArrowRight, Copy, Check } from "lucide-react";
 import type { MigrationAssessmentResult } from "@/lib/calculateMigrationAssessment";
 import {
+  ensureMigrationProfileCredentials,
   readStoredMigrationAssessment,
-  unlockMigrationDashboard,
   writeStoredMigrationAssessment,
 } from "@/components/migration/MigrationState";
 import { QualificationBadge } from "@/components/migration/QualificationBadge";
@@ -231,6 +231,7 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
   const [copied, setCopied] = useState(false);
   const router = useRouter();
   const dashboardPath = credentials ? `/migration/dashboard?p=${credentials.profileId}` : "/migration/dashboard";
+  const registrationPath = credentials ? `/migration/register?p=${credentials.profileId}` : "/migration/register";
   const dashboardUrl = credentials
     ? `${typeof window === "undefined" ? "https://1os.foundation-1.co.za" : window.location.origin}${dashboardPath}`
     : "https://1os.foundation-1.co.za/migration/dashboard";
@@ -442,9 +443,9 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
         </p>
 
         <section className={styles.ctaPanel}>
-          <h2 className={styles.cardTitle}>Ready to get your actual proposal?</h2>
+          <h2 className={styles.cardTitle}>Ready to qualify your business?</h2>
           <p className={styles.sectionCopy}>
-            Continue to your dashboard to capture your business details, download the EOI template, and upload your utility bills. Foundation-1 will then prepare your formal proposal.
+            Complete the company registration form first. Once the qualifying details are submitted, your dashboard will open so you can download the EOI template and upload your utility bills.
           </p>
           <div className={styles.buttonRow} style={{ marginTop: 16 }}>
             <button
@@ -453,25 +454,14 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
               onClick={() => {
                 const stored = readStoredMigrationAssessment();
                 if (!stored) return;
-                // Generate credentials if not already done
-                let creds = stored.profileId && stored.accessCode
-                  ? { profileId: stored.profileId, accessCode: stored.accessCode }
-                  : null;
-                if (!creds) {
-                  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-                  const profileIdSuffix = Array.from(crypto.getRandomValues(new Uint8Array(8)))
-                    .map((b) => chars[b % chars.length]).join("");
-                  const profileId = `F1-${profileIdSuffix}`;
-                  const accessCode = String(1000 + (crypto.getRandomValues(new Uint32Array(1))[0] % 9000));
-                  creds = { profileId, accessCode };
-                  writeStoredMigrationAssessment({ ...stored, profileId, accessCode });
-                }
-                setCredentials(creds);
+                const { assessment, credentials } = ensureMigrationProfileCredentials(stored);
+                writeStoredMigrationAssessment(assessment);
+                setCredentials(credentials);
                 setShowCredentials(true);
               }}
             >
               <ArrowRight size={14} strokeWidth={2.5} />
-              Continue to Dashboard
+              Complete Business Details
             </button>
             <button
               className={styles.ghostButton}
@@ -505,8 +495,7 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
           <div className={styles.credentialCard}>
             <h2 className={styles.credentialTitle}>Save your access details</h2>
             <p className={styles.credentialCopy}>
-              These are your unique profile credentials. Save them — you&apos;ll need the access
-              code to return to your dashboard from another device.
+              These are your unique profile credentials. Save them — after the business details form is complete, you&apos;ll need this access code to return to your dashboard from another device.
             </p>
             <div className={styles.credentialFields}>
               <div className={styles.credentialField}>
@@ -521,7 +510,7 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
               </div>
             </div>
             <div className={styles.credentialDashboardUrl}>
-              <span className={styles.credentialLabel}>Dashboard URL</span>
+              <span className={styles.credentialLabel}>Dashboard URL after qualification</span>
               <span className={styles.credentialUrlText}>
                 {dashboardUrl}
               </span>
@@ -531,12 +520,11 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
                 className={styles.primaryButton}
                 type="button"
                 onClick={() => {
-                  unlockMigrationDashboard(credentials.profileId);
-                  router.push(dashboardPath);
+                  router.push(registrationPath);
                 }}
               >
                 <ArrowRight size={14} strokeWidth={2.5} />
-                I&apos;ve saved my details — Continue
+                I&apos;ve saved my details — Complete Business Details
               </button>
               <button
                 className={styles.ghostButton}

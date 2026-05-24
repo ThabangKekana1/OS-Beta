@@ -5,15 +5,32 @@ import type {
   MigrationAssessmentInput,
   MigrationAssessmentResult,
 } from "@/lib/calculateMigrationAssessment";
+import type { RegistrationFormValues } from "@/components/registration/ClientRegistrationForm";
 
 export type MigrationRegistration = {
   assessmentId: string;
   backend: "supabase" | "local";
+  leadId?: string;
+  clientProfileId?: string;
   businessName: string;
+  industry?: string;
+  contactFirstName?: string;
+  contactSurname?: string;
+  contactPosition?: string;
   contactName: string;
   email: string;
   phone: string;
   companyRegistrationNumber: string;
+  monthlyElectricitySpendEstimateZar?: number;
+  isBusinessRegistered?: boolean;
+  isBusinessOperational?: boolean;
+  hasSixMonthUtilityBill?: boolean;
+  physicalAddress?: string;
+  city?: string;
+  province?: string;
+  source?: RegistrationFormValues["source"];
+  ownerId?: string;
+  businessDetails?: RegistrationFormValues;
   registeredAt: string;
 };
 
@@ -57,7 +74,8 @@ function hasBrowserStorage() {
 }
 
 function sanitizedForRemote(value: StoredMigrationAssessment) {
-  const { accessCode: _accessCode, ...assessment } = value;
+  const assessment = { ...value };
+  delete assessment.accessCode;
   return assessment;
 }
 
@@ -126,6 +144,54 @@ export function unlockMigrationDashboard(profileId: string) {
   if (typeof window === "undefined") return;
   window.sessionStorage.setItem(DASHBOARD_UNLOCK_KEY, profileId);
   window.dispatchEvent(new Event(DASHBOARD_UNLOCK_EVENT));
+}
+
+export type MigrationProfileCredentials = {
+  profileId: string;
+  accessCode: string;
+};
+
+function randomBytes(length: number) {
+  const bytes = new Uint8Array(length);
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    crypto.getRandomValues(bytes);
+    return bytes;
+  }
+  return bytes.map(() => Math.floor(Math.random() * 256));
+}
+
+export function createMigrationProfileCredentials(): MigrationProfileCredentials {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const profileIdSuffix = Array.from(randomBytes(8))
+    .map((byte) => chars[byte % chars.length])
+    .join("");
+  const [a, b, c, d] = randomBytes(4);
+  const pinSeed = (((a << 24) >>> 0) + (b << 16) + (c << 8) + d) >>> 0;
+  const accessCode = String(1000 + (pinSeed % 9000));
+  return {
+    profileId: `F1-${profileIdSuffix}`,
+    accessCode,
+  };
+}
+
+export function ensureMigrationProfileCredentials(
+  value: StoredMigrationAssessment,
+): { assessment: StoredMigrationAssessment; credentials: MigrationProfileCredentials } {
+  if (value.profileId && value.accessCode) {
+    return {
+      assessment: value,
+      credentials: {
+        profileId: value.profileId,
+        accessCode: value.accessCode,
+      },
+    };
+  }
+
+  const credentials = createMigrationProfileCredentials();
+  return {
+    assessment: { ...value, ...credentials },
+    credentials,
+  };
 }
 
 export function clearMigrationDashboardUnlock() {

@@ -16,7 +16,9 @@ export function MigrationShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const stored = useStoredMigrationAssessment();
   const unlockedProfile = useMigrationDashboardUnlockedProfile();
-  const hasDashboardSession = Boolean(stored?.profileId && unlockedProfile === stored.profileId);
+  const hasDashboardSession = Boolean(
+    stored?.profileId && stored.registration && unlockedProfile === stored.profileId,
+  );
 
   function logout() {
     clearStoredMigrationAssessment();

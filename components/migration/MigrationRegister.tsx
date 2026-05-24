@@ -1,13 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { calculateMigrationAssessment } from "@/lib/calculateMigrationAssessment";
 import {
+  ClientRegistrationForm,
+  type RegistrationFormValues,
+} from "@/components/registration/ClientRegistrationForm";
+import {
+  ensureMigrationProfileCredentials,
+  unlockMigrationDashboard,
   useStoredMigrationAssessment,
   writeStoredMigrationAssessment,
-  type StoredMigrationAssessment,
 } from "@/components/migration/MigrationState";
 import styles from "@/components/migration/migration.module.css";
 
@@ -18,75 +23,151 @@ type ApiResponse = {
   backend?: "supabase" | "local";
 };
 
+type RegistrationApiResponse = {
+  ok?: boolean;
+  error?: string;
+  backend?: "supabase" | "local";
+  leadId?: string;
+  clientProfileId?: string;
+};
+
+function contactName(values: RegistrationFormValues) {
+  return `${values.contactFirstName} ${values.contactSurname}`.trim();
+}
+
+function splitName(value = "") {
+  const [firstName = "", ...surnameParts] = value.trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName,
+    surname: surnameParts.join(" "),
+  };
+}
+
 export function MigrationRegister() {
   const router = useRouter();
   const stored = useStoredMigrationAssessment();
-  const [businessName, setBusinessName] = useState("");
-  const [contactName, setContactName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [companyRegistrationNumber, setCompanyRegistrationNumber] = useState("");
-  const [consent, setConsent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!stored) return;
-    if (!businessName.trim() || !contactName.trim() || !email.trim() || !phone.trim()) {
-      setError("Business name, contact person, email, and phone number are required.");
-      return;
-    }
-    if (!consent) {
-      setError("Authorisation is required to continue the Migration Assessment.");
-      return;
-    }
+  const initialValues = useMemo<Partial<RegistrationFormValues>>(() => {
+    if (!stored) return {};
 
-    setIsSubmitting(true);
-    setError(null);
+    const existingDetails = stored.registration?.businessDetails;
+    if (existingDetails) return existingDetails;
+
+    const existingName = splitName(stored.registration?.contactName);
+    return {
+      businessName: stored.registration?.businessName ?? "",
+      businessRegistrationNumber: stored.registration?.companyRegistrationNumber ?? "",
+      industry: stored.registration?.industry ?? "",
+      contactFirstName: stored.registration?.contactFirstName ?? existingName.firstName,
+      contactSurname: stored.registration?.contactSurname ?? existingName.surname,
+      contactPosition: stored.registration?.contactPosition ?? "",
+      contactEmail: stored.registration?.email ?? "",
+      contactNumber: stored.registration?.phone ?? "",
+      monthlyElectricitySpendEstimateZar:
+        stored.registration?.monthlyElectricitySpendEstimateZar ??
+        stored.input.monthlyElectricitySpend ??
+        stored.input.monthlySpend,
+      isBusinessRegistered: stored.registration?.isBusinessRegistered ?? true,
+      isBusinessOperational: stored.registration?.isBusinessOperational ?? true,
+      hasSixMonthUtilityBill: stored.registration?.hasSixMonthUtilityBill ?? false,
+      physicalAddress: stored.registration?.physicalAddress ?? "",
+      city: stored.registration?.city ?? "",
+      province: stored.registration?.province ?? "",
+      source: stored.registration?.source ?? "Migrate Portal",
+      ownerId: stored.registration?.ownerId ?? "public-link",
+    };
+  }, [stored]);
+
+  const submitBusinessDetails = async (values: RegistrationFormValues) => {
+    if (!stored) return false;
+
+    const monthlyElectricitySpend = values.monthlyElectricitySpendEstimateZar;
+    const input = {
+      ...stored.input,
+      monthlyElectricitySpend,
+      monthlySpend: monthlyElectricitySpend,
+    };
+    const result = calculateMigrationAssessment(input);
 
     try {
-      const response = await fetch("/api/migration/assessments", {
+      const registrationResponse = await fetch("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify(values),
+      });
+      const registrationPayload = (await registrationResponse.json().catch(() => null)) as RegistrationApiResponse | null;
+
+      if (
+        !registrationResponse.ok ||
+        !registrationPayload?.ok ||
+        !registrationPayload.clientProfileId
+      ) {
+        return false;
+      }
+
+      const assessmentResponse = await fetch("/api/migration/assessments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          input: stored.input,
-          result,
-          businessName,
-          contactName,
-          email,
-          phone,
-          companyRegistrationNumber,
+          input,
+          businessName: values.businessName,
+          contactName: contactName(values),
+          email: values.contactEmail,
+          phone: values.contactNumber,
+          companyRegistrationNumber: values.businessRegistrationNumber,
         }),
       });
-      const payload = (await response.json()) as ApiResponse;
+      const assessmentPayload = (await assessmentResponse.json().catch(() => null)) as ApiResponse | null;
 
-      if (!response.ok || !payload.ok || !payload.assessmentId || !payload.backend) {
-        setError(payload.error ?? "Unable to register this Migration Assessment.");
-        return;
+      if (
+        !assessmentResponse.ok ||
+        !assessmentPayload?.ok ||
+        !assessmentPayload.assessmentId ||
+        !assessmentPayload.backend
+      ) {
+        return false;
       }
 
-      const next: StoredMigrationAssessment = {
+      const { assessment: next, credentials } = ensureMigrationProfileCredentials({
         ...stored,
+        input,
         result,
         registration: {
-          assessmentId: payload.assessmentId,
-          backend: payload.backend,
-          businessName: businessName.trim(),
-          contactName: contactName.trim(),
-          email: email.trim(),
-          phone: phone.trim(),
-          companyRegistrationNumber: companyRegistrationNumber.trim(),
+          assessmentId: assessmentPayload.assessmentId,
+          backend: assessmentPayload.backend,
+          leadId: registrationPayload.leadId,
+          clientProfileId: registrationPayload.clientProfileId,
+          businessName: values.businessName,
+          industry: values.industry,
+          contactFirstName: values.contactFirstName,
+          contactSurname: values.contactSurname,
+          contactPosition: values.contactPosition,
+          contactName: contactName(values),
+          email: values.contactEmail,
+          phone: values.contactNumber,
+          companyRegistrationNumber: values.businessRegistrationNumber,
+          monthlyElectricitySpendEstimateZar: values.monthlyElectricitySpendEstimateZar,
+          isBusinessRegistered: values.isBusinessRegistered,
+          isBusinessOperational: values.isBusinessOperational,
+          hasSixMonthUtilityBill: values.hasSixMonthUtilityBill,
+          physicalAddress: values.physicalAddress,
+          city: values.city,
+          province: values.province,
+          source: values.source,
+          ownerId: values.ownerId,
+          businessDetails: values,
           registeredAt: new Date().toISOString(),
         },
         status: "registered",
-      };
+      });
+
       writeStoredMigrationAssessment(next);
-      router.push("/migration/upload");
+      unlockMigrationDashboard(credentials.profileId);
+      router.push(`/migration/dashboard?p=${credentials.profileId}`);
+      return true;
     } catch {
-      setError("Unable to reach the migration service. Try again.");
-    } finally {
-      setIsSubmitting(false);
+      return false;
     }
   };
 
@@ -112,81 +193,39 @@ export function MigrationRegister() {
     );
   }
 
-  const result = stored.result?.currentUtilityProjection
-    ? stored.result
-    : calculateMigrationAssessment(stored.input);
-
-  return (
-    <section className={styles.section}>
-      <div className={styles.shell}>
-        <div className={styles.sectionHeader}>
-          <div>
-            <h1 className={styles.sectionTitle}>Complete Business Details</h1>
+  if (stored.registration) {
+    const dashboardHref = stored.profileId ? `/migration/dashboard?p=${stored.profileId}` : "/migration/dashboard";
+    return (
+      <section className={styles.section}>
+        <div className={styles.shell}>
+          <div className={`${styles.panel} ${styles.form}`}>
+            <h1 className={styles.sectionTitle}>Business details complete.</h1>
             <p className={styles.sectionCopy}>
-              Connect the estimate to your business so Foundation-1 can receive your utility
-              profile and prepare the next proposal step.
+              Your business registration is connected to this migration profile. Continue in the dashboard to upload the remaining utility profile documents.
             </p>
+            <div className={styles.buttonRow}>
+              <Link href={dashboardHref} className={styles.primaryButton}>
+                Continue to Dashboard
+              </Link>
+            </div>
           </div>
         </div>
-        <div className={`${styles.panel} ${styles.split}`}>
-          <form className={styles.form} onSubmit={submit}>
-            <div className={styles.fieldStack}>
-              <label className={styles.label}>
-                Business name
-                <input className={styles.input} value={businessName} onChange={(event) => setBusinessName(event.target.value)} />
-              </label>
-              <label className={styles.label}>
-                Contact person
-                <input className={styles.input} value={contactName} onChange={(event) => setContactName(event.target.value)} />
-              </label>
-              <label className={styles.label}>
-                Email
-                <input className={styles.input} type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
-              </label>
-              <label className={styles.label}>
-                Phone number
-                <input className={styles.input} value={phone} onChange={(event) => setPhone(event.target.value)} />
-              </label>
-              <label className={styles.label}>
-                Company registration number optional
-                <input
-                  className={styles.input}
-                  value={companyRegistrationNumber}
-                  onChange={(event) => setCompanyRegistrationNumber(event.target.value)}
-                />
-              </label>
-              <label className={styles.checkboxRow}>
-                <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} />
-                <span>I authorise Foundation-1 to review my utility profile for energy migration suitability.</span>
-              </label>
-              {error ? <p className={styles.error}>{error}</p> : null}
-              <button className={styles.primaryButton} type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Registering" : "Continue to Utility Profile"}
-              </button>
-            </div>
-          </form>
-          <aside className={styles.reportPreview}>
-            <span className={styles.cardLabel}>Assessment ready</span>
-            <h2 className={styles.cardTitle}>{result.qualificationStatus}</h2>
-            <div className={styles.cardRows}>
-              <div className={styles.row}>
-                <span>Next requirement</span>
-                <strong>{result.recommendedPathway}</strong>
-              </div>
-              <div className={styles.row}>
-                <span>Annual exposure</span>
-                <strong>
-                  {new Intl.NumberFormat("en-ZA", {
-                    style: "currency",
-                    currency: "ZAR",
-                    maximumFractionDigits: 0,
-                  }).format(result.currentUtilityProjection.currentAnnualSpend)}
-                </strong>
-              </div>
-            </div>
-          </aside>
-        </div>
-      </div>
-    </section>
+      </section>
+    );
+  }
+
+  return (
+    <ClientRegistrationForm
+      key={`migration-${stored.profileId ?? "draft"}`}
+      defaultOwnerId="public-link"
+      lockOwner
+      initialValues={initialValues}
+      storageKey={`oneos:registration:migration:${stored.profileId ?? "draft"}`}
+      eyebrow="Foundation-1 Migration Qualification"
+      title="Complete business details to unlock your dashboard."
+      description="This is the same secure company registration used by Foundation-1. Complete it once so the team can qualify your business before dashboard upload and proposal steps open."
+      submitLabel="Complete Business Details"
+      onSubmit={submitBusinessDetails}
+    />
   );
 }

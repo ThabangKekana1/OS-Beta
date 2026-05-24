@@ -12,6 +12,10 @@ import { MigrationProgressTracker } from "@/components/migration/MigrationProgre
 import { NextActionPanel } from "@/components/migration/NextActionPanel";
 import styles from "@/components/migration/migration.module.css";
 
+const SUPPORT_EMAIL = "support@foundation-1.co.za";
+const WHATSAPP_PHONE_DISPLAY = "+27 69 036 8243";
+const WHATSAPP_LINK = "https://wa.me/27690368243";
+
 function zar(value: number) {
   return new Intl.NumberFormat("en-ZA", {
     style: "currency",
@@ -56,6 +60,22 @@ function hasCompleteDashboardResult(value: unknown) {
     result.currentUtilityProjection &&
     result.ufmsSolar?.scenarios?.[1] &&
     result.wheeling?.photovoltaicOnlyReference,
+  );
+}
+
+function WhatsAppIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className={styles.whatsappIcon}
+      focusable="false"
+    >
+      <path
+        d="M12 3.25a8.66 8.66 0 0 0-7.47 13.05L3.5 20.5l4.28-1a8.66 8.66 0 1 0 4.22-16.25Zm0 1.7a6.96 6.96 0 0 1 0 13.92 6.9 6.9 0 0 1-3.58-.99l-.3-.18-2.18.51.52-2.11-.2-.32A6.96 6.96 0 0 1 12 4.95Zm-2.38 3.36c-.17 0-.43.06-.66.31-.23.26-.87.86-.87 2.09 0 1.23.9 2.42 1.03 2.59.13.17 1.75 2.79 4.31 3.8 2.13.84 2.56.67 3.02.63.46-.04 1.49-.61 1.7-1.2.21-.59.21-1.1.15-1.2-.07-.11-.23-.17-.49-.3-.26-.13-1.49-.74-1.73-.82-.23-.09-.4-.13-.57.13-.17.25-.66.82-.81.99-.15.17-.3.19-.55.06-.26-.13-1.08-.4-2.06-1.27-.76-.68-1.28-1.52-1.43-1.78-.15-.26-.02-.4.11-.53.12-.12.26-.3.39-.45.13-.15.17-.26.26-.43.09-.17.04-.32-.02-.45-.06-.13-.57-1.39-.79-1.9-.2-.49-.41-.42-.57-.43l-.44-.01Z"
+        fill="currentColor"
+      />
+    </svg>
   );
 }
 
@@ -202,6 +222,29 @@ export function MigrationDashboard() {
     );
   }
 
+  if (!activeStored.registration) {
+    return (
+      <section className={styles.section}>
+        <div className={styles.shell}>
+          <div className={`${styles.panel} ${styles.form}`} style={{ maxWidth: 560 }}>
+            <h1 className={styles.sectionTitle} style={{ fontSize: "1.4rem" }}>Complete Business Details</h1>
+            <p className={styles.sectionCopy}>
+              This dashboard is reserved for your migration profile, but it only opens after the company registration form is complete. This is the qualifying stage before uploads and proposal preparation.
+            </p>
+            <div className={styles.buttonRow}>
+              <Link href="/migration/register" className={styles.primaryButton}>
+                Complete Business Details
+              </Link>
+              <Link href="/migration/report" className={styles.ghostButton}>
+                View Report
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   const result = hasCompleteDashboardResult(activeStored.result)
     ? activeStored.result
     : calculateMigrationAssessment(activeStored.input);
@@ -218,19 +261,12 @@ export function MigrationDashboard() {
         primaryHref: "/migration/proposal-status",
         primaryLabel: "View Proposal Status",
       }
-    : activeStored.registration
-      ? {
-          title: "Utility Profile Required",
-          copy: "Upload your signed Expression of Interest and six months of utility bills to unlock proposal preparation.",
-          primaryHref: "/migration/upload",
-          primaryLabel: "Upload Utility Profile",
-        }
-      : {
-          title: "Complete Business Details",
-          copy: "Capture your business details first, then upload your Expression of Interest and utility bills.",
-          primaryHref: "/migration/register",
-          primaryLabel: "Complete Business Details",
-        };
+    : {
+        title: "Utility Profile Required",
+        copy: "Upload your signed Expression of Interest and six months of utility bills to unlock proposal preparation.",
+        primaryHref: "/migration/upload",
+        primaryLabel: "Upload Utility Profile",
+      };
 
   return (
     <section className={styles.section}>
@@ -242,10 +278,27 @@ export function MigrationDashboard() {
               Track your profile intake, proposal preparation, and deployment status.
             </p>
           </div>
-          <span className={styles.statusChip}>
-            <span className={styles.statusDot} />
-            {formatStatus(activeStored.status)}
-          </span>
+          <div className={styles.dashboardHeaderActions}>
+            <span className={styles.statusChip}>
+              <span className={styles.statusDot} />
+              {formatStatus(activeStored.status)}
+            </span>
+            <div className={styles.supportLinks} aria-label="Foundation-1 support contacts">
+              <a href={`mailto:${SUPPORT_EMAIL}`} className={styles.supportLink}>
+                {SUPPORT_EMAIL}
+              </a>
+              <a
+                href={WHATSAPP_LINK}
+                className={`${styles.supportLink} ${styles.whatsappLink}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`Chat to Foundation-1 on WhatsApp at ${WHATSAPP_PHONE_DISPLAY}`}
+              >
+                <WhatsAppIcon />
+                <span>WhatsApp {WHATSAPP_PHONE_DISPLAY}</span>
+              </a>
+            </div>
+          </div>
         </div>
 
         <div className={styles.metricStrip}>
@@ -283,7 +336,7 @@ export function MigrationDashboard() {
           </section>
           <section className={styles.reportPreview}>
             <span className={styles.cardLabel}>Progress</span>
-            <MigrationProgressTracker activeIndex={utilityProfileComplete ? 2 : activeStored.registration ? 1 : 0} />
+            <MigrationProgressTracker activeIndex={utilityProfileComplete ? 2 : 1} />
           </section>
         </div>
 

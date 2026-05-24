@@ -3,12 +3,28 @@ import Link from "next/link";
 import styles from "@/components/migration/migration.module.css";
 
 const trustIndicators = [
-  "Zero upfront capital required",
-  "Financed energy infrastructure",
-  "Solar and wheeling pathways",
-  "Proposal-ready utility analysis",
-  "Built for South African businesses",
-  "Institutional infrastructure finance",
+  {
+    title: "Zero Risk",
+    description: "No capital required, no financial exposure",
+    proof: "Fully financed by Nedbank",
+    details: ["Insured by Foundation-1 at no cost to you"],
+  },
+  {
+    title: "Immediate Value",
+    description: "Savings from day one",
+    proof: "Up to 60% cost reduction",
+  },
+  {
+    title: "Zero Complexity",
+    description: "We manage application to energisation",
+    proof: "End-to-end managed process",
+    details: ["Fully maintained by Foundation-1", "24-hour support"],
+  },
+  {
+    title: "Resilience",
+    description: "Energy security beyond the grid",
+    proof: "56MW solar farm backing Lumen",
+  },
 ];
 
 export function MigrationHero() {
@@ -32,10 +48,17 @@ export function MigrationHero() {
               </Link>
             </div>
           </div>
-          <div className={styles.trustGrid} aria-label="Trust indicators">
+          <div className={styles.trustGrid} aria-label="Migration value proposition">
             {trustIndicators.map((item) => (
-              <div className={styles.trustItem} key={item}>
-                {item}
+              <div className={styles.trustItem} key={item.title}>
+                <span className={styles.trustItemTitle}>{item.title}</span>
+                <span className={styles.trustItemDescription}>{item.description}</span>
+                <span className={styles.trustItemProof}>{item.proof}</span>
+                {item.details ? (
+                  <span className={styles.trustItemDetails}>
+                    {item.details.join(" · ")}
+                  </span>
+                ) : null}
               </div>
             ))}
           </div>

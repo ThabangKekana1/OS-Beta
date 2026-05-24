@@ -88,6 +88,41 @@ test("registration is a staged Typeform-style experience with autosave", () => {
   assert.match(publicRoute, /storageKey=\{`oneos:registration:\$\{linkId \?\? "generic"\}`\}/);
 });
 
+test("migration dashboard is gated by company registration", () => {
+  const migrationHero = read("components/migration/MigrationHero.tsx");
+  const migrationRegister = read("components/migration/MigrationRegister.tsx");
+  const migrationDashboard = read("components/migration/MigrationDashboard.tsx");
+  const migrationReport = read("components/migration/MigrationReport.tsx");
+  const migrationShell = read("components/migration/MigrationShell.tsx");
+  const utilityUpload = read("components/migration/UtilityUpload.tsx");
+
+  assert.match(migrationHero, /Zero Risk/);
+  assert.match(migrationHero, /Fully financed by Nedbank/);
+  assert.match(migrationHero, /Insured by Foundation-1 at no cost to you/);
+  assert.match(migrationHero, /Immediate Value/);
+  assert.match(migrationHero, /Up to 60% cost reduction/);
+  assert.match(migrationHero, /Zero Complexity/);
+  assert.match(migrationHero, /End-to-end managed process/);
+  assert.match(migrationHero, /Fully maintained by Foundation-1/);
+  assert.match(migrationHero, /24-hour support/);
+  assert.match(migrationHero, /Resilience/);
+  assert.match(migrationHero, /56MW solar farm backing Lumen/);
+  assert.match(migrationRegister, /ClientRegistrationForm/);
+  assert.match(migrationRegister, /\/api\/register/);
+  assert.match(migrationRegister, /\/api\/migration\/assessments/);
+  assert.match(migrationRegister, /unlockMigrationDashboard\(credentials\.profileId\)/);
+  assert.match(migrationDashboard, /if \(!activeStored\.registration\)/);
+  assert.match(migrationDashboard, /This dashboard is reserved/);
+  assert.match(migrationDashboard, /support@foundation-1\.co\.za/);
+  assert.match(migrationDashboard, /https:\/\/wa\.me\/27690368243/);
+  assert.match(migrationReport, /router\.push\(registrationPath\)/);
+  assert.match(migrationShell, /stored\.registration && unlockedProfile === stored\.profileId/);
+  assert.match(utilityUpload, /documentUploadLinkIdForLead/);
+  assert.match(utilityUpload, /signed_eoi/);
+  assert.match(utilityUpload, /utility_bills/);
+  assert.match(utilityUpload, /\/api\/upload\/\$\{encodeURIComponent\(token\)\}/);
+});
+
 test("secure upload portal is a staged designer-grade flow", () => {
   const uploadPortal = read("components/upload/ClientDocumentUploadPortal.tsx");
   const uploadApi = read("app/api/upload/[token]/route.ts");
