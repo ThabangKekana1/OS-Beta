@@ -24,15 +24,17 @@ function contactMethodLabel(value: string | undefined) {
   return "WhatsApp";
 }
 
-function shareText(stored: NonNullable<ReturnType<typeof useStoredMigrationAssessment>>) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function shareText(stored: any) {
   const result = stored.result;
   const bestSaving = Math.max(
-    ...result.ufmsSolar.scenarios.map((scenario) => scenario.tenYearSavingAgainstEskom),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ...result.ufmsSolar.scenarios.map((s: any) => s.tenYearSavingAgainstEskom),
     result.wheeling.conservative.tenYearSavingAgainstEskom,
     result.wheeling.photovoltaicOnlyReference.tenYearSavingAgainstEskom,
-    ...result.combinedScenarios.map((scenario) => scenario.combinedTenYearSavingAgainstEskom),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ...result.combinedScenarios.map((s: any) => s.combinedTenYearSavingAgainstEskom),
   );
-
   return [
     "Foundation-1 Energy Migration Estimate",
     `Business: ${stored.registration?.businessName ?? "Migration prospect"}`,
@@ -74,17 +76,12 @@ export function MigrationSuccess() {
     if (!stored) return;
     const text = shareText(stored);
     setShareStatus("");
-
     try {
       if (navigator.share) {
-        await navigator.share({
-          title: "Foundation-1 Energy Migration Estimate",
-          text,
-        });
+        await navigator.share({ title: "Foundation-1 Energy Migration Estimate", text });
         setShareStatus("Report shared.");
         return;
       }
-
       await navigator.clipboard.writeText(text);
       setShareStatus("Report summary copied.");
     } catch {
@@ -94,39 +91,34 @@ export function MigrationSuccess() {
 
   return (
     <section className={styles.successSection}>
-      <div className={styles.successAura} aria-hidden="true" />
+      {/* Full-page atmospheric rings */}
+      <div className={styles.successAtmosphere} aria-hidden="true">
+        <span className={styles.successRingLg} />
+        <span className={styles.successRingLg} style={{ animationDelay: "0.8s" }} />
+        <span className={styles.successRingLg} style={{ animationDelay: "1.6s" }} />
+        <span className={styles.successRingLg} style={{ animationDelay: "2.4s" }} />
+        <div className={styles.successGlowCore} />
+      </div>
+
       <div className={styles.shell}>
-        <div className={styles.successCard}>
-          <div className={styles.successOrb} aria-hidden="true">
-            <span className={styles.successRing} />
-            <span className={styles.successRing} />
-            <span className={styles.successRing} />
-            <span className={styles.successCheck}>
-              <Check size={42} strokeWidth={2.6} />
-            </span>
+        <div className={styles.successBody}>
+
+          {/* Badge */}
+          <div className={styles.successIconWrap} aria-hidden="true">
+            <Check size={28} strokeWidth={2.8} />
           </div>
 
-          <span className={styles.successKicker}>Registration successful</span>
-          <h1 className={styles.successTitle}>Your Foundation-1 file is open.</h1>
+          {/* Headline */}
+          <p className={styles.successKicker}>Registration successful</p>
+          <h1 className={styles.successTitle}>
+            Your Foundation&#8209;1<br />file is open.
+          </h1>
           <p className={styles.successCopy}>
-            Thanks, {stored.registration.contactName}. A Foundation-1 representative will contact you via {preferredContact} using the details you provided. Your estimate and intake profile are now linked to the admin dashboard.
+            A representative will reach out via{" "}
+            <strong style={{ color: "rgba(255,255,255,0.88)" }}>{preferredContact}</strong>.
           </p>
 
-          <div className={styles.successMetaGrid}>
-            <div>
-              <span>Business</span>
-              <strong>{stored.registration.businessName}</strong>
-            </div>
-            <div>
-              <span>Preferred contact</span>
-              <strong>{preferredContact}</strong>
-            </div>
-            <div>
-              <span>Monthly spend</span>
-              <strong>{zar(stored.result.currentUtilityProjection.currentMonthlySpend)}</strong>
-            </div>
-          </div>
-
+          {/* Actions */}
           <div className={styles.successActions}>
             <button
               className={styles.primaryButton}
@@ -134,15 +126,12 @@ export function MigrationSuccess() {
               disabled={pdfLoading}
               onClick={async () => {
                 setPdfLoading(true);
-                try {
-                  await downloadMigrationReportPDF(stored.result);
-                } finally {
-                  setPdfLoading(false);
-                }
+                try { await downloadMigrationReportPDF(stored.result); }
+                finally { setPdfLoading(false); }
               }}
             >
               <Download size={15} strokeWidth={2.5} />
-              {pdfLoading ? "Generating…" : "Download Report"}
+              {pdfLoading ? "Generating\u2026" : "Download Report"}
             </button>
             <button className={styles.secondaryButton} type="button" onClick={() => void shareReport()}>
               <Share2 size={15} strokeWidth={2.5} />
@@ -156,11 +145,31 @@ export function MigrationSuccess() {
 
           {shareStatus ? <p className={styles.successShareStatus}>{shareStatus}</p> : null}
 
+          {/* Glass data strip */}
+          <div className={styles.successDataStrip}>
+            <div className={styles.successDataItem}>
+              <span>Business</span>
+              <strong>{stored.registration.businessName}</strong>
+            </div>
+            <div className={styles.successDataDivider} aria-hidden="true" />
+            <div className={styles.successDataItem}>
+              <span>Contact preference</span>
+              <strong style={{ textTransform: "capitalize" }}>{preferredContact}</strong>
+            </div>
+            <div className={styles.successDataDivider} aria-hidden="true" />
+            <div className={styles.successDataItem}>
+              <span>Monthly spend</span>
+              <strong>{zar(stored.result.currentUtilityProjection.currentMonthlySpend)}</strong>
+            </div>
+          </div>
+
+          {/* Footer */}
           <div className={styles.successFooterLinks}>
             <Link href="/migration/report">View report again</Link>
-            <span aria-hidden="true">•</span>
+            <span aria-hidden="true">&middot;</span>
             <Link href="/migration/upload">Upload documents if ready</Link>
           </div>
+
         </div>
       </div>
     </section>
