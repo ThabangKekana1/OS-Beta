@@ -14,7 +14,7 @@ export default function MigrationHeroBg() {
       }}
     >
       <Image
-        src="/migration-landing-hero-v6.avif"
+        src="/migration-landing-hero-v7.avif"
         alt=""
         fill
         priority
@@ -22,7 +22,7 @@ export default function MigrationHeroBg() {
         sizes="100vw"
         style={{
           objectFit: "cover",
-          objectPosition: "center 28%",
+          objectPosition: "center",
         }}
       />
     </div>
