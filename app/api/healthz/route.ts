@@ -36,28 +36,18 @@ function checkAuthConfig(): HealthCheck {
   return { ok: true };
 }
 
-function checkLlm(): HealthCheck {
-  if (process.env.NODE_ENV !== "production") return { ok: true };
-  const hasOpenRouter = Boolean((process.env.OPENROUTER_API_KEY ?? "").trim());
-  if (!hasOpenRouter) {
-    return { ok: false, error: "OPENROUTER_API_KEY missing" };
-  }
-  return { ok: true };
-}
-
 export async function GET() {
-  const [supabase, auth, llm] = await Promise.all([
+  const [supabase, auth] = await Promise.all([
     checkSupabase(),
     Promise.resolve(checkAuthConfig()),
-    Promise.resolve(checkLlm()),
   ]);
 
-  const allOk = supabase.ok && auth.ok && llm.ok;
+  const allOk = supabase.ok && auth.ok;
   return NextResponse.json(
     {
       ok: allOk,
       env: process.env.NODE_ENV,
-      checks: { supabase, auth, llm },
+      checks: { supabase, auth },
       timestamp: new Date().toISOString(),
     },
     { status: allOk ? 200 : 503 },

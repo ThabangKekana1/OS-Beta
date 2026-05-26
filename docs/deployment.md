@@ -60,15 +60,7 @@ The migrations create:
 3. The same flow applies for `sales` and `partner` users (set
    `partner_org_id` for partners).
 
-## 5. Configure an LLM provider
-
-Production refuses to use the local Ollama loopback. Dawn uses OpenRouter only.
-Set:
-
-- `OPENROUTER_API_KEY`
-- optional `OPENROUTER_MODEL` (defaults to `minimax/minimax-m2.5:free`)
-
-## 6. Set environment variables on your host
+## 5. Set environment variables on your host
 
 | Var | Notes |
 |-----|-------|
@@ -76,8 +68,6 @@ Set:
 | `NEXT_PUBLIC_SUPABASE_URL` | from Supabase |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | from Supabase |
 | `SUPABASE_SERVICE_ROLE_KEY` | from Supabase, **secret** |
-| `OPENROUTER_API_KEY` | Dawn's primary LLM provider, **secret** |
-| `OPENROUTER_MODEL` | optional; defaults to `minimax/minimax-m2.5:free` |
 | `APP_BASE_URL` | canonical app origin, e.g. `https://1os.foundation-1.co.za` |
 | `NEXT_PUBLIC_SITE_URL` | same canonical public origin |
 | `EMAIL_OUTBOUND_DOMAIN` | `foundation-1.co.za` |

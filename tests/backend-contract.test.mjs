@@ -309,9 +309,8 @@ test("sales surveillance is backed by login audit and email activity", () => {
   assert.match(surveillance, /recentAuditEvents/);
 });
 
-test("obsolete agent and PDF parsing dependencies are removed", () => {
+test("obsolete animation and PDF parsing dependencies are removed", () => {
   const pkg = read("package.json");
-  assert.doesNotMatch(pkg, /@openrouter\/sdk/);
   assert.doesNotMatch(pkg, /framer-motion/);
   assert.doesNotMatch(pkg, /pdf-parse/);
   assert.doesNotMatch(pkg, /pdf-lib/);

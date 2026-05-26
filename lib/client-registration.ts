@@ -610,7 +610,7 @@ export function buildAdminLeadShellFromSignup(
     estimatedValueZar: DEAL_VALUE_ZAR,
     lastTouched: "Just now",
     nextAction:
-      "Client account created. Dawn must complete pre-qualification, then full business registration to generate the EOI.",
+      "Client account created. Complete pre-qualification, then full business registration to generate the EOI.",
     migrateAccountName: SIGNUP_PENDING_BUSINESS_NAME,
     migrateAccountId: buildAccountIdFromBusinessName(`signup-${contactName}`),
     userProfile: {
@@ -644,7 +644,7 @@ export function buildAdminLeadShellFromSignup(
         id: makeId("event"),
         title: "Client account created",
         detail:
-          "Client signed up in 1OS. Name and email are visible in admin. Dawn must complete pre-qualification before full registration and EOI generation.",
+          "Client signed up in 1OS. Name and email are visible in admin. Complete pre-qualification before full registration and EOI generation.",
         createdAt: timelineLabel(),
         tone: "system",
       },
