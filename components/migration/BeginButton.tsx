@@ -17,7 +17,7 @@ export function BeginButton() {
     if (!launching) return;
     const t = window.setTimeout(() => {
       router.push("/migration/start");
-    }, 3000);
+    }, 5000);
     return () => window.clearTimeout(t);
   }, [launching, router]);
 

@@ -4,6 +4,8 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { BeginButton } from "@/components/migration/BeginButton";
 import styles from "@/components/migration/migration.module.css";
 
+const HERO_TITLE = "Your power, restored.";
+
 export function MigrationHeroIntro() {
   const titleRef = useRef<HTMLHeadingElement>(null);
   const [titleWidth, setTitleWidth] = useState<number | null>(null);
@@ -23,11 +25,15 @@ export function MigrationHeroIntro() {
     };
 
     updateTitleWidth();
+    const animationFrame = window.requestAnimationFrame(updateTitleWidth);
+    document.fonts?.ready.then(updateTitleWidth).catch(() => undefined);
+
     const observer = new ResizeObserver(updateTitleWidth);
     observer.observe(title);
     window.addEventListener("resize", updateTitleWidth);
 
     return () => {
+      window.cancelAnimationFrame(animationFrame);
       observer.disconnect();
       window.removeEventListener("resize", updateTitleWidth);
     };
@@ -40,7 +46,7 @@ export function MigrationHeroIntro() {
     >
       <span className={styles.heroEyebrow}>Energy Migration Platform</span>
       <h1 ref={titleRef} className={styles.heroTitle}>
-        Power, without the weight.
+        {HERO_TITLE}
       </h1>
       <p className={styles.heroText}>
         Financed clean-energy migration for businesses ready to lower costs, reduce grid
