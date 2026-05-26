@@ -18,6 +18,7 @@ export default function MigrationHeroBg() {
         alt=""
         fill
         priority
+        unoptimized
         sizes="100vw"
         style={{
           objectFit: "cover",
