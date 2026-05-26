@@ -201,11 +201,14 @@ function compactAdminLeadFromRow(
     "Client Registered",
   );
   const disqualifiedAt = toIsoOrNull(row.disqualified_at);
-  const createdAt = toIsoOrNull(row.created_at) ?? "";
+  const createdAt = toIsoOrNull(row.created_at) ?? new Date().toISOString();
 
   const compactLead: AdminLead = {
     id,
     clientProfileId: stringValue(row.client_profile_id, `profile-${id}`),
+    createdAt,
+    registeredAt: createdAt,
+    manuallyAddedAt: null,
     company,
     businessRegistrationNumber: stringValue(row.business_registration_number),
     industry: stringValue(row.industry),
@@ -272,10 +275,32 @@ function compactAdminLeadFromRow(
   };
 
   if (row.payload && typeof row.payload === "object") {
+    const payloadRecord = row.payload as Partial<AdminLead>;
+    const payloadHasCreatedAt = typeof payloadRecord.createdAt === "string" && payloadRecord.createdAt.trim().length > 0;
+    const payloadHasRegisteredAt = typeof payloadRecord.registeredAt === "string" && payloadRecord.registeredAt.trim().length > 0;
+    const payloadHasManuallyAddedAt = typeof payloadRecord.manuallyAddedAt === "string" && payloadRecord.manuallyAddedAt.trim().length > 0;
     const [payloadLead] = normalizeAdminLeads([row.payload as AdminLead]);
     if (payloadLead?.id) {
+      const isManualLead =
+        payloadLead.origin === "created" && payloadLead.registrationSource?.channel !== "public_link";
+      const hasRegistrationSignal = Boolean(
+        payloadLead.isClientRegistered ||
+          payloadLead.registrationSource?.channel === "public_link" ||
+          payloadLead.migrationAssessment,
+      );
       return {
         ...payloadLead,
+        createdAt: payloadHasCreatedAt ? payloadLead.createdAt : createdAt,
+        registeredAt: payloadHasRegisteredAt
+          ? payloadLead.registeredAt
+          : hasRegistrationSignal
+            ? createdAt
+            : null,
+        manuallyAddedAt: payloadHasManuallyAddedAt
+          ? payloadLead.manuallyAddedAt
+          : isManualLead
+            ? createdAt
+            : null,
         documents: documents.length > 0 ? documents : payloadLead.documents,
       };
     }
@@ -303,6 +328,7 @@ function adminLeadRow(lead: AdminLead) {
     eoi_signed_at: toIsoOrNull(lead.eoiSignedAt),
     onboarding_completed_at: toIsoOrNull(lead.onboardingCompletedAt),
     disqualified_at: lead.disqualification ? new Date().toISOString() : null,
+    created_at: toIsoOrNull(lead.createdAt) ?? undefined,
     payload: lead,
   };
 }

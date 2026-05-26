@@ -82,6 +82,33 @@ function formatEngagementTime(value: string) {
   }).format(parsed);
 }
 
+function formatLeadTimestamp(value: string | null | undefined) {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "—";
+  return new Intl.DateTimeFormat("en-ZA", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(parsed);
+}
+
+function leadTimestampRows(lead: AdminLead) {
+  const rows: Array<{ label: string; value: string }> = [];
+  if (lead.registeredAt) {
+    rows.push({ label: "Registered", value: formatLeadTimestamp(lead.registeredAt) });
+  }
+  if (lead.manuallyAddedAt) {
+    rows.push({ label: "Admin added", value: formatLeadTimestamp(lead.manuallyAddedAt) });
+  }
+  if (rows.length === 0) {
+    rows.push({ label: "Created", value: formatLeadTimestamp(lead.createdAt) });
+  }
+  return rows;
+}
+
 function buildInboxHref(
   lead: AdminLead,
   engagement: LeadEngagement | null,
@@ -318,6 +345,9 @@ export function AdminLeadsRoute({
       "City",
       "Contact Status",
       "Stage",
+      "Registered At",
+      "Manual Admin Added At",
+      "Created At",
       "Last Touched",
       "Source",
     ];
@@ -338,6 +368,9 @@ export function AdminLeadsRoute({
           lead.city,
           lead.contactStatus,
           lead.stage,
+          formatLeadTimestamp(lead.registeredAt),
+          formatLeadTimestamp(lead.manuallyAddedAt),
+          formatLeadTimestamp(lead.createdAt),
           lead.lastTouched,
           adminLeadOriginLabels[(lead.origin ?? "created") as AdminLeadOrigin],
         ];
@@ -352,7 +385,7 @@ export function AdminLeadsRoute({
 
   const defaultOwnerId = actorAgentId ?? agents[0]?.id ?? "";
   const tableColumnCount =
-    12 + (showOwnerControls ? 1 : 0) + (showPartnerControls ? 1 : 0);
+    13 + (showOwnerControls ? 1 : 0) + (showPartnerControls ? 1 : 0);
   const handleCreateLead = () => {
     setQuickLeadError(null);
     const created = createLeadShell({
@@ -612,7 +645,7 @@ export function AdminLeadsRoute({
         </div>
 
         <div className="mt-5 max-w-full overflow-x-auto rounded-2xl border border-white/60 bg-white/[0.03]">
-          <table className="min-w-[92rem] border-collapse text-sm text-white/75">
+          <table className="min-w-[102rem] border-collapse text-sm text-white/75">
             <thead>
               <tr className="bg-white/[0.03] text-xs uppercase tracking-[0.2em] text-white/52">
                 <th className="px-3 py-3 text-left font-medium">Company</th>
@@ -631,6 +664,7 @@ export function AdminLeadsRoute({
                 <th className="px-3 py-3 text-left font-medium">Lead status</th>
                 <th className="px-3 py-3 text-left font-medium">Email status</th>
                 <th className="px-3 py-3 text-left font-medium">Stage</th>
+                <th className="px-3 py-3 text-left font-medium">Registered / Added</th>
                 <th className="px-3 py-3 text-left font-medium">Last touched</th>
                 <th className="px-3 py-3 text-left font-medium">Action</th>
               </tr>
@@ -781,6 +815,18 @@ export function AdminLeadsRoute({
                       ) : null}
                     </td>
                     <td className="px-3 py-3 text-white/62">{lead.stage}</td>
+                    <td className="px-3 py-3 text-white/58">
+                      <div className="space-y-1">
+                        {leadTimestampRows(lead).map((row) => (
+                          <div key={`${lead.id}-${row.label}`}>
+                            <div className="text-[0.62rem] uppercase tracking-[0.16em] text-white/35">
+                              {row.label}
+                            </div>
+                            <div className="whitespace-nowrap text-xs text-white/66">{row.value}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </td>
                     <td className="px-3 py-3 text-white/52">{lead.lastTouched}</td>
                     <td className="px-3 py-3">
                       {lead.userProfile.email ? (

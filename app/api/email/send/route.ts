@@ -9,7 +9,7 @@ import {
   shouldRebuildHtmlForSystemSignature,
   SYSTEM_EMAIL_FOOTER_CONTENT_ID,
 } from "@/lib/email-signatures";
-import { systemSignatureTextForSender } from "@/lib/email-signature-copy";
+import { foundationDisplayNameForEmail } from "@/lib/email-signature-copy";
 import { recordMessage } from "@/lib/email-threads";
 import { recordLeadEmailSent } from "@/lib/lead-email-activity";
 import { resolveAdminSenderOption } from "@/lib/admin-mailboxes";
@@ -176,8 +176,9 @@ export async function POST(request: Request) {
   const personalFromEmail = session.role === "sales" || session.role === "partner"
     ? emailOnOutboundDomain(session.email)
     : null;
+  const senderDisplayName = foundationDisplayNameForEmail(session.email, session.name);
   const fromAddress = personalFromEmail
-    ? formatMailboxAddress(session.name, personalFromEmail)
+    ? formatMailboxAddress(senderDisplayName, personalFromEmail)
     : adminSender?.value ?? (process.env.EMAIL_FROM ?? "").trim();
   if (!fromAddress) {
     return NextResponse.json({ error: "EMAIL_FROM is not configured on the server" }, { status: 500 });
@@ -201,12 +202,8 @@ export async function POST(request: Request) {
 
   const mailboxOwnerUserId = personalMailbox ? session.userId : null;
   const mailboxAddress = personalMailbox ? session.email : adminSender?.email ?? null;
-  const shouldAppendSystemSignature = Boolean(
-    systemSignatureTextForSender({
-      ownerEmail: session.email,
-      ownerRole: session.role,
-    }),
-  );
+  const shouldAppendSystemSignature =
+    session.role === "admin" || session.role === "sales" || session.role === "partner";
   const signatureFooterImage = shouldAppendSystemSignature
     ? await getSystemEmailFooterImage()
     : null;
@@ -215,6 +212,7 @@ export async function POST(request: Request) {
     ? buildSystemEmailSignature({
         ownerUserId: session.userId,
         ownerEmail: session.email,
+        ownerName: senderDisplayName,
         ownerRole: session.role,
         footerImage: signatureFooterImage,
       })

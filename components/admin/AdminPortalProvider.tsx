@@ -1378,6 +1378,7 @@ export function AdminPortalProvider({
             isBusinessOperational,
         );
         const completedNow = registrationComplete && !lead.isClientRegistered;
+        const timestamp = new Date().toISOString();
         const nextStage =
           registrationComplete && !TERMINAL_STAGES.has(lead.stage)
             ? promoteStage(lead.stage, "EOI Generated")
@@ -1396,6 +1397,7 @@ export function AdminPortalProvider({
           contactSurname,
           contactPosition,
           contactName,
+          registeredAt: completedNow ? timestamp : lead.registeredAt,
           monthlyElectricitySpendEstimateZar,
           isBusinessRegistered,
           isClientRegistered: lead.isClientRegistered || registrationComplete,

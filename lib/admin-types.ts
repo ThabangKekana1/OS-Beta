@@ -177,6 +177,9 @@ export interface SalesLead {
 export interface AdminLead {
   id: string;
   clientProfileId: string;
+  createdAt: string;
+  registeredAt: string | null;
+  manuallyAddedAt: string | null;
   company: string;
   businessRegistrationNumber: string;
   industry: string;

@@ -127,6 +127,7 @@ export function emptyEmailSignature(input: {
 export function buildSystemEmailSignature(input: {
   ownerUserId?: string | null;
   ownerEmail?: string | null;
+  ownerName?: string | null;
   ownerRole?: EmailSignatureRole | null;
   footerImage?: EmailSignatureFooterImage | null;
 }): EmailSignature {

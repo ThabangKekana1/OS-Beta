@@ -88,6 +88,27 @@ test("registration is a staged Typeform-style experience with autosave", () => {
   assert.match(publicRoute, /storageKey=\{`oneos:registration:\$\{linkId \?\? "generic"\}`\}/);
 });
 
+test("admin leads track registration and manual-add timestamps", () => {
+  const adminTypes = read("lib/admin-types.ts");
+  const clientRegistration = read("lib/client-registration.ts");
+  const adminProvider = read("components/admin/AdminPortalProvider.tsx");
+  const leadsRoute = read("components/admin/routes/AdminLeadsRoute.tsx");
+  const profileRoute = read("components/admin/routes/AdminLeadProfileRoute.tsx");
+  const supabaseStore = read("lib/supabase-db-store.ts");
+
+  assert.match(adminTypes, /createdAt: string/);
+  assert.match(adminTypes, /registeredAt: string \| null/);
+  assert.match(adminTypes, /manuallyAddedAt: string \| null/);
+  assert.match(clientRegistration, /registeredAt: createdAt/);
+  assert.match(clientRegistration, /manuallyAddedAt/);
+  assert.match(adminProvider, /registeredAt: completedNow \? timestamp : lead\.registeredAt/);
+  assert.match(leadsRoute, /Registered \/ Added/);
+  assert.match(leadsRoute, /Admin added/);
+  assert.match(profileRoute, /Registration submitted/);
+  assert.match(profileRoute, /Manually added by admin/);
+  assert.match(supabaseStore, /created_at: toIsoOrNull\(lead\.createdAt\)/);
+});
+
 test("migration creates a lightweight client profile before document upload", () => {
   const migrationHero = read("components/migration/MigrationHero.tsx");
   const migrationRegister = read("components/migration/MigrationRegister.tsx");
@@ -237,14 +258,18 @@ test("automatic email signature remains while editable signature API is gone", (
 
   assert.match(signature, /buildSystemEmailSignature/);
   assert.match(signatureCopy, /Founder & Platform Engineer/);
+  assert.match(signatureCopy, /Karman Kekana/);
   assert.match(signatureCopy, /Moeketsi Moima/);
+  assert.match(signatureCopy, /Tiisetso Mogotlane/);
   assert.match(signatureCopy, /Business Development/);
   assert.match(signatureCopy, /moeketsi@foundation-1\.co\.za/);
+  assert.match(signatureCopy, /tiisetso@foundation-1\.co\.za/);
   assert.match(signatureCopy, /No 17 Muswell Road, Wedgefield Office Park/);
   assert.match(signatureCopy, /CONFIDENTIAL: This email and any files transmitted with it are confidential/);
+  assert.match(signatureCopy, /foundationDisplayNameForEmail/);
   assert.match(sendRoute, /buildSystemEmailSignature/);
-  assert.match(sendRoute, /systemSignatureTextForSender/);
   assert.match(sendRoute, /shouldAppendSystemSignature/);
+  assert.match(sendRoute, /foundationDisplayNameForEmail/);
   assert.match(adminMailboxes, /email: "karman@foundation-1\.co\.za"/);
   assert.match(adminMailboxes, /label: "Support"/);
   assert.match(adminMailboxes, /email: "support@foundation-1\.co\.za"/);

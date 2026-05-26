@@ -1,4 +1,5 @@
 import { formatMailboxAddress } from "@/lib/email-addressing";
+import { foundationDisplayNameForEmail } from "@/lib/email-signature-copy";
 
 export type AdminSenderOption = {
   label: string;
@@ -8,7 +9,7 @@ export type AdminSenderOption = {
 
 const ADMIN_SENDERS = [
   {
-    label: "Karman",
+    label: "Karman Kekana",
     email: "karman@foundation-1.co.za",
     aliases: ["karman@replies.1os.co.za"],
   },
@@ -33,9 +34,9 @@ function extractEmail(value: string) {
 
 export function getAdminSenderOptions(): AdminSenderOption[] {
   return ADMIN_SENDERS.map((sender) => ({
-    label: sender.label,
+    label: foundationDisplayNameForEmail(sender.email, sender.label),
     email: sender.email,
-    value: formatMailboxAddress(sender.label, sender.email),
+    value: formatMailboxAddress(foundationDisplayNameForEmail(sender.email, sender.label), sender.email),
   }));
 }
 

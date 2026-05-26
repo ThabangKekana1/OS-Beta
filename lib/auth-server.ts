@@ -4,6 +4,7 @@ import {
   type AuthSession,
   type UserRole,
 } from "@/lib/auth";
+import { foundationDisplayNameForEmail } from "@/lib/email-signature-copy";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { findProfileByEmail } from "@/lib/users-db";
 
@@ -41,7 +42,7 @@ export async function getServerAuthSession(): Promise<AuthSession | null> {
       return {
         userId: profile.id,
         email: profile.email,
-        name: profile.name || metaName || email.split("@")[0],
+        name: foundationDisplayNameForEmail(profile.email, profile.name || metaName || email.split("@")[0]),
         role: profile.role,
         agentId: effectiveAgentId,
         partnerOrgId: profile.partnerOrgId,
@@ -52,7 +53,7 @@ export async function getServerAuthSession(): Promise<AuthSession | null> {
     return {
       userId: null,
       email,
-      name: metaName ?? email.split("@")[0],
+      name: foundationDisplayNameForEmail(email, metaName ?? email.split("@")[0]),
       role: "client",
       agentId: null,
       partnerOrgId: null,

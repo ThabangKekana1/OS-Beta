@@ -3,7 +3,7 @@ import type { AdminAgent } from "@/lib/admin-types";
 export const ADMIN_AGENTS: AdminAgent[] = [
   {
     id: "agent-karman",
-    name: "Karman",
+    name: "Karman Kekana",
     role: "Admin",
     region: "National",
   },
@@ -15,7 +15,7 @@ export const ADMIN_AGENTS: AdminAgent[] = [
   },
   {
     id: "agent-tiisetso",
-    name: "Tiisetso",
+    name: "Tiisetso Mogotlane",
     role: "Sales Agent",
     region: "National",
   },

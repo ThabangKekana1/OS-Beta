@@ -52,6 +52,15 @@ function coerceContactStatus(value: unknown): AdminLeadContactStatus {
   return "Not Contacted";
 }
 
+function coerceIsoTimestamp(value: unknown): string | null {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
 export function normalizeAdminLead(lead: AdminLead): AdminLead {
   const nameParts = lead.contactName.trim().split(/\s+/).filter(Boolean);
   const contactFirstName =
@@ -66,9 +75,30 @@ export function normalizeAdminLead(lead: AdminLead): AdminLead {
     typeof lead.contactPosition === "string" && lead.contactPosition.trim().length > 0
       ? lead.contactPosition.trim()
       : lead.userProfile.role || "Owner";
+  const createdAt =
+    coerceIsoTimestamp((lead as Partial<AdminLead>).createdAt) ??
+    coerceIsoTimestamp(lead.userProfile.joinedAt) ??
+    new Date().toISOString();
+  const hasRegistrationSignal = Boolean(
+    (lead as Partial<AdminLead>).isClientRegistered === true ||
+      (lead as Partial<AdminLead>).registrationSource?.channel === "public_link" ||
+      (lead as Partial<AdminLead>).migrationAssessment,
+  );
+  const registeredAt =
+    coerceIsoTimestamp((lead as Partial<AdminLead>).registeredAt) ??
+    (hasRegistrationSignal ? createdAt : null);
+  const manuallyAddedAt =
+    coerceIsoTimestamp((lead as Partial<AdminLead>).manuallyAddedAt) ??
+    ((lead as Partial<AdminLead>).origin === "created" &&
+    (lead as Partial<AdminLead>).registrationSource?.channel !== "public_link"
+      ? createdAt
+      : null);
 
   return {
     ...lead,
+    createdAt,
+    registeredAt,
+    manuallyAddedAt,
     contactFirstName,
     contactSurname,
     contactPosition,

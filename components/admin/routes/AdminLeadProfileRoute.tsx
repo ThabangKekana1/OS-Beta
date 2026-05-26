@@ -94,7 +94,9 @@ type ComposeAttachment = {
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "";
-  return new Date(value).toLocaleString("en-ZA", {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toLocaleString("en-ZA", {
     dateStyle: "medium",
     timeStyle: "short",
   });
@@ -1059,6 +1061,19 @@ export function AdminLeadProfileRoute({
               <p className="mt-1 text-xs text-white/42">
                 Registered via {lead.registrationSource.profileName}&apos;s unique {lead.registrationSource.profileRole} link
                 {" "}({lead.registrationSource.channel === "public_link" ? "client-submitted" : "dashboard"})
+              </p>
+            ) : null}
+            <p className="mt-1 text-xs text-white/42">
+              Profile created: {formatDateTime(lead.createdAt) || "—"}
+            </p>
+            {lead.registeredAt ? (
+              <p className="mt-1 text-xs text-white/42">
+                Registration submitted: {formatDateTime(lead.registeredAt)}
+              </p>
+            ) : null}
+            {lead.manuallyAddedAt ? (
+              <p className="mt-1 text-xs text-white/42">
+                Manually added by admin: {formatDateTime(lead.manuallyAddedAt)}
               </p>
             ) : null}
             <p className="mt-1 text-xs text-white/42">Reg No: {lead.businessRegistrationNumber}</p>

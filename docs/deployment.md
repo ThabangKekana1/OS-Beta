@@ -78,6 +78,19 @@ Set:
 | `SUPABASE_SERVICE_ROLE_KEY` | from Supabase, **secret** |
 | `OPENROUTER_API_KEY` | Dawn's primary LLM provider, **secret** |
 | `OPENROUTER_MODEL` | optional; defaults to `minimax/minimax-m2.5:free` |
+| `APP_BASE_URL` | canonical app origin, e.g. `https://1os.foundation-1.co.za` |
+| `NEXT_PUBLIC_SITE_URL` | same canonical public origin |
+| `EMAIL_OUTBOUND_DOMAIN` | `foundation-1.co.za` |
+| `EMAIL_REPLY_DOMAIN` | Resend inbound subdomain, e.g. `replies.foundation-1.co.za` |
+
+Keep Resend inbound on a dedicated reply subdomain. Do not point the root
+`foundation-1.co.za` MX at Resend if human mailbox/webmail hosting also receives
+mail for `@foundation-1.co.za`.
+
+For the current 1-grid mailbox setup, the root MX records belong to the 1-grid
+cluster (`1-grid-mx01.co.za`, `1-grid-mx02.com`, `1-grid-mx03.co.za`,
+`1-grid-mx04.com`), while `webmail`, `mail`, `imap`, and `smtp` point to the
+assigned Plesk server `lnxsvrweb09.hostserv.co.za`.
 
 ## 7. Deploy
 

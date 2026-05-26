@@ -257,10 +257,15 @@ export function buildAdminLeadFromClientRegistration(
   const clientProfileId = makeId("profile");
   const eoiSigningToken = buildEoiSigningToken(businessName);
   const registrationDetail = buildRegistrationEventDetail(input.registrationSource);
+  const createdAt = new Date().toISOString();
+  const manuallyAddedAt = input.registrationSource?.channel === "dashboard" ? createdAt : null;
 
   const nextLead: AdminLead = {
     id: newLeadId,
     clientProfileId,
+    createdAt,
+    registeredAt: createdAt,
+    manuallyAddedAt,
     company: businessName,
     businessRegistrationNumber,
     industry,
@@ -298,7 +303,7 @@ export function buildAdminLeadFromClientRegistration(
       email: contactEmail,
       phone: contactNumber,
       role: contactPosition,
-      joinedAt: new Date().toISOString().slice(0, 10),
+      joinedAt: createdAt.slice(0, 10),
     },
     eoiSigningToken,
     eoiSignatureId: null,
@@ -382,7 +387,8 @@ export function buildAdminLeadFromMigrationIntake(
   const { contactFirstName, contactSurname } = splitContactName(contactName);
   const leadId = makeId("lead");
   const clientProfileId = makeId("profile");
-  const joinedAt = new Date().toISOString().slice(0, 10);
+  const createdAt = new Date().toISOString();
+  const joinedAt = createdAt.slice(0, 10);
   const assessmentDetail = assessmentEventDetail(input.assessmentSummary);
   const preferredContactMethod = input.preferredContactMethod.trim() || "whatsapp";
   const contactPreferenceDetail = `Preferred contact method: ${preferredContactMethod}. Email: ${contactEmail}. Phone/WhatsApp: ${contactNumber}.`;
@@ -390,6 +396,9 @@ export function buildAdminLeadFromMigrationIntake(
   const lead: AdminLead = {
     id: leadId,
     clientProfileId,
+    createdAt,
+    registeredAt: createdAt,
+    manuallyAddedAt: null,
     company: businessName,
     businessRegistrationNumber: "",
     industry: "",
@@ -491,6 +500,9 @@ export function updateExistingLeadFromMigrationIntake(
 
   const lead: AdminLead = {
     ...existingLead,
+    createdAt: existingLead.createdAt || intake.lead.createdAt,
+    registeredAt: existingLead.registeredAt ?? intake.lead.registeredAt,
+    manuallyAddedAt: existingLead.manuallyAddedAt ?? null,
     company: businessName,
     contactFirstName: existingLead.contactFirstName?.trim() || contactFirstName,
     contactSurname: existingLead.contactSurname?.trim() || contactSurname,
@@ -561,11 +573,15 @@ export function buildAdminLeadShellFromSignup(
   const { contactFirstName, contactSurname } = splitContactName(contactName);
   const leadId = makeId("lead");
   const clientProfileId = makeId("profile");
-  const joinedAt = new Date().toISOString().slice(0, 10);
+  const createdAt = new Date().toISOString();
+  const joinedAt = createdAt.slice(0, 10);
 
   const lead: AdminLead = {
     id: leadId,
     clientProfileId,
+    createdAt,
+    registeredAt: createdAt,
+    manuallyAddedAt: null,
     company: SIGNUP_PENDING_BUSINESS_NAME,
     businessRegistrationNumber: "",
     industry: "",
@@ -700,6 +716,9 @@ export function promoteSignupLeadToClientRegistration(
     ...created.lead,
     id: existingLead.id,
     clientProfileId: existingLead.clientProfileId,
+    createdAt: existingLead.createdAt || created.lead.createdAt,
+    registeredAt: existingLead.registeredAt ?? created.lead.registeredAt,
+    manuallyAddedAt: existingLead.manuallyAddedAt ?? created.lead.manuallyAddedAt,
     ownerId: existingLead.ownerId || created.lead.ownerId,
     linkedSalesLeadId: existingLead.linkedSalesLeadId,
     partnerOrgId: existingLead.partnerOrgId ?? created.lead.partnerOrgId ?? null,
@@ -753,6 +772,9 @@ export function completeExistingLeadFromClientRegistration(
     ...created.lead,
     id: existingLead.id,
     clientProfileId: existingLead.clientProfileId,
+    createdAt: existingLead.createdAt || created.lead.createdAt,
+    registeredAt: existingLead.registeredAt ?? created.lead.registeredAt,
+    manuallyAddedAt: existingLead.manuallyAddedAt ?? created.lead.manuallyAddedAt,
     ownerId: existingLead.ownerId || created.lead.ownerId,
     linkedSalesLeadId: existingLead.linkedSalesLeadId,
     contactStatus: existingLead.contactStatus,
@@ -812,10 +834,14 @@ export function buildAdminLeadStubFromSalesLead(
   const newLeadId = makeId("lead");
   const clientProfileId = makeId("profile");
   const migrateAccountId = buildAccountIdFromBusinessName(company);
+  const createdAt = new Date().toISOString();
 
   const nextLead: AdminLead = {
     id: newLeadId,
     clientProfileId,
+    createdAt,
+    registeredAt: null,
+    manuallyAddedAt: input.origin === "created" || !input.origin ? createdAt : null,
     company,
     businessRegistrationNumber: "",
     industry: "",
@@ -852,7 +878,7 @@ export function buildAdminLeadStubFromSalesLead(
       email,
       phone: "",
       role: "",
-      joinedAt: new Date().toISOString().slice(0, 10),
+      joinedAt: createdAt.slice(0, 10),
     },
     eoiSigningToken: null,
     eoiSignatureId: null,

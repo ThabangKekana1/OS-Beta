@@ -12,4 +12,4 @@ export const CALCULATION_CONFIG = {
 } as const;
 
 export const MIGRATION_DISCLAIMER =
-  "These figures are indicative estimates only. Final pricing and savings are only confirmed after Foundation-1 receives your six months of utility bills and signed Expression of Interest, submits the file for formal UFMS solar and wheeling assessment, and receives the formal partner proposals. Final outcomes depend on tariff category, consumption history, site suitability, network conditions, credit approval, engineering design, and partner approval.";
+  "These figures are indicative estimates only. Final pricing and savings are only confirmed after Foundation-1 receives your six months of utility bills and signed Expression of Interest, submits the file for formal UFMS solar and wheeling assessment, and receives the formal partner proposals. Final outcomes depend on tariff category, consumption history, site suitability, network conditions, engineering design, and partner approval.";
