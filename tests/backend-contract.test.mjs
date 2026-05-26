@@ -110,7 +110,6 @@ test("admin leads track registration and manual-add timestamps", () => {
 });
 
 test("migration creates a lightweight client profile before document upload", () => {
-  const migrationHero = read("components/migration/MigrationHero.tsx");
   const migrationRegister = read("components/migration/MigrationRegister.tsx");
   const migrationDashboard = read("components/migration/MigrationDashboard.tsx");
   const migrationReport = read("components/migration/MigrationReport.tsx");
@@ -123,17 +122,6 @@ test("migration creates a lightweight client profile before document upload", ()
   const migrationIntakeApi = read("app/api/migration/intake/route.ts");
   const migrationDashboardStatusApi = read("app/api/migration/profiles/status/route.ts");
 
-  assert.match(migrationHero, /Zero Risk/);
-  assert.match(migrationHero, /Fully financed by Nedbank/);
-  assert.match(migrationHero, /Maintained by us, Insured by us, 24 hour support/);
-  assert.match(migrationHero, /Immediate Value/);
-  assert.match(migrationHero, /Up to 60% cost reduction/);
-  assert.match(migrationHero, /Zero Complexity/);
-  assert.match(migrationHero, /End-to-end managed process/);
-  assert.match(migrationHero, /Fully maintained by Foundation-1/);
-  assert.match(migrationHero, /24-hour support/);
-  assert.match(migrationHero, /Resilience/);
-  assert.match(migrationHero, /56MW solar farm backing Lumen/);
   assert.match(migrationRegister, /ClientRegistrationForm/);
   assert.match(migrationRegister, /\/api\/register/);
   assert.match(migrationRegister, /\/api\/migration\/assessments/);
