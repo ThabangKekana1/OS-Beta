@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Mail, Download, ArrowRight, ChevronDown } from "lucide-react";
+import { Mail, Download, ArrowRight, ChevronDown, Sun, Zap, Sparkles } from "lucide-react";
 import type { MigrationAssessmentResult } from "@/lib/calculateMigrationAssessment";
 import {
   ensureMigrationProfileCredentials,
@@ -421,6 +421,24 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
           </div>
         </div>
 
+        <div className={styles.explainerCard}>
+          <div className={styles.explainerIcon}><Sun size={18} strokeWidth={2} aria-hidden="true" /></div>
+          <div className={styles.explainerBody}>
+            <p className={styles.explainerTitle}>You pay nothing upfront. Ever.</p>
+            <p className={styles.explainerCopy}>
+              Think of UFMS like renting electricity instead of buying a power station. <strong>We own the
+              solar system</strong> — we install it, we maintain it, we insure it, and we give you 24/7
+              support anywhere in South Africa. You just pay your new (lower) tariff for the power you use.
+            </p>
+            <ul className={styles.explainerPills}>
+              <li>No capex</li>
+              <li>No loan</li>
+              <li>No maintenance bills</li>
+              <li>Lower tariff from day one</li>
+            </ul>
+          </div>
+        </div>
+
         <div className={`${styles.cardsGrid} ${styles.cardsGridThree}`}>
           {ufmsSolar.scenarios.map((scenario) => (
             <SavingsCard
@@ -449,6 +467,24 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
               Estimated monthly usage for wheeling comparison:{" "}
               <strong>{kwh(wheeling.estimatedMonthlyKilowattHours)}</strong>
             </p>
+          </div>
+        </div>
+
+        <div className={styles.explainerCard}>
+          <div className={styles.explainerIcon}><Zap size={18} strokeWidth={2} aria-hidden="true" /></div>
+          <div className={styles.explainerBody}>
+            <p className={styles.explainerTitle}>We send our sunshine to your meter.</p>
+            <p className={styles.explainerCopy}>
+              Wheeling is simple: <strong>we generate clean power at our 56MW solar farm and deliver it
+              through the national grid to your premises</strong>. You stay where you are, change nothing
+              on site, and just pay a cheaper tariff for the energy that arrives. <strong>No installation
+              cost, no equipment to buy.</strong>
+            </p>
+            <ul className={styles.explainerPills}>
+              <li>No site works</li>
+              <li>No upfront cost</li>
+              <li>Cheaper per kWh than Eskom</li>
+            </ul>
           </div>
         </div>
 
@@ -487,6 +523,23 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
             <p className={styles.sectionCopy}>
               What you pay today with Eskom compared to what you could pay with each Foundation-1 solution — and the combined best case. The Eskom current path is calculated with tariffs increasing by {annualEskomEscalation}% every year.
             </p>
+          </div>
+        </div>
+
+        <div className={`${styles.explainerCard} ${styles.explainerCardAccent}`}>
+          <div className={styles.explainerIcon}><Sparkles size={18} strokeWidth={2} aria-hidden="true" /></div>
+          <div className={styles.explainerBody}>
+            <p className={styles.explainerTitle}>The magic happens when you mix the two.</p>
+            <p className={styles.explainerCopy}>
+              On their own, UFMS solar and Wheeling each save you money. <strong>Blended together, qualifying
+              clients can save up to 60%</strong> on their electricity bill — sunshine on the roof during
+              the day, wheeled power filling the gaps. <strong>Still no upfront cost.</strong>
+            </p>
+            <ul className={styles.explainerPills}>
+              <li>Up to 60% saving</li>
+              <li>Solar + Wheeling combined</li>
+              <li>Fully financed</li>
+            </ul>
           </div>
         </div>
 
@@ -557,11 +610,14 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
                     key={row.label}
                     className={row.isEskom ? styles.vsRowEskom : row.isBest ? styles.vsRowBest : undefined}
                   >
-                    <td>{row.label}</td>
-                    <td>{row.monthly}</td>
-                    <td>{row.annual}</td>
-                    <td>{row.tenYear}</td>
-                    <td className={row.saving ? styles.vsSavingCell : styles.vsDash}>
+                    <td data-label="Scenario">{row.label}</td>
+                    <td data-label="Monthly">{row.monthly}</td>
+                    <td data-label="Annual">{row.annual}</td>
+                    <td data-label="10-year cost">{row.tenYear}</td>
+                    <td
+                      data-label="10-year saving vs Eskom"
+                      className={row.saving ? styles.vsSavingCell : styles.vsDash}
+                    >
                       {row.saving ?? "—"}
                     </td>
                   </tr>
