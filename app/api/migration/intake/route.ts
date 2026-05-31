@@ -109,11 +109,11 @@ export async function POST(request: NextRequest) {
   const input = payload.input;
   const monthlySpend = Number(input?.monthlyElectricitySpend ?? input?.monthlySpend);
   const profileId = cleanMigrationProfileId(payload.profileId);
-  const businessName = cleanString(payload.businessName);
-  const contactName = cleanString(payload.contactName);
-  const email = cleanString(payload.email).toLowerCase();
-  const phone = cleanString(payload.phone);
-  const preferredContactMethod = cleanString(payload.preferredContactMethod).toLowerCase();
+  const submittedBusinessName = cleanString(payload.businessName);
+  const submittedContactName = cleanString(payload.contactName);
+  const submittedEmail = cleanString(payload.email).toLowerCase();
+  const submittedPhone = cleanString(payload.phone);
+  const submittedPreferredContactMethod = cleanString(payload.preferredContactMethod).toLowerCase();
   const leadLinkId = cleanString(payload.leadLinkId);
   const sourceCampaign = cleanString(payload.sourceCampaign) || null;
   const referrer = cleanString(payload.referrer) || null;
@@ -129,7 +129,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Enter a valid Migration Profile ID." }, { status: 400 });
   }
 
-  if (!businessName || !contactName || !email || !phone) {
+  const linkedLead = leadLinkId ? await findLeadByMigrationLinkFromDatabase(leadLinkId) : null;
+  if (leadLinkId && !linkedLead) {
+    return NextResponse.json({ ok: false, error: "Migration lead link not found." }, { status: 404 });
+  }
+
+  const businessName = submittedBusinessName || linkedLead?.company || "";
+  const contactName = submittedContactName || linkedLead?.contactName || linkedLead?.userProfile.fullName || "";
+  const email = submittedEmail || linkedLead?.userProfile.email.trim().toLowerCase() || "";
+  const phone = submittedPhone || linkedLead?.userProfile.phone || "";
+  const preferredContactMethod = submittedPreferredContactMethod || (linkedLead ? "email" : "");
+
+  if (!businessName || !contactName || !email || (!linkedLead && !phone)) {
     return NextResponse.json(
       { ok: false, error: "Business name, contact person, email, and phone number are required." },
       { status: 400 },
@@ -179,7 +190,6 @@ export async function POST(request: NextRequest) {
     generatedAt,
   };
 
-  const linkedLead = leadLinkId ? await findLeadByMigrationLinkFromDatabase(leadLinkId) : null;
   const existingLeads = linkedLead ? [] : await findLeadsByEmailFromDatabase(email);
   const existingLead = linkedLead ?? findExistingIntakeLead(existingLeads, email, businessName);
   const registrationSource = linkedLead
@@ -195,6 +205,7 @@ export async function POST(request: NextRequest) {
     ownerId: existingLead?.ownerId || defaultOwnerIdForRegistration(registrationSource),
     registrationSource,
     assessmentSummary,
+    preserveRegistrationState: Boolean(linkedLead),
   };
 
   const created = existingLead

@@ -59,6 +59,7 @@ export type MigrationIntakeProfileInput = {
   ownerId: string;
   registrationSource: AdminLeadRegistrationSource | null;
   assessmentSummary?: MigrationAssessmentLeadSummary | null;
+  preserveRegistrationState?: boolean;
 };
 
 const SIGNUP_PENDING_BUSINESS_NAME = "Business details pending";
@@ -380,7 +381,7 @@ export function buildAdminLeadFromMigrationIntake(
     ? Math.max(0, Math.round(input.monthlyElectricitySpendEstimateZar))
     : 0;
 
-  if (!businessName || !contactName || !contactEmail || !contactNumber || !ownerId || monthlyElectricitySpendEstimateZar <= 0) {
+  if (!businessName || !contactName || !contactEmail || !ownerId || monthlyElectricitySpendEstimateZar <= 0) {
     return null;
   }
 
@@ -501,7 +502,9 @@ export function updateExistingLeadFromMigrationIntake(
   const lead: AdminLead = {
     ...existingLead,
     createdAt: existingLead.createdAt || intake.lead.createdAt,
-    registeredAt: existingLead.registeredAt ?? intake.lead.registeredAt,
+    registeredAt: input.preserveRegistrationState
+      ? existingLead.registeredAt
+      : existingLead.registeredAt ?? intake.lead.registeredAt,
     manuallyAddedAt: existingLead.manuallyAddedAt ?? null,
     company: businessName,
     contactFirstName: existingLead.contactFirstName?.trim() || contactFirstName,
@@ -543,7 +546,7 @@ export function updateExistingLeadFromMigrationIntake(
     events: [
       {
         id: makeId("event"),
-        title: "Assessment refreshed",
+        title: input.preserveRegistrationState ? "Linked assessment generated" : "Assessment refreshed",
         detail: `${assessmentDetail} ${contactPreferenceDetail}`,
         createdAt: timelineLabel(),
         tone: "client",

@@ -6,6 +6,7 @@ import { Mail, Download, ArrowRight, ChevronDown, Sun, Zap, Sparkles, Share2 } f
 import type { MigrationAssessmentResult } from "@/lib/calculateMigrationAssessment";
 import {
   ensureMigrationProfileCredentials,
+  type MigrationLeadAttribution,
   readStoredMigrationAssessment,
   unlockMigrationDashboard,
   writeStoredMigrationAssessment,
@@ -280,6 +281,9 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
   const [intakeLoading, setIntakeLoading] = useState(false);
   const [intakeError, setIntakeError] = useState("");
   const [shareStatus, setShareStatus] = useState("");
+  const [linkedLeadAttribution, setLinkedLeadAttribution] = useState<MigrationLeadAttribution | null>(null);
+  const [linkedSaveStatus, setLinkedSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [linkedSaveMessage, setLinkedSaveMessage] = useState("");
   const [intakeValues, setIntakeValues] = useState({
     businessName: "",
     contactName: "",
@@ -294,13 +298,13 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
     wheeling.photovoltaicOnlyReference.tenYearSavingAgainstEskom,
     ...combinedScenarios.map((scenario) => scenario.combinedTenYearSavingAgainstEskom),
   );
-  const leadAttributionPrimedRef = useRef(false);
+  const linkedSaveStartedRef = useRef(false);
 
   useEffect(() => {
-    if (leadAttributionPrimedRef.current) return;
-    const attribution = readStoredMigrationAssessment()?.leadAttribution;
+    const stored = readStoredMigrationAssessment();
+    const attribution = stored?.leadAttribution;
     if (!attribution) return;
-    leadAttributionPrimedRef.current = true;
+    setLinkedLeadAttribution(attribution);
     setIntakeValues((current) => ({
       ...current,
       businessName: current.businessName || attribution.company || "",
@@ -309,7 +313,63 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
       phone: current.phone || attribution.phone || "",
       preferredContactMethod: current.preferredContactMethod || "email",
     }));
-  }, []);
+
+    if (linkedSaveStartedRef.current || !stored) return;
+    linkedSaveStartedRef.current = true;
+    const storedAssessment = stored;
+    const linkedAttribution = attribution;
+
+    async function saveLinkedEstimate() {
+      setLinkedSaveStatus("saving");
+      setLinkedSaveMessage("Saving this estimate to your Foundation-1 lead profile…");
+
+      try {
+        const { assessment, credentials } = ensureMigrationProfileCredentials({
+          ...storedAssessment,
+          result,
+        });
+        writeStoredMigrationAssessment(assessment);
+        const campaign = sourceCampaignFromLocation();
+        const response = await fetch("/api/migration/intake", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          cache: "no-store",
+          body: JSON.stringify({
+            input: assessment.input,
+            profileId: credentials.profileId,
+            leadLinkId: linkedAttribution.linkId,
+            businessName: linkedAttribution.company,
+            contactName: linkedAttribution.contactName,
+            email: linkedAttribution.email,
+            phone: linkedAttribution.phone,
+            preferredContactMethod: linkedAttribution.email ? "email" : "phone",
+            ...campaign,
+          }),
+        });
+        const payload = (await response.json().catch(() => null)) as IntakeApiResponse | null;
+
+        if (!response.ok || !payload?.ok) {
+          setLinkedSaveStatus("error");
+          setLinkedSaveMessage(payload?.error ?? "Report generated, but we could not update the linked lead profile automatically.");
+          return;
+        }
+
+        writeStoredMigrationAssessment({
+          ...assessment,
+          result,
+          status: "instant_report_generated",
+          updatedAt: new Date().toISOString(),
+        });
+        setLinkedSaveStatus("saved");
+        setLinkedSaveMessage("Saved to your existing Foundation-1 lead profile. No registration is needed.");
+      } catch {
+        setLinkedSaveStatus("error");
+        setLinkedSaveMessage("Report generated, but we could not update the linked lead profile automatically.");
+      }
+    }
+
+    void saveLinkedEstimate();
+  }, [result]);
 
   async function submitIntake(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -654,12 +714,80 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
           <strong style={{ color: "#fff" }}>{zar(bestIllustrativeSaving)}</strong>. Continue to open your profile, then upload the documents needed for formal proposal review.
         </p>
 
-        <section className={styles.ctaPanel}>
-          <h2 className={styles.cardTitle}>Register your interest</h2>
-          <p className={styles.sectionCopy}>
-            Your estimate is ready. Add your contact details and preferred contact method. A Foundation-1 representative will contact you using your selected channel.
-          </p>
-          <form className={styles.fieldStack} style={{ marginTop: 18 }} onSubmit={submitIntake}>
+        {linkedLeadAttribution ? (
+          <section className={styles.ctaPanel}>
+            <h2 className={styles.cardTitle}>Estimate linked to your Foundation-1 profile</h2>
+            <p className={styles.sectionCopy}>
+              This private link is connected to {linkedLeadAttribution.company || "your existing lead profile"}.
+              No registration form is needed — your estimate is attached to the lead profile Foundation-1 already has.
+            </p>
+            {linkedSaveMessage ? (
+              <p
+                className={linkedSaveStatus === "error" ? styles.error : styles.successShareStatus}
+                style={{ marginTop: 12 }}
+              >
+                {linkedSaveMessage}
+              </p>
+            ) : null}
+            <div className={styles.buttonRow} style={{ marginTop: 18 }}>
+              <button
+                className={styles.ghostButton}
+                type="button"
+                disabled={pdfLoading}
+                onClick={async () => {
+                  setPdfLoading(true);
+                  try { await downloadMigrationReportPDF(result); }
+                  finally { setPdfLoading(false); }
+                }}
+              >
+                <Download size={14} strokeWidth={2.5} />
+                {pdfLoading ? "Generating…" : "Download Report PDF"}
+              </button>
+              <button className={styles.ghostButton} type="button" onClick={() => emailMigrationReport(result)}>
+                <Mail size={14} strokeWidth={2.5} />
+                Email This Report
+              </button>
+              <button
+                className={styles.ghostButton}
+                type="button"
+                onClick={async () => {
+                  const text = [
+                    "Foundation-1 Energy Migration Estimate",
+                    `Current monthly electricity spend: ${zar(currentUtilityProjection.currentMonthlySpend)}`,
+                    `Estimated 10-year current utility path: ${zar(currentUtilityProjection.tenYearSpend)}`,
+                    `Indicative 10-year saving range up to: ${zar(bestIllustrativeSaving)}`,
+                    "Figures are indicative and subject to formal review.",
+                  ].join("\n");
+                  setShareStatus("");
+                  try {
+                    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+                      await navigator.share({
+                        title: "Foundation-1 Energy Migration Estimate",
+                        text,
+                      });
+                      setShareStatus("Report shared.");
+                      return;
+                    }
+                    await navigator.clipboard.writeText(text);
+                    setShareStatus("Report summary copied.");
+                  } catch {
+                    setShareStatus("Unable to share automatically. Use Email This Report instead.");
+                  }
+                }}
+              >
+                <Share2 size={14} strokeWidth={2.5} />
+                Share Report
+              </button>
+            </div>
+            {shareStatus ? <p className={styles.successShareStatus}>{shareStatus}</p> : null}
+          </section>
+        ) : (
+          <section className={styles.ctaPanel}>
+            <h2 className={styles.cardTitle}>Register your interest</h2>
+            <p className={styles.sectionCopy}>
+              Your estimate is ready. Add your contact details and preferred contact method. A Foundation-1 representative will contact you using your selected channel.
+            </p>
+            <form className={styles.fieldStack} style={{ marginTop: 18 }} onSubmit={submitIntake}>
             <label className={styles.label}>
               Business name
               <input
@@ -776,7 +904,8 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
             </div>
             {shareStatus ? <p className={styles.successShareStatus}>{shareStatus}</p> : null}
           </form>
-        </section>
+          </section>
+        )}
 
         <div className={styles.warningBox}>
           <p className={styles.warningLabel}>Indicative estimates only</p>
