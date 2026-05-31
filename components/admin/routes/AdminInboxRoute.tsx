@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element -- Email previews use raw image markup that mirrors sent email HTML. */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { EmailSignaturePreviewText } from "@/components/admin/EmailSignaturePreviewText";
 import { AdminBadge, AdminHeader } from "@/components/admin/AdminPrimitives";
 import { useOptionalAdminPortal } from "@/components/admin/AdminPortalProvider";
 import {
@@ -1064,9 +1065,7 @@ export function AdminInboxRoute({
                   </p>
                 </div>
                 <div className="space-y-3 p-3">
-                  <pre className="whitespace-pre-wrap break-words font-sans text-xs leading-5 text-white/72">
-                    {systemSignaturePreview.beforeBanner}
-                  </pre>
+                  <EmailSignaturePreviewText text={systemSignaturePreview.beforeBanner} />
                   <div className="overflow-hidden rounded-lg border border-white/10 bg-white/[0.03]">
                     <img
                       src={FOUNDATION_EMAIL_BANNER_PATH}
@@ -1075,9 +1074,7 @@ export function AdminInboxRoute({
                     />
                   </div>
                   {systemSignaturePreview.afterBanner ? (
-                    <pre className="whitespace-pre-wrap break-words font-sans text-xs leading-5 text-white/72">
-                      {systemSignaturePreview.afterBanner}
-                    </pre>
+                    <EmailSignaturePreviewText text={systemSignaturePreview.afterBanner} />
                   ) : null}
                 </div>
               </div>

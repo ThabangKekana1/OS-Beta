@@ -3,6 +3,8 @@ import { join } from "node:path";
 import type { UserRole } from "@/lib/auth";
 import {
   KARMAN_EMAIL_SIGNATURE_TEXT,
+  KARMAN_LINKEDIN_LABEL,
+  KARMAN_LINKEDIN_URL,
   SYSTEM_SIGNATURE_EMAILS,
   SYSTEM_SIGNATURE_TEXTS,
   splitSignatureForBanner,
@@ -223,7 +225,7 @@ function escapeHtml(value: string): string {
 
 const EMAIL_LINK_STYLE = "color:#0f766e;text-decoration:underline;";
 
-function renderTextWithLinks(value: string): string {
+function renderInlineTextWithLinks(value: string): string {
   const linkPattern = /(https?:\/\/[^\s<>]+|www\.[^\s<>]+)/gi;
   return value
     .split(linkPattern)
@@ -239,8 +241,19 @@ function renderTextWithLinks(value: string): string {
     .join("");
 }
 
+function renderTextLineWithLinks(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.toLowerCase() === KARMAN_LINKEDIN_LABEL.toLowerCase()) {
+    const leadingWhitespace = value.match(/^\s*/)?.[0] ?? "";
+    const trailingWhitespace = value.match(/\s*$/)?.[0] ?? "";
+    return `${escapeHtml(leadingWhitespace)}<a href="${escapeHtml(KARMAN_LINKEDIN_URL)}" style="${EMAIL_LINK_STYLE}" target="_blank" rel="noopener noreferrer">${escapeHtml(KARMAN_LINKEDIN_LABEL)}</a>${escapeHtml(trailingWhitespace)}`;
+  }
+
+  return renderInlineTextWithLinks(value);
+}
+
 function textToHtml(value: string): string {
-  return renderTextWithLinks(value).replace(/\n/g, "<br>");
+  return value.split("\n").map(renderTextLineWithLinks).join("<br>");
 }
 
 function hasSignatureContent(signature: EmailSignature | null | undefined): boolean {
