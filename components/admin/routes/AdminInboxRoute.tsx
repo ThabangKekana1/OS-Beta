@@ -226,6 +226,7 @@ export function AdminInboxRoute({
   const [composeSubject, setComposeSubject] = useState("");
   const [composeBody, setComposeBody] = useState("");
   const [composeLeadId, setComposeLeadId] = useState<string | null>(initialLeadFilter);
+  const [activeLeadFilter, setActiveLeadFilter] = useState<string | null>(initialLeadFilter);
   const [composeAttachments, setComposeAttachments] = useState<ComposeAttachment[]>([]);
   const [composeOutreachActive, setComposeOutreachActive] = useState(false);
   const [leadSearch, setLeadSearch] = useState("");
@@ -352,6 +353,10 @@ export function AdminInboxRoute({
       : leadOptions;
     return matches.slice(0, 40);
   }, [leadOptions, leadSearch]);
+  const activeLeadFilterLabel = useMemo(() => {
+    if (!activeLeadFilter) return null;
+    return leadOptions.find((lead) => lead.id === activeLeadFilter)?.label ?? activeLeadFilter;
+  }, [activeLeadFilter, leadOptions]);
 
   const selectComposeLead = useCallback(
     (lead: InboxLeadOption | null) => {
@@ -379,7 +384,7 @@ export function AdminInboxRoute({
     setLoadingList(true);
     try {
       const url = new URL("/api/email/threads", window.location.origin);
-      if (initialLeadFilter) url.searchParams.set("leadId", initialLeadFilter);
+      if (activeLeadFilter) url.searchParams.set("leadId", activeLeadFilter);
       if (viewerRole === "admin" && activeMailboxOption) {
         url.searchParams.set("mailbox", activeMailboxOption.email);
       }
@@ -396,11 +401,25 @@ export function AdminInboxRoute({
     } finally {
       setLoadingList(false);
     }
-  }, [activeMailboxOption, initialLeadFilter, viewerRole]);
+  }, [activeLeadFilter, activeMailboxOption, viewerRole]);
+
+  const clearLeadFilter = useCallback(() => {
+    setActiveLeadFilter(null);
+    setActiveThreadId(null);
+    setActiveThread(null);
+    setActiveMessages([]);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("lead");
+      url.searchParams.delete("thread");
+      window.history.replaceState(null, "", url.toString());
+    }
+  }, []);
 
   const switchMailbox = useCallback((option: InboxSenderOption) => {
     setActiveMailbox(option.value);
     setComposeFrom(option.value);
+    setActiveLeadFilter(null);
     setActiveThreadId(null);
     setActiveThread(null);
     setActiveMessages([]);
@@ -410,6 +429,7 @@ export function AdminInboxRoute({
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
       url.searchParams.set("mailbox", mailboxSlug(option));
+      url.searchParams.delete("lead");
       url.searchParams.delete("thread");
       window.history.replaceState(null, "", url.toString());
     }
@@ -737,6 +757,21 @@ export function AdminInboxRoute({
         </div>
       ) : null}
 
+      {activeLeadFilter ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300/20 bg-amber-300/[0.08] px-4 py-3 text-sm text-amber-50">
+          <span>
+            Showing only threads linked to <span className="font-medium">{activeLeadFilterLabel}</span>.
+          </span>
+          <button
+            type="button"
+            onClick={clearLeadFilter}
+            className="rounded-lg border border-amber-200/30 px-3 py-1.5 text-[0.68rem] font-medium uppercase tracking-[0.16em] text-amber-50 transition hover:bg-amber-200/10"
+          >
+            Show all mailbox threads
+          </button>
+        </div>
+      ) : null}
+
       <div className="grid gap-5 lg:grid-cols-[minmax(280px,360px)_1fr]">
         <aside className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
           <div className="mb-2 flex items-center justify-between">
@@ -747,7 +782,15 @@ export function AdminInboxRoute({
             <div className="px-2 py-6 text-sm text-white/50">Loading…</div>
           ) : threads.length === 0 ? (
             <div className="px-2 py-6 text-sm text-white/50">
-              No conversations yet. Click <span className="font-medium text-white/80">New email</span> to send your first message.
+              {activeLeadFilter ? (
+                <>
+                  No conversations for this lead in the current mailbox. Clear the lead filter to see all threads.
+                </>
+              ) : (
+                <>
+                  No conversations yet. Click <span className="font-medium text-white/80">New email</span> to send your first message.
+                </>
+              )}
             </div>
           ) : (
             <ul className="space-y-1">
