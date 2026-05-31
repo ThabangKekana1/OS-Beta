@@ -12,7 +12,11 @@ import { makeId } from "@/lib/formatting";
 import { cleanMigrationProfileId, isValidMigrationProfileId } from "@/lib/migration-profile-auth";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { documentUploadLinkIdForLead } from "@/lib/registration-links";
-import { findLeadsByEmailFromDatabase, upsertSingleLeadToDatabase } from "@/lib/supabase-db-store";
+import {
+  findLeadByMigrationLinkFromDatabase,
+  findLeadsByEmailFromDatabase,
+  upsertSingleLeadToDatabase,
+} from "@/lib/supabase-db-store";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import { createNotification } from "@/lib/notifications";
 import type { AdminLead, AdminLeadRegistrationSource } from "@/lib/admin-types";
@@ -28,6 +32,17 @@ const MIGRATION_INTAKE_SOURCE: AdminLeadRegistrationSource = {
   channel: "public_link",
 };
 
+function leadMigrationSource(lead: AdminLead, linkId: string): AdminLeadRegistrationSource {
+  return {
+    linkId,
+    profileName: lead.company || lead.contactName || lead.userProfile.email || "Linked lead",
+    profileRole: "sales",
+    profileAgentId: lead.ownerId || null,
+    partnerOrgId: lead.partnerOrgId ?? null,
+    channel: "public_link",
+  };
+}
+
 type IntakePayload = {
   input?: Partial<MigrationAssessmentInput>;
   profileId?: unknown;
@@ -36,6 +51,7 @@ type IntakePayload = {
   email?: unknown;
   phone?: unknown;
   preferredContactMethod?: unknown;
+  leadLinkId?: unknown;
   sourceCampaign?: unknown;
   referrer?: unknown;
 };
@@ -98,6 +114,7 @@ export async function POST(request: NextRequest) {
   const email = cleanString(payload.email).toLowerCase();
   const phone = cleanString(payload.phone);
   const preferredContactMethod = cleanString(payload.preferredContactMethod).toLowerCase();
+  const leadLinkId = cleanString(payload.leadLinkId);
   const sourceCampaign = cleanString(payload.sourceCampaign) || null;
   const referrer = cleanString(payload.referrer) || null;
 
@@ -162,8 +179,12 @@ export async function POST(request: NextRequest) {
     generatedAt,
   };
 
-  const existingLeads = await findLeadsByEmailFromDatabase(email);
-  const existingLead = findExistingIntakeLead(existingLeads, email, businessName);
+  const linkedLead = leadLinkId ? await findLeadByMigrationLinkFromDatabase(leadLinkId) : null;
+  const existingLeads = linkedLead ? [] : await findLeadsByEmailFromDatabase(email);
+  const existingLead = linkedLead ?? findExistingIntakeLead(existingLeads, email, businessName);
+  const registrationSource = linkedLead
+    ? leadMigrationSource(linkedLead, leadLinkId)
+    : MIGRATION_INTAKE_SOURCE;
   const intakeInput = {
     businessName,
     contactName,
@@ -171,8 +192,8 @@ export async function POST(request: NextRequest) {
     contactNumber: phone,
     preferredContactMethod,
     monthlyElectricitySpendEstimateZar: result.currentUtilityProjection.currentMonthlySpend,
-    ownerId: existingLead?.ownerId || defaultOwnerIdForRegistration(MIGRATION_INTAKE_SOURCE),
-    registrationSource: MIGRATION_INTAKE_SOURCE,
+    ownerId: existingLead?.ownerId || defaultOwnerIdForRegistration(registrationSource),
+    registrationSource,
     assessmentSummary,
   };
 
@@ -215,6 +236,26 @@ export async function POST(request: NextRequest) {
         contactEmail: email,
         contactPhone: phone,
         monthlySpend: result.currentUtilityProjection.currentMonthlySpend,
+        sourceCampaign,
+        referrer,
+      },
+    });
+  } else if (persistedLead && linkedLead) {
+    const savingsZar = Math.round(bestTenYearSaving ?? 0);
+    void createNotification({
+      audience: "admin",
+      kind: "client_registered",
+      title: `Linked migration estimate: ${businessName}`,
+      body: `${contactName} used their dedicated migration link. Monthly spend ~R ${Math.round(result.currentUtilityProjection.currentMonthlySpend).toLocaleString("en-ZA")}. 10-yr best saving R ${savingsZar.toLocaleString("en-ZA")}.`,
+      link: `/admin/leads/${created.clientProfileId}`,
+      metadata: {
+        leadId: created.leadId,
+        clientProfileId: created.clientProfileId,
+        company: businessName,
+        contactEmail: email,
+        contactPhone: phone,
+        monthlySpend: result.currentUtilityProjection.currentMonthlySpend,
+        leadLinkId,
         sourceCampaign,
         referrer,
       },

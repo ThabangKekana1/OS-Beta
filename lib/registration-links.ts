@@ -39,6 +39,17 @@ export function registrationLinkPath(linkId: string) {
   return `/register/${encodeURIComponent(linkId)}`;
 }
 
+export function migrationLinkIdForLead(lead: RegistrationLeadProfile) {
+  const stableKey = ["migration", lead.leadId, lead.clientProfileId]
+    .filter(Boolean)
+    .join(":");
+  return `mig-${hashBase36(stableKey)}`;
+}
+
+export function migrationLinkPath(linkId: string) {
+  return `/migration/start?lead=${encodeURIComponent(linkId)}`;
+}
+
 export function documentUploadLinkIdForLead(lead: RegistrationLeadProfile) {
   const stableKey = ["documents", lead.leadId, lead.clientProfileId, lead.email?.trim().toLowerCase() ?? ""]
     .filter(Boolean)

@@ -17,6 +17,7 @@ import {
   splitSignatureForBanner,
   systemSignatureTextForSender,
 } from "@/lib/email-signature-copy";
+import { migrationLinkIdForLead, migrationLinkPath } from "@/lib/registration-links";
 import { cn } from "@/lib/utils";
 
 type EmailDirection = "inbound" | "outbound";
@@ -42,6 +43,7 @@ export type InboxLeadOption = {
   id: string;
   label: string;
   email: string;
+  clientProfileId?: string | null;
   company?: string | null;
   contactName?: string | null;
 };
@@ -89,12 +91,25 @@ type ComposeLeadDetails = {
   id: string | null;
   label?: string | null;
   email?: string | null;
+  clientProfileId?: string | null;
   company?: string | null;
   contactName?: string | null;
 };
 
 function buildOutreachBody(lead: ComposeLeadDetails | null): string {
-  return buildFoundationOutreachBody(lead);
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const migrationEstimateUrl = lead?.id && lead.clientProfileId
+    ? `${origin}${migrationLinkPath(migrationLinkIdForLead({
+        leadId: lead.id,
+        clientProfileId: lead.clientProfileId,
+        email: lead.email,
+      }))}`
+    : null;
+
+  return buildFoundationOutreachBody({
+    ...lead,
+    migrationEstimateUrl,
+  });
 }
 
 function buildOutreachHtml(body: string): string {
@@ -269,6 +284,7 @@ export function AdminInboxRoute({
       id: lead.id,
       label: `${lead.company} · ${lead.contactName ?? "no contact"}`,
       email: lead.userProfile?.email ?? "",
+      clientProfileId: lead.clientProfileId,
       company: lead.company,
       contactName: lead.contactName,
     }));
@@ -282,6 +298,7 @@ export function AdminInboxRoute({
           id: portalLead.id,
           label: `${portalLead.company} · ${portalLead.contactName ?? "no contact"}`,
           email: portalLead.userProfile?.email ?? "",
+          clientProfileId: portalLead.clientProfileId,
           company: portalLead.company,
           contactName: portalLead.contactName,
         };
@@ -293,6 +310,7 @@ export function AdminInboxRoute({
           id: option.id,
           label: option.label,
           email: option.email,
+          clientProfileId: option.clientProfileId,
           company: option.company,
           contactName: option.contactName,
         };

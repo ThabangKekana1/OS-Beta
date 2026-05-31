@@ -8,6 +8,7 @@ export const FOUNDATION_OUTREACH_SUBJECT = "Zero Capex Energy Migration Proposal
 export type OutreachTemplateLead = {
   contactName?: string | null;
   company?: string | null;
+  migrationEstimateUrl?: string | null;
 };
 
 function firstName(value: string | null | undefined): string {
@@ -29,6 +30,7 @@ function textToHtml(value: string): string {
 export function buildFoundationOutreachBody(lead: OutreachTemplateLead | null): string {
   const name = firstName(lead?.contactName) || "[name]";
   const company = lead?.company?.trim() || "[company]";
+  const migrationEstimateUrl = lead?.migrationEstimateUrl?.trim() || "1os.co.za";
 
   return [
     `Good day ${name},`,
@@ -47,7 +49,7 @@ export function buildFoundationOutreachBody(lead: OutreachTemplateLead | null): 
     "",
     "Together, these solutions allow us to target savings of up to 60 percent on monthly electricity spend.",
     "",
-    `I have attached our brochure for context. You can also visit foundation-1.co.za, or generate a quick migration estimate for ${company} at 1os.co.za in under three minutes.`,
+    `I have attached our brochure for context. You can also visit foundation-1.co.za, or generate a quick migration estimate for ${company} at ${migrationEstimateUrl} in under three minutes.`,
     "",
     "If this is worth a 20-minute conversation, I would welcome the opportunity to connect.",
     "",

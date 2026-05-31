@@ -1,4 +1,5 @@
 import { MigrationAssessmentForm } from "@/components/migration/MigrationAssessmentForm";
+import type { MigrationLeadAttribution } from "@/components/migration/MigrationState";
 import styles from "@/components/migration/migration.module.css";
 
 const PREVIEW_ITEMS = [
@@ -20,21 +21,33 @@ const PREVIEW_ITEMS = [
   },
 ];
 
-export function MigrationStart() {
+export function MigrationStart({
+  leadAttribution = null,
+}: {
+  leadAttribution?: MigrationLeadAttribution | null;
+}) {
   return (
     <section className={styles.startSection}>
       <div className={styles.startShell}>
         <div className={styles.startHeader}>
           <div>
-            <h1 className={styles.sectionTitle}>Instant Migration Assessment</h1>
+            <h1 className={styles.sectionTitle}>
+              {leadAttribution?.company
+                ? `Instant Migration Assessment for ${leadAttribution.company}`
+                : "Instant Migration Assessment"}
+            </h1>
             <p className={styles.sectionCopy}>
-              Enter your monthly electricity spend. The full report generates instantly — no account
-              required.
+              {leadAttribution
+                ? "This private link is connected to your Foundation-1 lead profile. Generate the estimate here and we will update the same profile — no duplicate registration needed."
+                : "Enter your monthly electricity spend. The full report generates instantly — no account required."}
             </p>
           </div>
         </div>
         <div className={styles.startPanel}>
-          <MigrationAssessmentForm paneClass={styles.startPane} />
+          <MigrationAssessmentForm
+            paneClass={styles.startPane}
+            leadAttribution={leadAttribution}
+          />
           <aside className={styles.startPane}>
             <span className={styles.cardLabel}>What you&apos;ll see</span>
             <h2 className={styles.cardTitle}>

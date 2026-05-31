@@ -45,11 +45,22 @@ export type MigrationDocumentRecord = {
   status: string;
 };
 
+export type MigrationLeadAttribution = {
+  linkId: string;
+  leadId?: string | null;
+  clientProfileId?: string | null;
+  company?: string | null;
+  contactName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+};
+
 export type StoredMigrationAssessment = {
   input: MigrationAssessmentInput;
   result: MigrationAssessmentResult;
   registration?: MigrationRegistration;
   documents: MigrationDocumentRecord[];
+  leadAttribution?: MigrationLeadAttribution | null;
   profileId?: string;   // generated when user continues to dashboard
   accessCode?: string;  // 4-digit PIN shown to user once
   status:

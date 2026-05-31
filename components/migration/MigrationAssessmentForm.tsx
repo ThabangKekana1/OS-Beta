@@ -9,6 +9,7 @@ import {
 import styles from "@/components/migration/migration.module.css";
 import {
   clearStoredMigrationAssessment,
+  type MigrationLeadAttribution,
   writeStoredMigrationAssessment,
 } from "@/components/migration/MigrationState";
 
@@ -36,7 +37,13 @@ function formatSpendInput(raw: string): string {
 
 const QUALIFICATION_THRESHOLD_ZAR = 10000;
 
-export function MigrationAssessmentForm({ paneClass }: { paneClass?: string }) {
+export function MigrationAssessmentForm({
+  paneClass,
+  leadAttribution = null,
+}: {
+  paneClass?: string;
+  leadAttribution?: MigrationLeadAttribution | null;
+}) {
   const router = useRouter();
   const [monthlySpend, setMonthlySpend] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -68,6 +75,7 @@ export function MigrationAssessmentForm({ paneClass }: { paneClass?: string }) {
       input,
       result,
       documents: [],
+      leadAttribution,
       status: "instant_report_generated",
       updatedAt: new Date().toISOString(),
     });

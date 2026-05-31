@@ -36,6 +36,8 @@ import {
 import {
   documentUploadLinkIdForLead,
   documentUploadLinkPath,
+  migrationLinkIdForLead,
+  migrationLinkPath,
   registrationLinkIdForLead,
   registrationLinkPath,
 } from "@/lib/registration-links";
@@ -155,10 +157,11 @@ function buildOutreachSubject() {
   return FOUNDATION_OUTREACH_SUBJECT;
 }
 
-function buildOutreachBody(lead: AdminLead) {
+function buildOutreachBody(lead: AdminLead, migrationEstimateUrl?: string | null) {
   return buildFoundationOutreachBody({
     contactName: lead.contactName || lead.contactFirstName,
     company: lead.company,
+    migrationEstimateUrl,
   });
 }
 
@@ -351,6 +354,7 @@ export function AdminLeadProfileRoute({
   const [disqualifyReason, setDisqualifyReason] = useState("");
   const [copiedSigningLink, setCopiedSigningLink] = useState(false);
   const [copiedRegistrationLink, setCopiedRegistrationLink] = useState(false);
+  const [copiedMigrationLink, setCopiedMigrationLink] = useState(false);
   const [copiedDocumentUploadLink, setCopiedDocumentUploadLink] = useState(false);
   const [workflowNotice, setWorkflowNotice] = useState<string | null>(null);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
@@ -384,6 +388,14 @@ export function AdminLeadProfileRoute({
       }))
     : null;
   const registrationLinkUrl = registrationLinkPathForLead ? `${appOrigin}${registrationLinkPathForLead}` : null;
+  const migrationLinkPathForLead = lead
+    ? migrationLinkPath(migrationLinkIdForLead({
+        leadId: lead.id,
+        clientProfileId: lead.clientProfileId,
+        email: lead.userProfile.email,
+      }))
+    : null;
+  const migrationLinkUrl = migrationLinkPathForLead ? `${appOrigin}${migrationLinkPathForLead}` : null;
   const documentUploadPathForLead = lead
     ? documentUploadLinkPath(documentUploadLinkIdForLead({
         leadId: lead.id,
@@ -454,7 +466,7 @@ export function AdminLeadProfileRoute({
     } else {
       setEmailOutreachActive(true);
       setEmailSubject(buildOutreachSubject());
-      setEmailBody(buildOutreachBody(lead));
+      setEmailBody(buildOutreachBody(lead, migrationLinkUrl));
       try {
         const outreachAttachments = await buildFoundationOutreachAttachments();
         setEmailAttachments((current) => [
@@ -472,7 +484,7 @@ export function AdminLeadProfileRoute({
         block: "start",
       });
     });
-  }, [lead]);
+  }, [lead, migrationLinkUrl]);
 
   const addEmailAttachments = async (incoming: FileList | null) => {
     if (!incoming) return;
@@ -860,6 +872,17 @@ export function AdminLeadProfileRoute({
     }
   };
 
+  const handleCopyMigrationLink = async () => {
+    if (!migrationLinkUrl || typeof window === "undefined") return;
+    try {
+      await navigator.clipboard.writeText(migrationLinkUrl);
+      setCopiedMigrationLink(true);
+      window.setTimeout(() => setCopiedMigrationLink(false), 2000);
+    } catch {
+      setCopiedMigrationLink(false);
+    }
+  };
+
   const handleCopyDocumentUploadLink = async () => {
     if (!documentUploadUrl || typeof window === "undefined") return;
     try {
@@ -928,7 +951,7 @@ export function AdminLeadProfileRoute({
     }
 
     setEmailSubject(buildOutreachSubject());
-    setEmailBody(buildOutreachBody(lead));
+  setEmailBody(buildOutreachBody(lead, migrationLinkUrl));
     setEmailOutreachActive(true);
     setEmailAttachments([]);
     setEmailNotice(null);
@@ -939,7 +962,7 @@ export function AdminLeadProfileRoute({
     void refreshLeadThreads();
     // Composer defaults should reset only when navigating to another lead.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeLeadId, refreshLeadThreads]);
+  }, [activeLeadId, migrationLinkUrl, refreshLeadThreads]);
 
   useEffect(() => {
     if (!selectedEmailThreadId) {
@@ -1104,7 +1127,36 @@ export function AdminLeadProfileRoute({
       </section>
 
       <section className="app-surface rounded-[1.4rem] p-4">
-        <div className="grid gap-3 lg:grid-cols-2">
+        <div className="grid gap-3 lg:grid-cols-3">
+          <div className="rounded-[1.15rem] border border-emerald-300/18 bg-emerald-500/[0.055] p-4">
+            <p className="line-label">Unique Migration Estimate Link</p>
+            <p className="mt-2 text-sm leading-6 text-white/56">
+              Use this in outreach. The estimate form updates this exact lead profile instead of creating a duplicate.
+            </p>
+            <p className="mt-3 break-all rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2 text-sm text-white/72">
+              {migrationLinkUrl ?? "Loading migration link..."}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {migrationLinkUrl ? (
+                <Link
+                  href={migrationLinkUrl}
+                  target="_blank"
+                  className="rounded-[0.75rem] border border-white/14 px-3 py-2 text-[0.64rem] uppercase tracking-[0.18em] text-white/76 transition hover:border-white/26 hover:text-white"
+                >
+                  Open
+                </Link>
+              ) : null}
+              <button
+                type="button"
+                onClick={handleCopyMigrationLink}
+                disabled={!migrationLinkUrl}
+                className="rounded-[0.75rem] border border-white/14 px-3 py-2 text-[0.64rem] uppercase tracking-[0.18em] text-white/76 transition hover:border-white/26 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {copiedMigrationLink ? "Copied" : "Copy Link"}
+              </button>
+            </div>
+          </div>
+
           <div className="rounded-[1.15rem] border border-white/10 bg-black/30 p-4">
             <p className="line-label">Unique Registration Link</p>
             <p className="mt-2 text-sm leading-6 text-white/56">

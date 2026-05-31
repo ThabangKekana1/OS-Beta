@@ -4,7 +4,7 @@ import {
   type AdminStateSnapshot,
 } from "@/lib/admin-state";
 import { normalizeAdminLeads } from "@/lib/admin-storage";
-import { registrationLinkIdForLead } from "@/lib/registration-links";
+import { migrationLinkIdForLead, registrationLinkIdForLead } from "@/lib/registration-links";
 import {
   adminLeadContactStatuses,
   adminLeadOrigins,
@@ -632,6 +632,55 @@ export async function findLeadByRegistrationLinkFromDatabase(
   if (!matchedRow) return null;
 
   // Fetch only the matched lead's payload.
+  const { data: fullData, error: fullError } = await supabase
+    .from("oneos_admin_leads")
+    .select("payload")
+    .eq("id", matchedRow.id)
+    .single();
+
+  if (isMissingRelationError(fullError)) return null;
+  if (fullError) throw fullError;
+
+  return (fullData?.payload as AdminLead | null) ?? null;
+}
+
+/**
+ * Targeted lookup: resolves the dedicated migration-estimate link for an
+ * existing lead. This lets outreach recipients generate an estimate without
+ * creating a duplicate lead record.
+ */
+export async function findLeadByMigrationLinkFromDatabase(
+  linkId: string,
+): Promise<AdminLead | null> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return null;
+
+  const rows: Array<{ id: string; client_profile_id: string | null; contact_email: string | null }> = [];
+  for (let from = 0; ; from += SUPABASE_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("oneos_admin_leads")
+      .select("id, client_profile_id, contact_email")
+      .range(from, from + SUPABASE_PAGE_SIZE - 1);
+
+    if (isMissingRelationError(error)) return null;
+    if (error) throw error;
+
+    const page = (data ?? []) as typeof rows;
+    rows.push(...page);
+    if (page.length < SUPABASE_PAGE_SIZE) break;
+  }
+
+  const matchedRow = rows.find(
+    (row) =>
+      migrationLinkIdForLead({
+        leadId: row.id,
+        clientProfileId: row.client_profile_id ?? "",
+        email: row.contact_email ?? "",
+      }) === linkId,
+  );
+
+  if (!matchedRow) return null;
+
   const { data: fullData, error: fullError } = await supabase
     .from("oneos_admin_leads")
     .select("payload")

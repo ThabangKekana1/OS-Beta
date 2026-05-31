@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Mail, Download, ArrowRight, ChevronDown, Sun, Zap, Sparkles, Share2 } from "lucide-react";
 import type { MigrationAssessmentResult } from "@/lib/calculateMigrationAssessment";
@@ -294,6 +294,22 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
     wheeling.photovoltaicOnlyReference.tenYearSavingAgainstEskom,
     ...combinedScenarios.map((scenario) => scenario.combinedTenYearSavingAgainstEskom),
   );
+  const leadAttributionPrimedRef = useRef(false);
+
+  useEffect(() => {
+    if (leadAttributionPrimedRef.current) return;
+    const attribution = readStoredMigrationAssessment()?.leadAttribution;
+    if (!attribution) return;
+    leadAttributionPrimedRef.current = true;
+    setIntakeValues((current) => ({
+      ...current,
+      businessName: current.businessName || attribution.company || "",
+      contactName: current.contactName || attribution.contactName || "",
+      email: current.email || attribution.email || "",
+      phone: current.phone || attribution.phone || "",
+      preferredContactMethod: current.preferredContactMethod || "email",
+    }));
+  }, []);
 
   async function submitIntake(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -334,6 +350,7 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
         body: JSON.stringify({
           input: assessment.input,
           profileId: credentials.profileId,
+          leadLinkId: assessment.leadAttribution?.linkId ?? null,
           businessName,
           contactName,
           email,

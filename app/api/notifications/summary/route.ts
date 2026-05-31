@@ -23,7 +23,7 @@ export async function GET() {
   }
 
   let unreadInboxCount = 0;
-  let inboxCountsByMailbox: Record<string, number> = {};
+  const inboxCountsByMailbox: Record<string, number> = {};
 
   if (session.role === "admin") {
     const senderOptions = getAdminSenderOptions();
