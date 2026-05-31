@@ -38,7 +38,7 @@ export function MigrationStart({
             </h1>
             <p className={styles.sectionCopy}>
               {leadAttribution
-                ? "This private link is connected to your Foundation-1 lead profile. Generate the estimate here and we will update the same profile — no duplicate registration needed."
+                ? "You are one step away from seeing how much cleaner, cheaper energy could unlock for your business. Enter your latest monthly electricity spend and we will model your migration path in minutes."
                 : "Enter your monthly electricity spend. The full report generates instantly — no account required."}
             </p>
           </div>
