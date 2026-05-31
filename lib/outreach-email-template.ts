@@ -15,6 +15,10 @@ function firstName(value: string | null | undefined): string {
   return value?.trim().split(/\s+/)[0] ?? "";
 }
 
+function companyShortName(value: string): string {
+  return value.trim().split(/\s+/)[0] || value;
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -30,6 +34,7 @@ function textToHtml(value: string): string {
 export function buildFoundationOutreachBody(lead: OutreachTemplateLead | null): string {
   const name = firstName(lead?.contactName) || "[name]";
   const company = lead?.company?.trim() || "[company]";
+  const shortCompany = companyShortName(company);
   const migrationEstimateUrl = lead?.migrationEstimateUrl?.trim() || "1os.co.za";
 
   return [
@@ -39,21 +44,21 @@ export function buildFoundationOutreachBody(lead: OutreachTemplateLead | null): 
     "",
     "My name is Karman Kekana, founder of Foundation-1, an energy-as-a-service company helping South African businesses migrate to cleaner, cheaper energy with zero upfront capital expenditure.",
     "",
-    `We help companies reduce electricity costs by carrying the infrastructure, installation, maintenance, and insurance burden ourselves. The client simply moves onto a new energy tariff through a power purchase agreement. For example, if ${company} currently pays around R3.00 per kilowatt-hour, we may be able to reduce that to around R2.00 per kilowatt-hour, and in strong cases as low as R0.98 per kilowatt-hour.`,
+    `I am reaching out because ${company} appears to be exactly the kind of business that can benefit from a structured energy migration: high operational electricity demand, exposure to rising tariffs, and a clear need to protect margins without taking on infrastructure costs.`,
     "",
-    "Foundation-1 offers two solutions:",
+    `Foundation-1 can help ${company} reduce its monthly electricity spend by carrying the cost of the infrastructure, installation, maintenance, and insurance ourselves. ${shortCompany} would simply move onto a new energy tariff through a power purchase agreement. For example, if ${shortCompany} is currently paying around R3.00 per kilowatt-hour, we may be able to reduce that to around R2.00 per kilowatt-hour, and in strong cases as low as R0.98 per kilowatt-hour.`,
     "",
-    "Generocity UFMS: a full solar infrastructure solution where we install, maintain, and insure the system.",
+    "We do this through two solutions:",
     "",
-    "Lumen: a wheeling solution where power is supplied from our 56 megawatt solar farm, also with no upfront cost to the client.",
+    "Generocity UFMS: a full solar infrastructure solution where Foundation-1 installs, maintains, and insures the system.",
     "",
-    "Together, these solutions allow us to target savings of up to 60 percent on monthly electricity spend.",
+    `Lumen: a wheeling solution where power is supplied from our 56 megawatt solar farm, also with no upfront cost to ${shortCompany}.`,
+    "",
+    `Together, these solutions allow us to target savings of up to 60 percent on monthly electricity spend, while keeping the capital burden off ${shortCompany}’s balance sheet.`,
     "",
     `I have attached our brochure for context. You can also visit foundation-1.co.za, or generate a quick migration estimate for ${company} at ${migrationEstimateUrl} in under three minutes.`,
     "",
     "If this is worth a 20-minute conversation, I would welcome the opportunity to connect.",
-    "",
-    "Thanks and will be hoping to hear from you,",
   ].join("\n");
 }
 
