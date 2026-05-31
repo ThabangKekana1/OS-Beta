@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element -- Email previews use raw image markup that mirrors sent email HTML. */
+
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAdminPortal } from "@/components/admin/AdminPortalProvider";
@@ -16,8 +18,13 @@ import {
   buildFoundationOutreachBody,
   FOUNDATION_BROCHURE_FILENAME,
   FOUNDATION_BROCHURE_PATH,
+  FOUNDATION_EMAIL_BANNER_PATH,
   FOUNDATION_OUTREACH_SUBJECT,
 } from "@/lib/outreach-email-template";
+import {
+  splitSignatureForBanner,
+  systemSignatureTextForSender,
+} from "@/lib/email-signature-copy";
 import type { EmailMessage, EmailThread } from "@/lib/email-threads";
 import type {
   AdminDocumentStatus,
@@ -378,6 +385,17 @@ export function AdminLeadProfileRoute({
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailSending, setEmailSending] = useState(false);
   const [emailNotice, setEmailNotice] = useState<string | null>(null);
+  const selectedEmailSenderOption = useMemo(
+    () => senderOptions.find((option) => option.value === emailFrom) ?? senderOptions[0] ?? null,
+    [emailFrom, senderOptions],
+  );
+  const systemSignaturePreview = useMemo(() => {
+    const signatureText = systemSignatureTextForSender({
+      ownerEmail: selectedEmailSenderOption?.email,
+      ownerRole: actorRole,
+    });
+    return signatureText ? splitSignatureForBanner(signatureText) : null;
+  }, [actorRole, selectedEmailSenderOption?.email]);
   const eoiSigningPath = lead?.eoiSigningToken ? `/eoi/${lead.eoiSigningToken}` : null;
   const eoiSigningUrl = eoiSigningPath ? `${appOrigin}${eoiSigningPath}` : null;
   const registrationLinkPathForLead = lead
@@ -1526,6 +1544,32 @@ export function AdminLeadProfileRoute({
               onChange={(event) => setEmailBody(event.target.value)}
               className="admin-input mt-3 w-full rounded-[0.8rem] px-3 py-2 text-sm leading-6"
             />
+            {systemSignaturePreview ? (
+              <div className="mt-3 overflow-hidden rounded-xl border border-white/12 bg-black/35">
+                <div className="border-b border-white/8 px-3 py-2">
+                  <p className="text-[0.62rem] uppercase tracking-[0.22em] text-white/46">
+                    Footer added to this email
+                  </p>
+                </div>
+                <div className="space-y-3 p-3">
+                  <pre className="whitespace-pre-wrap break-words font-sans text-xs leading-5 text-white/72">
+                    {systemSignaturePreview.beforeBanner}
+                  </pre>
+                  <div className="overflow-hidden rounded-lg border border-white/10 bg-white/[0.03]">
+                    <img
+                      src={FOUNDATION_EMAIL_BANNER_PATH}
+                      alt="Foundation-1 email banner"
+                      className="h-auto w-full object-cover"
+                    />
+                  </div>
+                  {systemSignaturePreview.afterBanner ? (
+                    <pre className="whitespace-pre-wrap break-words font-sans text-xs leading-5 text-white/72">
+                      {systemSignaturePreview.afterBanner}
+                    </pre>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
 
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
               <label className="inline-flex cursor-pointer items-center rounded-[0.7rem] border border-white/14 px-3 py-1.5 text-[0.64rem] uppercase tracking-[0.16em] text-white/76 transition hover:border-white/26 hover:text-white">
