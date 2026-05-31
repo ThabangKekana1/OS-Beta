@@ -1,7 +1,8 @@
 /**
  * Minimal email sender. Uses Resend via plain HTTPS (no SDK).
- * Configure with RESEND_API_KEY + EMAIL_FROM. If unset, sendEmail is a no-op
- * that resolves with { ok: false, skipped: true } so callers never break.
+ * Configure with RESEND_RECEIVING_API_KEY or RESEND_API_KEY + EMAIL_FROM. If
+ * unset, sendEmail is a no-op that resolves with { ok: false, skipped: true }
+ * so callers never break.
  */
 
 type SendEmailInput = {
@@ -33,12 +34,12 @@ function normalizeEnv(value?: string) {
 }
 
 export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
-  const apiKey = normalizeEnv(process.env.RESEND_API_KEY);
+  const apiKey = normalizeEnv(process.env.RESEND_RECEIVING_API_KEY) || normalizeEnv(process.env.RESEND_API_KEY);
   const defaultFrom = normalizeEnv(process.env.EMAIL_FROM);
   const from = input.from ?? defaultFrom;
 
   if (!apiKey || !from) {
-    return { ok: false, skipped: true, reason: "RESEND_API_KEY or EMAIL_FROM not configured" };
+    return { ok: false, skipped: true, reason: "RESEND_RECEIVING_API_KEY/RESEND_API_KEY or EMAIL_FROM not configured" };
   }
   const to = Array.isArray(input.to) ? input.to : [input.to];
   if (!to.length || !to[0]) {

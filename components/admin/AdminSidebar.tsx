@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity,
+  Bell,
   ClipboardList,
   Mail,
   PanelLeftClose,
@@ -17,6 +18,7 @@ import { cn } from "@/lib/utils";
 
 type NotificationSummary = {
   unreadInboxCount: number;
+  unreadNotificationCount: number;
 };
 
 function navItemsFor(rootPath: "/admin" | "/sales", showSales: boolean) {
@@ -43,6 +45,16 @@ function navItemsFor(rootPath: "/admin" | "/sales", showSales: boolean) {
     href: `${rootPath}/inbox`,
     icon: Mail,
   },
+  ...(rootPath === "/admin"
+    ? [
+        {
+          id: "notifications",
+          label: "Notifications",
+          href: "/admin/notifications",
+          icon: Bell,
+        },
+      ]
+    : []),
   ] as const;
 }
 
@@ -76,6 +88,7 @@ export function AdminSidebar({
   });
   const [summary, setSummary] = useState<NotificationSummary>({
     unreadInboxCount: 0,
+    unreadNotificationCount: 0,
   });
 
   useEffect(() => {
@@ -95,6 +108,7 @@ export function AdminSidebar({
         if (!cancelled) {
           setSummary({
             unreadInboxCount: Number(json.unreadInboxCount ?? 0),
+            unreadNotificationCount: Number(json.unreadNotificationCount ?? 0),
           });
         }
       } catch {
@@ -161,7 +175,13 @@ export function AdminSidebar({
           {navItems.map((item) => {
             const active = isActivePath(pathname, item.href);
             const Icon = item.icon;
-            const showDot = item.id === "inbox" && summary.unreadInboxCount > 0;
+            const showDot =
+              (item.id === "inbox" && summary.unreadInboxCount > 0) ||
+              (item.id === "notifications" && summary.unreadNotificationCount > 0);
+            const badgeCount =
+              item.id === "notifications" && summary.unreadNotificationCount > 0
+                ? summary.unreadNotificationCount
+                : null;
 
             return (
               <Link
@@ -188,7 +208,14 @@ export function AdminSidebar({
                     <span className="absolute right-0.5 top-0.5 size-2.5 rounded-full border border-black bg-red-500" />
                   ) : null}
                 </span>
-                <span className={cn("text-sm", collapsed && !mobile ? "sr-only" : "")}>{item.label}</span>
+                <span className={cn("flex flex-1 items-center justify-between gap-2 text-sm", collapsed && !mobile ? "sr-only" : "")}>
+                  <span>{item.label}</span>
+                  {badgeCount ? (
+                    <span className="rounded-full border border-amber-300/30 bg-amber-300/[0.08] px-2 py-0.5 text-[0.62rem] font-medium text-amber-100">
+                      {badgeCount > 99 ? "99+" : badgeCount}
+                    </span>
+                  ) : null}
+                </span>
               </Link>
             );
           })}

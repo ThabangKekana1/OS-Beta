@@ -6,6 +6,7 @@ import { Clock3, Download, Mail, MessageCircle, Plus, Upload, X } from "lucide-r
 import { AdminBadge, AdminHeader } from "@/components/admin/AdminPrimitives";
 import { useAdminPortal } from "@/components/admin/AdminPortalProvider";
 import { downloadCsvFile, sanitizeFileSegment } from "@/lib/download-utils";
+import { FOUNDATION_OUTREACH_SUBJECT } from "@/lib/outreach-email-template";
 import type {
   AdminLead,
   AdminLeadContactStatus,
@@ -16,7 +17,6 @@ import type {
 import { adminLeadOriginLabels, adminLeadOrigins, adminLeadPartners } from "@/lib/admin-types";
 
 const ALL = "all" as const;
-const OUTREACH_EMAIL_SUBJECT = "Zero-Cost Solar Proposal";
 const leadStatusOptions = [
   "Not Contacted",
   "Contacted",
@@ -128,7 +128,7 @@ function buildInboxHref(
     params.set("subject", emailSubject(lead));
     params.set("body", followUpEmailBody(lead));
   } else {
-    params.set("subject", OUTREACH_EMAIL_SUBJECT);
+    params.set("subject", FOUNDATION_OUTREACH_SUBJECT);
     params.set("template", "outreach");
   }
   return `${basePath}/inbox?${params.toString()}`;

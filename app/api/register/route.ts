@@ -7,13 +7,14 @@ import {
   findSignupShellLeadByEmail,
   promoteSignupLeadToClientRegistration,
 } from "@/lib/client-registration";
+import { createNotification } from "@/lib/notifications";
 import type { AdminLeadRegistrationSource } from "@/lib/admin-types";
 
 export const runtime = "nodejs";
 
 const PUBLIC_REGISTRATION_SOURCE: AdminLeadRegistrationSource = {
   linkId: "public-registration",
-  profileName: "Website",
+  profileName: "Migrate",
   profileRole: "admin",
   profileAgentId: null,
   partnerOrgId: null,
@@ -117,6 +118,22 @@ export async function POST(request: NextRequest) {
   }
 
   const persisted = await upsertSingleLeadToDatabase(created.lead, "public-registration:generic");
+
+  if (persisted) {
+    void createNotification({
+      audience: "admin",
+      kind: "client_registered",
+      title: `New client registration: ${created.lead.company}`,
+      body: `${created.lead.contactName} (${created.lead.userProfile.email}) just registered.`,
+      link: `/admin/leads/${created.clientProfileId}`,
+      metadata: {
+        leadId: created.leadId,
+        clientProfileId: created.clientProfileId,
+        company: created.lead.company,
+        contactEmail: created.lead.userProfile.email,
+      },
+    });
+  }
 
   return NextResponse.json({
     ok: true,

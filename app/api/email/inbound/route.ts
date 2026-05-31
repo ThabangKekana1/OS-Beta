@@ -4,6 +4,9 @@ import { recordMessage } from "@/lib/email-threads";
 import { recordLeadEmailReply } from "@/lib/lead-email-activity";
 import { createNotification } from "@/lib/notifications";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
+import { resolveAdminSenderByRoutingAddress } from "@/lib/admin-mailboxes";
+import { sendEmail } from "@/lib/email";
+import { emailOnOutboundDomain, formatMailboxAddress } from "@/lib/email-addressing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -88,6 +91,8 @@ type ReceivedEmail = {
   subject?: string;
   html?: string | null;
   text?: string | null;
+  html_body?: string | null;
+  text_body?: string | null;
   headers?: Record<string, string>;
   message_id?: string;
   created_at?: string;
@@ -134,6 +139,31 @@ function pickHeader(headers: Record<string, string> | undefined, key: string): s
   return found ? found[1].trim() : null;
 }
 
+function stripHtml(value: string): string {
+  return value
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n\s+/g, "\n")
+    .trim();
+}
+
+function pickString(...values: unknown[]): string {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return "";
+}
+
 function leadIdFromAddress(email: string): string | null {
   // Pattern: sales+lead-<id>@replies.<host>
   const localPart = email.split("@")[0] ?? "";
@@ -160,6 +190,55 @@ async function mailboxForOwner(userId: string): Promise<{ email: string; role: "
   const row = data as { email?: string | null; role?: string | null; is_active?: boolean | null };
   if ((row.role !== "sales" && row.role !== "partner") || row.is_active === false || !row.email) return null;
   return { email: row.email.trim().toLowerCase(), role: row.role };
+}
+
+async function forwardInboundCopyToMailbox({
+  mailboxAddress,
+  fromAddress,
+  fromName,
+  toAddresses,
+  ccAddresses,
+  subject,
+  bodyText,
+}: {
+  mailboxAddress: string | null | undefined;
+  fromAddress: string;
+  fromName: string | null;
+  toAddresses: string[];
+  ccAddresses: string[];
+  subject: string;
+  bodyText: string | null;
+}) {
+  const destination = mailboxAddress?.trim().toLowerCase();
+  const sender = fromAddress.trim().toLowerCase();
+  if (!destination || destination === sender) return;
+
+  const originalFrom = formatMailboxAddress(fromName, fromAddress);
+  const forwardSubject = subject.toLowerCase().startsWith("fwd:") ? subject : `Fwd: ${subject}`;
+  const text = [
+    "A reply was received in the 1OS dashboard and copied to your mailbox.",
+    "",
+    `From: ${originalFrom}`,
+    `To: ${toAddresses.join(", ") || "(none)"}`,
+    ccAddresses.length > 0 ? `Cc: ${ccAddresses.join(", ")}` : null,
+    `Subject: ${subject}`,
+    "",
+    "--- Original message ---",
+    "",
+    bodyText?.trim() || "(No plain-text body was provided.)",
+  ].filter((line): line is string => line !== null).join("\n");
+
+  const result = await sendEmail({
+    from: formatMailboxAddress("1OS Inbox", emailOnOutboundDomain(destination)),
+    to: destination,
+    subject: forwardSubject,
+    text,
+    replyTo: originalFrom,
+  });
+  if (!result.ok) {
+    const error = "skipped" in result && result.skipped ? result.reason : "error" in result ? result.error : "Unknown send error";
+    console.error("[email/inbound] mailbox forward failed", error);
+  }
 }
 
 function normalizeEnv(value?: string) {
@@ -254,7 +333,7 @@ function verifySignature(rawBody: string, request: Request): boolean {
 }
 
 async function fetchResendJson<T>(path: string): Promise<T | null> {
-  const apiKey = normalizeEnv(process.env.RESEND_API_KEY);
+  const apiKey = normalizeEnv(process.env.RESEND_RECEIVING_API_KEY) || normalizeEnv(process.env.RESEND_API_KEY);
   if (!apiKey) return null;
 
   const response = await fetch(`https://api.resend.com${path}`, {
@@ -308,8 +387,17 @@ export async function POST(request: Request) {
   const toAddresses = parseAddressList(("to" in source && source.to) || parsed.to);
   const ccAddresses = parseAddressList(("cc" in source && source.cc) || parsed.cc);
   const subject = (("subject" in source && source.subject) || parsed.subject || "(no subject)").toString();
-  const bodyText = (("text" in source && source.text) || parsed.text || "").toString();
-  const bodyHtml = (("html" in source && source.html) || parsed.html || "").toString();
+  const bodyHtml = pickString(
+    "html" in source ? source.html : null,
+    "html_body" in source ? source.html_body : null,
+    parsed.html,
+  );
+  const bodyText = pickString(
+    "text" in source ? source.text : null,
+    "text_body" in source ? source.text_body : null,
+    parsed.text,
+    bodyHtml ? stripHtml(bodyHtml) : null,
+  );
   const headers = ("headers" in source && source.headers && typeof source.headers === "object" ? source.headers : undefined) as
     | Record<string, string>
     | undefined;
@@ -338,12 +426,18 @@ export async function POST(request: Request) {
     .find((id): id is string => Boolean(id))
     ?? null;
   const mailboxOwner = mailboxOwnerUserId ? await mailboxForOwner(mailboxOwnerUserId) : null;
+  const adminMailbox = mailboxOwner
+    ? null
+    : toAddresses
+        .map((entry) => resolveAdminSenderByRoutingAddress(entry.email))
+        .find((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+      ?? null;
 
   const recorded = await recordMessage({
     leadId,
     direction: "inbound",
     mailboxOwnerUserId: mailboxOwner ? mailboxOwnerUserId : null,
-    mailboxAddress: mailboxOwner?.email ?? null,
+    mailboxAddress: mailboxOwner?.email ?? adminMailbox?.email ?? null,
     mailboxRole: mailboxOwner?.role ?? "admin",
     fromAddress: fromAddress.email,
     fromName: fromAddress.name,
@@ -366,6 +460,17 @@ export async function POST(request: Request) {
   if (recorded.created) {
     await recordLeadEmailReply(leadId, fromAddress.email).catch((error) => {
       console.error("[email/inbound] lead reply update failed", error);
+    });
+    await forwardInboundCopyToMailbox({
+      mailboxAddress: recorded.thread.mailboxAddress,
+      fromAddress: fromAddress.email,
+      fromName: fromAddress.name,
+      toAddresses: toAddresses.map((entry) => entry.email),
+      ccAddresses: ccAddresses.map((entry) => entry.email),
+      subject,
+      bodyText: bodyText || null,
+    }).catch((error) => {
+      console.error("[email/inbound] mailbox forward failed", error);
     });
   }
 
@@ -398,7 +503,7 @@ export async function POST(request: Request) {
   if (recorded.created) {
     void createNotification({
       audience: "admin",
-      kind: "system",
+      kind: "email_reply",
       title: `New email reply from ${fromAddress.name ?? fromAddress.email}`,
       body: subject,
       link: `/admin/inbox?thread=${recorded.thread.id}`,
@@ -409,7 +514,7 @@ export async function POST(request: Request) {
       void createNotification({
         audience: "sales",
         recipientEmail: recorded.thread.mailboxAddress,
-        kind: "system",
+        kind: "email_reply",
         title: `New email reply from ${fromAddress.name ?? fromAddress.email}`,
         body: subject,
         link: `/admin/inbox?thread=${recorded.thread.id}`,

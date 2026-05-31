@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Mail, Download, ArrowRight, ChevronDown, Sun, Zap, Sparkles } from "lucide-react";
+import { Mail, Download, ArrowRight, ChevronDown, Sun, Zap, Sparkles, Share2 } from "lucide-react";
 import type { MigrationAssessmentResult } from "@/lib/calculateMigrationAssessment";
 import {
   ensureMigrationProfileCredentials,
@@ -279,6 +279,7 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
   const [pdfLoading, setPdfLoading] = useState(false);
   const [intakeLoading, setIntakeLoading] = useState(false);
   const [intakeError, setIntakeError] = useState("");
+  const [shareStatus, setShareStatus] = useState("");
   const [intakeValues, setIntakeValues] = useState({
     businessName: "",
     contactName: "",
@@ -724,7 +725,39 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
                 <Mail size={14} strokeWidth={2.5} />
                 Email This Report
               </button>
+              <button
+                className={styles.ghostButton}
+                type="button"
+                onClick={async () => {
+                  const text = [
+                    "Foundation-1 Energy Migration Estimate",
+                    `Current monthly electricity spend: ${zar(currentUtilityProjection.currentMonthlySpend)}`,
+                    `Estimated 10-year current utility path: ${zar(currentUtilityProjection.tenYearSpend)}`,
+                    `Indicative 10-year saving range up to: ${zar(bestIllustrativeSaving)}`,
+                    "Figures are indicative and subject to formal review.",
+                  ].join("\n");
+                  setShareStatus("");
+                  try {
+                    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+                      await navigator.share({
+                        title: "Foundation-1 Energy Migration Estimate",
+                        text,
+                      });
+                      setShareStatus("Report shared.");
+                      return;
+                    }
+                    await navigator.clipboard.writeText(text);
+                    setShareStatus("Report summary copied.");
+                  } catch {
+                    setShareStatus("Unable to share automatically. Use Email This Report instead.");
+                  }
+                }}
+              >
+                <Share2 size={14} strokeWidth={2.5} />
+                Share Report
+              </button>
             </div>
+            {shareStatus ? <p className={styles.successShareStatus}>{shareStatus}</p> : null}
           </form>
         </section>
 

@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { MigrationReport } from "@/components/migration/MigrationReport";
 import {
@@ -10,6 +12,8 @@ import {
   useStoredMigrationAssessment,
 } from "@/components/migration/MigrationState";
 import styles from "@/components/migration/migration.module.css";
+
+const QUALIFICATION_THRESHOLD_ZAR = 10000;
 
 function isCurrentMigrationAssessmentResult(
   result: unknown,
@@ -30,8 +34,24 @@ function isCurrentMigrationAssessmentResult(
 
 export function MigrationReportPageClient() {
   const stored = useStoredMigrationAssessment();
+  const router = useRouter();
+
+  const spend = stored
+    ? stored.input.monthlyElectricitySpend ?? stored.input.monthlySpend ?? 0
+    : 0;
+  const disqualified = Boolean(stored) && spend > 0 && spend < QUALIFICATION_THRESHOLD_ZAR;
+
+  useEffect(() => {
+    if (disqualified) {
+      router.replace("/migration/unsuccessful");
+    }
+  }, [disqualified, router]);
 
   if (stored === undefined) {
+    return null;
+  }
+
+  if (disqualified) {
     return null;
   }
 

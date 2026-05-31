@@ -458,7 +458,33 @@ export function PublicMarketingShell({ children }: { children: (theme: "dark" | 
           </div>
 
           <div className={isLight ? "border-t border-black/10 py-8" : "border-t border-white/10 py-8"}>
-            <p className={isLight ? "text-xs text-black" : "text-xs text-white"}>© 2026 1OS | Reg: 2026/138664/07 | BBBEE Level 1 | All rights reserved.</p>
+            <p className={isLight ? "text-xs text-black" : "text-xs text-white"}>
+              © 2026 1OS | Reg: 2026/138664/07 | BBBEE Level 1 | All rights reserved. |{" "}
+              <a
+                href="mailto:sales@foundation-1.co.za"
+                className={isLight ? "text-black transition hover:text-black/70" : "text-white transition hover:text-white/70"}
+              >
+                sales@foundation-1.co.za
+              </a>{" "}
+              |{" "}
+              <a
+                href="https://x.com/Foundation1X"
+                target="_blank"
+                rel="noopener noreferrer"
+                className={isLight ? "text-black transition hover:text-black/70" : "text-white transition hover:text-white/70"}
+              >
+                Twitter
+              </a>{" "}
+              |{" "}
+              <a
+                href="https://foundation-1.co.za"
+                target="_blank"
+                rel="noopener noreferrer"
+                className={isLight ? "text-black transition hover:text-black/70" : "text-white transition hover:text-white/70"}
+              >
+                Foundation-1
+              </a>
+            </p>
           </div>
         </footer>
       </div>

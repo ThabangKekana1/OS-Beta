@@ -144,6 +144,14 @@ function preview(message: { bodyText: string | null; bodyHtml: string | null; su
   return message.subject ?? "(no preview)";
 }
 
+function readableMessageBody(message: { bodyText: string | null; bodyHtml: string | null; subject: string | null }): string {
+  const text = message.bodyText?.trim();
+  if (text) return text;
+  const htmlPreview = preview({ ...message, bodyText: null });
+  if (htmlPreview && htmlPreview !== message.subject && htmlPreview !== "(no preview)") return htmlPreview;
+  return "No readable email body was available for this message. The reply metadata was received, but the email body could not be loaded from the inbound provider.";
+}
+
 function mailboxSlug(option: InboxSenderOption) {
   return option.label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || option.email;
 }
@@ -211,6 +219,22 @@ export function AdminInboxRoute({
   const [sending, setSending] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const [expandedMessageIds, setExpandedMessageIds] = useState<Set<string>>(() => new Set());
+  const toggleMessageExpanded = useCallback((messageId: string) => {
+    setExpandedMessageIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(messageId)) next.delete(messageId);
+      else next.add(messageId);
+      return next;
+    });
+  }, []);
+  const expandAllMessages = useCallback(() => {
+    setExpandedMessageIds(new Set(activeMessages.map((message) => message.id)));
+  }, [activeMessages]);
+  const collapseAllMessages = useCallback(() => {
+    const latest = activeMessages[activeMessages.length - 1];
+    setExpandedMessageIds(latest ? new Set([latest.id]) : new Set());
+  }, [activeMessages]);
   const selectedSenderOption = useMemo(
     () => senderOptions.find((option) => option.value === composeFrom) ?? senderOptions[0] ?? null,
     [composeFrom, senderOptions],
@@ -468,6 +492,40 @@ export function AdminInboxRoute({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeMessages.length]);
 
+  // When switching threads, collapse all but the latest message.
+  // When new messages arrive on the current thread (poll/refresh), auto-expand them.
+  const previousThreadIdRef = useRef<string | null>(null);
+  const knownMessageIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (activeMessages.length === 0) {
+      knownMessageIdsRef.current = new Set();
+      setExpandedMessageIds(new Set());
+      previousThreadIdRef.current = activeThreadId;
+      return;
+    }
+
+    const threadChanged = previousThreadIdRef.current !== activeThreadId;
+    if (threadChanged) {
+      const latest = activeMessages[activeMessages.length - 1];
+      setExpandedMessageIds(latest ? new Set([latest.id]) : new Set());
+      knownMessageIdsRef.current = new Set(activeMessages.map((message) => message.id));
+      previousThreadIdRef.current = activeThreadId;
+      return;
+    }
+
+    // Same thread: auto-expand any newly arrived messages.
+    const known = knownMessageIdsRef.current;
+    const newIds = activeMessages.filter((message) => !known.has(message.id)).map((m) => m.id);
+    if (newIds.length > 0) {
+      setExpandedMessageIds((prev) => {
+        const next = new Set(prev);
+        newIds.forEach((id) => next.add(id));
+        return next;
+      });
+      knownMessageIdsRef.current = new Set(activeMessages.map((message) => message.id));
+    }
+  }, [activeMessages, activeThreadId]);
+
   // Poll every 30s for new messages on the active thread + refresh list.
   useEffect(() => {
     const tick = setInterval(() => {
@@ -681,6 +739,19 @@ export function AdminInboxRoute({
                   </div>
                   <div className="flex items-center gap-2">
                     <AdminBadge label={activeThread.lastDirection === "inbound" ? "Awaiting reply" : "Outbound"} tone="neutral" />
+                    {activeMessages.length > 1 ? (
+                      <button
+                        type="button"
+                        onClick={
+                          expandedMessageIds.size >= activeMessages.length
+                            ? collapseAllMessages
+                            : expandAllMessages
+                        }
+                        className="rounded-lg border border-white/12 px-2.5 py-1.5 text-[0.68rem] uppercase tracking-[0.16em] text-white/65 transition hover:bg-white/[0.06] hover:text-white"
+                      >
+                        {expandedMessageIds.size >= activeMessages.length ? "Collapse all" : "Expand all"}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={startReply}
@@ -692,49 +763,83 @@ export function AdminInboxRoute({
                 </div>
               </header>
 
-              <div className="flex-1 space-y-4 overflow-y-auto py-4">
+              <div className="flex-1 space-y-3 overflow-y-auto py-4">
                 {loadingMessages ? (
                   <p className="text-sm text-white/50">Loading…</p>
                 ) : (
-                  activeMessages.map((message) => (
-                    <article
-                      key={message.id}
-                      className={cn(
-                        "rounded-2xl border p-4",
-                        message.direction === "inbound"
-                          ? "border-white/8 bg-white/[0.04]"
-                          : "border-emerald-300/30 bg-emerald-500/[0.06]",
-                      )}
-                    >
-                      <header className="flex flex-wrap items-center justify-between gap-2 text-xs text-white/55">
-                        <div>
-                          <span className="font-medium text-white/82">{message.fromName ?? message.fromAddress}</span>
-                          <span className="ml-2 text-white/40">to {message.toAddresses.join(", ")}</span>
-                        </div>
-                        <span title={message.sentAt}>{formatRelative(message.sentAt)}</span>
-                      </header>
-                      <div className="mt-3 whitespace-pre-wrap text-sm leading-7 text-white/85">
-                        {message.bodyText ?? preview(message)}
-                      </div>
-                      {message.attachments?.length > 0 ? (
-                        <ul className="mt-3 flex flex-wrap gap-2">
-                          {message.attachments.map((attachment) => (
-                            <li
-                              key={attachment.id}
-                              className="inline-flex max-w-full items-center gap-2 rounded-full border border-white/14 bg-white/[0.04] px-2.5 py-1 text-[0.7rem] text-white/78"
+                  activeMessages.map((message) => {
+                    const isExpanded = expandedMessageIds.has(message.id);
+                    const bodyText = readableMessageBody(message);
+                    const snippet = preview(message);
+                    return (
+                      <article
+                        key={message.id}
+                        className={cn(
+                          "rounded-2xl border transition",
+                          message.direction === "inbound"
+                            ? "border-white/8 bg-white/[0.04]"
+                            : "border-emerald-300/30 bg-emerald-500/[0.06]",
+                        )}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => toggleMessageExpanded(message.id)}
+                          aria-expanded={isExpanded}
+                          className="flex w-full items-start justify-between gap-3 rounded-2xl px-4 py-3 text-left transition hover:bg-white/[0.03]"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-white/55">
+                              <span className="font-medium text-white/85">{message.fromName ?? message.fromAddress}</span>
+                              <span className="text-white/40">to {message.toAddresses.join(", ")}</span>
+                            </div>
+                            {!isExpanded ? (
+                              <p className="mt-1 truncate text-xs text-white/55">{snippet}</p>
+                            ) : null}
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2 text-xs text-white/50">
+                            <span title={message.sentAt}>{formatRelative(message.sentAt)}</span>
+                            <svg
+                              aria-hidden
+                              viewBox="0 0 20 20"
+                              className={cn(
+                                "h-4 w-4 transition-transform",
+                                isExpanded ? "rotate-180" : "rotate-0",
+                              )}
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.6"
                             >
-                              <span className="truncate">{attachment.filename}</span>
-                              {attachment.sizeBytes ? (
-                                <span className="shrink-0 text-white/40">
-                                  {(attachment.sizeBytes / 1024).toFixed(0)} KB
-                                </span>
-                              ) : null}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : null}
-                    </article>
-                  ))
+                              <path d="M5 7.5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          </div>
+                        </button>
+                        {isExpanded ? (
+                          <div className="border-t border-white/8 px-4 py-3">
+                            <div className="whitespace-pre-wrap text-sm leading-7 text-white/85">
+                              {bodyText}
+                            </div>
+                            {message.attachments?.length > 0 ? (
+                              <ul className="mt-3 flex flex-wrap gap-2">
+                                {message.attachments.map((attachment) => (
+                                  <li
+                                    key={attachment.id}
+                                    className="inline-flex max-w-full items-center gap-2 rounded-full border border-white/14 bg-white/[0.04] px-2.5 py-1 text-[0.7rem] text-white/78"
+                                  >
+                                    <span className="truncate">{attachment.filename}</span>
+                                    {attachment.sizeBytes ? (
+                                      <span className="shrink-0 text-white/40">
+                                        {(attachment.sizeBytes / 1024).toFixed(0)} KB
+                                      </span>
+                                    ) : null}
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </article>
+                    );
+                  })
                 )}
                 <div ref={messagesEndRef} />
               </div>

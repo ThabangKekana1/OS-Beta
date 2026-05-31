@@ -17,6 +17,19 @@ export function MigrationHero() {
         <li>Maintained by us</li>
         <li>Insured by us</li>
         <li>Built for you</li>
+        <li>
+          <a href="mailto:sales@foundation-1.co.za">sales@foundation-1.co.za</a>
+        </li>
+        <li>
+          <a href="https://x.com/Foundation1X" target="_blank" rel="noopener noreferrer">
+            Twitter
+          </a>
+        </li>
+        <li>
+          <a href="https://foundation-1.co.za" target="_blank" rel="noopener noreferrer">
+            Foundation-1
+          </a>
+        </li>
       </ul>
     </section>
   );

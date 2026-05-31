@@ -72,6 +72,7 @@ The migrations create:
 | `NEXT_PUBLIC_SITE_URL` | same canonical public origin |
 | `EMAIL_OUTBOUND_DOMAIN` | `foundation-1.co.za` |
 | `EMAIL_REPLY_DOMAIN` | Resend inbound subdomain, e.g. `replies.foundation-1.co.za` |
+| `RESEND_RECEIVING_API_KEY` | Optional separate Resend key with receiving-email read access if `RESEND_API_KEY` is send-only |
 
 Keep Resend inbound on a dedicated reply subdomain. Do not point the root
 `foundation-1.co.za` MX at Resend if human mailbox/webmail hosting also receives

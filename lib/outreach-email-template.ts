@@ -3,7 +3,7 @@ export const FOUNDATION_EMAIL_BANNER_FILENAME = "Email Banner 1-3.png";
 export const FOUNDATION_EMAIL_BANNER_CONTENT_ID = "foundation1-outreach-banner";
 export const FOUNDATION_BROCHURE_PATH = "/resources/foundation-1-brochure.pdf";
 export const FOUNDATION_BROCHURE_FILENAME = "foundation-1 Brochure.pdf";
-export const FOUNDATION_OUTREACH_SUBJECT = "Zero-Cost Solar Proposal";
+export const FOUNDATION_OUTREACH_SUBJECT = "Zero Capex Energy Migration Proposal";
 
 export type OutreachTemplateLead = {
   contactName?: string | null;
@@ -27,30 +27,31 @@ function textToHtml(value: string): string {
 }
 
 export function buildFoundationOutreachBody(lead: OutreachTemplateLead | null): string {
-  const name = firstName(lead?.contactName) || "[Name]";
-  const company = lead?.company?.trim();
-  const companyLowerPlaceholder = company || "[company name]";
-  const companyTitlePlaceholder = company || "[Company Name]";
+  const name = firstName(lead?.contactName) || "[name]";
+  const company = lead?.company?.trim() || "[company]";
 
   return [
     `Good day ${name},`,
     "",
-    "I hope you are well.",
+    "I trust you are well.",
     "",
-    "My name is Karman Kekana, the founder of Foundation-1, an energy-as-a-service company based in Johannesburg.",
+    "My name is Karman Kekana, founder of Foundation-1, an energy-as-a-service company helping South African businesses migrate to cleaner, cheaper energy with zero upfront capital expenditure.",
     "",
-    "I am reaching out because I would like to have a discussion to reduce your electricity costs through zero-capex energy solutions.",
+    `We help companies reduce electricity costs by carrying the infrastructure, installation, maintenance, and insurance burden ourselves. The client simply moves onto a new energy tariff through a power purchase agreement. For example, if ${company} currently pays around R3.00 per kilowatt-hour, we may be able to reduce that to around R2.00 per kilowatt-hour, and in strong cases as low as R0.98 per kilowatt-hour.`,
     "",
-    `For ${companyLowerPlaceholder}, our Generocity solar solution can help save up to 45% on monthly electricity spend. This means there is no upfront payment for the solar panels, installation, maintenance, or insurance.. these are 100% taken care of. There are also no separate monthly payments for the system. You only pay your new electricity tariff, which is structured to be lower than your current electricity cost.. this also means no more load shedding.`,
+    "Foundation-1 offers two solutions:",
     "",
-    `The solar infrastructure remains owned by our development financier. In return, ${companyTitlePlaceholder} gets access to the system, full maintenance support, insurance cover, and reduced exposure to load shedding without carrying the capital cost of buying the system.`,
+    "Generocity UFMS: a full solar infrastructure solution where we install, maintain, and insure the system.",
     "",
-    "Foundation-1 also offers Lumen, backed by a 56 megawatt solar farm in the Free State. We would bring electricity to your business premises through a process called wheeling, should your electricity spend be much higher, you also pay nothing upfront, pay nothing during the course except for your new and improved monthly tarrif.",
+    "Lumen: a wheeling solution where power is supplied from our 56 megawatt solar farm, also with no upfront cost to the client.",
     "",
+    "Together, these solutions allow us to target savings of up to 60 percent on monthly electricity spend.",
     "",
-    "I hope our energy-as-a-service model excites you and would like to ask if this might be of interest to for further discussion?",
+    `I have attached our brochure for context. You can also visit foundation-1.co.za, or generate a quick migration estimate for ${company} at 1os.co.za in under three minutes.`,
     "",
-    "Thanks, and I will be hoping to hear from you.",
+    "If this is worth a 20-minute conversation, I would welcome the opportunity to connect.",
+    "",
+    "Thanks and will be hoping to hear from you,",
   ].join("\n");
 }
 

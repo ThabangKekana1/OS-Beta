@@ -24,7 +24,7 @@ export const adminLeadOrigins = ["created", "website", "imported"] as const;
 export type AdminLeadOrigin = (typeof adminLeadOrigins)[number];
 export const adminLeadOriginLabels: Record<AdminLeadOrigin, string> = {
   created: "Created",
-  website: "Website",
+  website: "Migrate",
   imported: "Imported",
 };
 export const adminLeadPartners = ["Foundation-1", "New Lantern"] as const;

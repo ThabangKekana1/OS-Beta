@@ -7,6 +7,9 @@ export type NotificationKind =
   | "eoi_signed"
   | "customer_uploaded_document"
   | "admin_uploaded_document"
+  | "email_reply"
+  | "new_lead"
+  | "client_registered"
   | "system";
 
 export type NotificationRecord = {

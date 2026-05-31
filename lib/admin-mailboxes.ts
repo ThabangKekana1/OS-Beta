@@ -61,3 +61,17 @@ export function resolveAdminSenderOption(value: string | null | undefined) {
     ) ?? null
   );
 }
+
+export function resolveAdminSenderByRoutingAddress(value: string | null | undefined) {
+  if (!value?.trim()) return null;
+  const email = extractEmail(value) || value.trim().toLowerCase();
+  const localPart = email.split("@")[0]?.split("+")[0]?.trim().toLowerCase();
+  if (!localPart) return null;
+
+  return (
+    getAdminSenderOptions().find((option) => {
+      const senderLocalPart = option.email.split("@")[0]?.trim().toLowerCase();
+      return senderLocalPart === localPart;
+    }) ?? null
+  );
+}

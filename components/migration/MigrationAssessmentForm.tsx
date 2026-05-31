@@ -7,16 +7,38 @@ import {
   type MigrationAssessmentInput,
 } from "@/lib/calculateMigrationAssessment";
 import styles from "@/components/migration/migration.module.css";
-import { writeStoredMigrationAssessment } from "@/components/migration/MigrationState";
+import {
+  clearStoredMigrationAssessment,
+  writeStoredMigrationAssessment,
+} from "@/components/migration/MigrationState";
 
 function parseCurrency(value: string) {
   const numeric = Number(value.replace(/[^\d.]/g, ""));
   return Number.isFinite(numeric) ? numeric : 0;
 }
 
+function formatSpendInput(raw: string): string {
+  // Strip everything except digits and a single decimal point
+  const cleaned = raw.replace(/[^\d.]/g, "");
+  if (!cleaned) return "";
+
+  const firstDot = cleaned.indexOf(".");
+  const intPart =
+    firstDot === -1 ? cleaned : cleaned.slice(0, firstDot);
+  const decimalPart =
+    firstDot === -1
+      ? ""
+      : "." + cleaned.slice(firstDot + 1).replace(/\./g, "").slice(0, 2);
+
+  const intWithCommas = intPart.replace(/^0+(?=\d)/, "").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `R${intWithCommas || "0"}${decimalPart}`;
+}
+
+const QUALIFICATION_THRESHOLD_ZAR = 10000;
+
 export function MigrationAssessmentForm({ paneClass }: { paneClass?: string }) {
   const router = useRouter();
-  const [monthlySpend, setMonthlySpend] = useState("R100,000");
+  const [monthlySpend, setMonthlySpend] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -25,6 +47,15 @@ export function MigrationAssessmentForm({ paneClass }: { paneClass?: string }) {
     const spend = parseCurrency(monthlySpend);
     if (spend <= 0) {
       setError("Enter a valid monthly electricity spend greater than zero.");
+      return;
+    }
+
+    if (spend < QUALIFICATION_THRESHOLD_ZAR) {
+      clearStoredMigrationAssessment();
+      setLoading(true);
+      setTimeout(() => {
+        router.push("/migration/unsuccessful");
+      }, 5000);
       return;
     }
 
@@ -82,8 +113,8 @@ export function MigrationAssessmentForm({ paneClass }: { paneClass?: string }) {
               className={styles.input}
               value={monthlySpend}
               inputMode="decimal"
-              placeholder="R100,000"
-              onChange={(event) => setMonthlySpend(event.target.value)}
+              placeholder="e.g R10,000"
+              onChange={(event) => setMonthlySpend(formatSpendInput(event.target.value))}
             />
           </label>
 

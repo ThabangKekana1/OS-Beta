@@ -13,7 +13,7 @@ import { foundationDisplayNameForEmail } from "@/lib/email-signature-copy";
 import { recordMessage } from "@/lib/email-threads";
 import { recordLeadEmailSent } from "@/lib/lead-email-activity";
 import { resolveAdminSenderOption } from "@/lib/admin-mailboxes";
-import { emailOnOutboundDomain, formatMailboxAddress } from "@/lib/email-addressing";
+import { emailOnOutboundDomain, formatMailboxAddress, getOutboundEmailDomain } from "@/lib/email-addressing";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
@@ -35,6 +35,16 @@ function generateMessageId(threadId: string | null): string {
   const random = `${Date.now().toString(36)}.${Math.random().toString(36).slice(2, 10)}`;
   const prefix = threadId ? `t-${threadId}.${random}` : random;
   return `<${prefix}@${host}>`;
+}
+
+function normalizeEmailDomain(value: string | undefined): string {
+  return value?.trim().replace(/^@/, "").replace(/^['\"]|['\"]$/g, "").toLowerCase() ?? "";
+}
+
+function localPartForRouting(email: string | null | undefined, fallback: string): string {
+  const localPart = email?.trim().toLowerCase().split("@")[0]?.split("+")[0] ?? "";
+  const safeLocalPart = localPart.replace(/[^a-z0-9._-]/g, "");
+  return safeLocalPart || fallback;
 }
 
 async function salesCanUseLead(leadId: string, agentId: string | null): Promise<boolean> {
@@ -189,16 +199,26 @@ export async function POST(request: Request) {
   if (payload.inReplyTo) headers["In-Reply-To"] = payload.inReplyTo;
   if (payload.referenceIds && payload.referenceIds.length > 0) headers["References"] = payload.referenceIds.join(" ");
 
-  // Reply-To routes responses through the inbound webhook subdomain (e.g. replies.1os.co.za)
-  const replyDomain = (process.env.EMAIL_REPLY_DOMAIN ?? "").trim();
+  // Reply-To routes responses through a dedicated inbound webhook subdomain
+  // (for example replies.foundation-1.co.za). If EMAIL_REPLY_DOMAIN is
+  // accidentally set to the outbound/root domain, skip the tracking Reply-To so
+  // replies go to the real sender mailbox instead of a non-existent plus alias.
+  const configuredReplyDomain = normalizeEmailDomain(process.env.EMAIL_REPLY_DOMAIN);
+  const outboundDomain = getOutboundEmailDomain();
+  const replyDomain = configuredReplyDomain && configuredReplyDomain !== outboundDomain
+    ? configuredReplyDomain
+    : "";
   const personalMailbox = session.role === "sales" || session.role === "partner";
   const ownerToken = personalMailbox && session.userId ? `+u-${session.userId}` : "";
   const leadToken = recordLeadId ? `+lead-${recordLeadId}` : "";
-  const replyMailbox = session.role === "partner" ? "partner" : session.role === "admin" ? "admin" : "sales";
-  const replyTo =
+  const replyMailbox = session.role === "admin"
+    ? localPartForRouting(adminSender?.email, "admin")
+    : localPartForRouting(session.email, session.role === "partner" ? "partner" : "sales");
+  const replyToEmail =
     replyDomain
       ? `${replyMailbox}${ownerToken}${leadToken}@${replyDomain}`
       : undefined;
+  const replyTo = replyToEmail ? formatMailboxAddress(senderDisplayName, replyToEmail) : undefined;
 
   const mailboxOwnerUserId = personalMailbox ? session.userId : null;
   const mailboxAddress = personalMailbox ? session.email : adminSender?.email ?? null;

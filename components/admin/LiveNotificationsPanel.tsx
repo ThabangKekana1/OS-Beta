@@ -10,6 +10,9 @@ const KIND_LABEL: Record<string, string> = {
   eoi_signed: "EOI signed",
   customer_uploaded_document: "Customer upload",
   admin_uploaded_document: "Admin upload",
+  email_reply: "Email reply",
+  new_lead: "New lead",
+  client_registered: "Registration",
   system: "System",
 };
 

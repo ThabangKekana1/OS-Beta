@@ -320,6 +320,21 @@ export async function POST(
     },
   });
 
+  if (documentType === "signed_eoi") {
+    void createNotification({
+      audience: "admin",
+      kind: "eoi_signed",
+      title: `EOI signed by ${savedLead.company}`,
+      body: `${savedLead.contactName} signed and uploaded the Expression of Interest.`,
+      link: `/admin/leads/${savedLead.clientProfileId}`,
+      metadata: {
+        leadId: savedLead.id,
+        clientProfileId: savedLead.clientProfileId,
+        company: savedLead.company,
+      },
+    });
+  }
+
   return NextResponse.json({
     ok: true,
     backend,

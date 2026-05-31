@@ -679,6 +679,110 @@ export async function upsertSingleLeadToDatabase(
   return true;
 }
 
+/**
+ * Upserts a single admin lead row (and its documents) without touching the
+ * admin_state singleton. Use this for background activity updates (e.g. email
+ * sent / reply received) where we must not flip the dashboard's active lead.
+ */
+export async function upsertAdminLeadOnly(lead: AdminLead): Promise<boolean> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return false;
+
+  const leadResult = await supabase
+    .from("oneos_admin_leads")
+    .upsert(adminLeadRow(lead), { onConflict: "id" });
+
+  if (isMissingRelationError(leadResult.error)) return false;
+  if (leadResult.error) throw leadResult.error;
+
+  const leadDocRows = documentRows(lead);
+  if (leadDocRows.length > 0) {
+    const docResult = await supabase
+      .from("oneos_client_documents")
+      .upsert(leadDocRows, { onConflict: "id" });
+    if (isMissingRelationError(docResult.error)) return false;
+    if (docResult.error) throw docResult.error;
+  }
+
+  return true;
+}
+
+/**
+ * Upserts a single sales lead row. Used alongside upsertAdminLeadOnly for
+ * background activity updates.
+ */
+export async function upsertSalesLeadOnly(lead: SalesLead): Promise<boolean> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return false;
+
+  const result = await supabase
+    .from("oneos_sales_leads")
+    .upsert(salesLeadRow(lead), { onConflict: "id" });
+
+  if (isMissingRelationError(result.error)) return false;
+  if (result.error) throw result.error;
+
+  return true;
+}
+
+/**
+ * Fetches a single admin lead's payload by id. Returns null if not found.
+ */
+export async function readAdminLeadByIdFromDatabase(
+  leadId: string,
+): Promise<AdminLead | null> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from("oneos_admin_leads")
+    .select("payload")
+    .eq("id", leadId)
+    .maybeSingle();
+
+  if (isMissingRelationError(error)) return null;
+  if (error) throw error;
+
+  return (data?.payload as AdminLead | null) ?? null;
+}
+
+/**
+ * Fetches a single sales lead's payload by id, or by its linked admin lead id.
+ * Returns the first match (sales leads are 1:1 with admin leads in practice).
+ */
+export async function readSalesLeadForAdminLeadFromDatabase(
+  adminLeadId: string,
+  linkedSalesLeadId: string | null,
+): Promise<SalesLead | null> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return null;
+
+  if (linkedSalesLeadId) {
+    const { data, error } = await supabase
+      .from("oneos_sales_leads")
+      .select("payload")
+      .eq("id", linkedSalesLeadId)
+      .maybeSingle();
+    if (isMissingRelationError(error)) return null;
+    if (error) throw error;
+    if (data?.payload) return data.payload as SalesLead;
+  }
+
+  // Fallback: scan payload for linkedAdminLeadId match. Bounded to a small page
+  // because there's typically at most one row.
+  const { data, error } = await supabase
+    .from("oneos_sales_leads")
+    .select("payload")
+    .filter("payload->>linkedAdminLeadId", "eq", adminLeadId)
+    .limit(1);
+
+  if (isMissingRelationError(error)) return null;
+  if (error) throw error;
+
+  const row = (data ?? [])[0];
+  return (row?.payload as SalesLead | null) ?? null;
+}
+
 export async function writeAdminStateToDatabase(
   snapshot: AdminStateSnapshot,
   updatedBy: string,

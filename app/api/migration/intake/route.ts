@@ -14,6 +14,7 @@ import { consumeRateLimit } from "@/lib/rate-limit";
 import { documentUploadLinkIdForLead } from "@/lib/registration-links";
 import { findLeadsByEmailFromDatabase, upsertSingleLeadToDatabase } from "@/lib/supabase-db-store";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
+import { createNotification } from "@/lib/notifications";
 import type { AdminLead, AdminLeadRegistrationSource } from "@/lib/admin-types";
 
 export const runtime = "nodejs";
@@ -198,6 +199,27 @@ export async function POST(request: NextRequest) {
   const backend = persistedLead ? "supabase" : "local";
   const linkedLeadId = persistedLead ? created.leadId : null;
   const linkedClientProfileId = persistedLead ? created.clientProfileId : null;
+
+  if (persistedLead && !existingLead) {
+    const savingsZar = Math.round(bestTenYearSaving ?? 0);
+    void createNotification({
+      audience: "admin",
+      kind: "new_lead",
+      title: `New migration lead: ${businessName}`,
+      body: `${contactName} just generated a migration estimate. Monthly spend ~R ${Math.round(result.currentUtilityProjection.currentMonthlySpend).toLocaleString("en-ZA")}. 10-yr best saving R ${savingsZar.toLocaleString("en-ZA")}.`,
+      link: `/admin/leads/${created.clientProfileId}`,
+      metadata: {
+        leadId: created.leadId,
+        clientProfileId: created.clientProfileId,
+        company: businessName,
+        contactEmail: email,
+        contactPhone: phone,
+        monthlySpend: result.currentUtilityProjection.currentMonthlySpend,
+        sourceCampaign,
+        referrer,
+      },
+    });
+  }
   const fallbackAssessmentId = makeId("migration");
   let assessmentId = fallbackAssessmentId;
   let assessmentBackend: "supabase" | "local" = "local";
