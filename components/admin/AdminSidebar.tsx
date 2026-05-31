@@ -118,9 +118,14 @@ export function AdminSidebar({
 
     void refreshSummary();
     const interval = setInterval(() => void refreshSummary(), 30_000);
+    const handleRefresh = () => void refreshSummary();
+    window.addEventListener("oneos:notifications-changed", handleRefresh);
+    window.addEventListener("focus", handleRefresh);
     return () => {
       cancelled = true;
       clearInterval(interval);
+      window.removeEventListener("oneos:notifications-changed", handleRefresh);
+      window.removeEventListener("focus", handleRefresh);
     };
   }, []);
 
@@ -175,13 +180,13 @@ export function AdminSidebar({
           {navItems.map((item) => {
             const active = isActivePath(pathname, item.href);
             const Icon = item.icon;
-            const showDot =
-              (item.id === "inbox" && summary.unreadInboxCount > 0) ||
-              (item.id === "notifications" && summary.unreadNotificationCount > 0);
             const badgeCount =
-              item.id === "notifications" && summary.unreadNotificationCount > 0
+              item.id === "notifications"
                 ? summary.unreadNotificationCount
-                : null;
+                : item.id === "inbox"
+                  ? summary.unreadInboxCount
+                  : 0;
+            const showBadge = badgeCount > 0;
 
             return (
               <Link
@@ -204,13 +209,15 @@ export function AdminSidebar({
                   )}
                 >
                   <Icon className="size-4" />
-                  {showDot ? (
-                    <span className="absolute right-0.5 top-0.5 size-2.5 rounded-full border border-black bg-red-500" />
+                  {showBadge && collapsed && !mobile ? (
+                    <span className="absolute -right-1 -top-1 inline-flex min-w-[1.1rem] items-center justify-center rounded-full border border-black bg-amber-300 px-1 text-[0.6rem] font-semibold leading-none text-black">
+                      {badgeCount > 99 ? "99+" : badgeCount}
+                    </span>
                   ) : null}
                 </span>
                 <span className={cn("flex flex-1 items-center justify-between gap-2 text-sm", collapsed && !mobile ? "sr-only" : "")}>
                   <span>{item.label}</span>
-                  {badgeCount ? (
+                  {showBadge ? (
                     <span className="rounded-full border border-amber-300/30 bg-amber-300/[0.08] px-2 py-0.5 text-[0.62rem] font-medium text-amber-100">
                       {badgeCount > 99 ? "99+" : badgeCount}
                     </span>

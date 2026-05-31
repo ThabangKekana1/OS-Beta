@@ -61,6 +61,26 @@ export function LiveNotificationsPanel() {
         body: JSON.stringify({ ids: unreadIds }),
       });
       await refresh();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("oneos:notifications-changed"));
+      }
+    });
+  }
+
+  function markOneRead(id: string) {
+    void fetch("/api/notifications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    }).then(() => {
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === id && !item.readAt ? { ...item, readAt: new Date().toISOString() } : item,
+        ),
+      );
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("oneos:notifications-changed"));
+      }
     });
   }
 
@@ -130,7 +150,7 @@ export function LiveNotificationsPanel() {
               </article>
             );
             return n.link ? (
-              <Link key={n.id} href={n.link} className="block">
+              <Link key={n.id} href={n.link} className="block" onClick={() => markOneRead(n.id)}>
                 {body}
               </Link>
             ) : (

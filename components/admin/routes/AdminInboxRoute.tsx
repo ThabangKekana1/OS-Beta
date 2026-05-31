@@ -219,6 +219,7 @@ export function AdminInboxRoute({
   const [sending, setSending] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const [mailboxUnreadCounts, setMailboxUnreadCounts] = useState<Record<string, number>>({});
   const [expandedMessageIds, setExpandedMessageIds] = useState<Set<string>>(() => new Set());
   const toggleMessageExpanded = useCallback((messageId: string) => {
     setExpandedMessageIds((prev) => {
@@ -408,6 +409,9 @@ export function AdminInboxRoute({
       setActiveMessages(json.messages ?? []);
       // Mark this thread read locally
       setThreads((prev) => prev.map((t) => (t.id === id ? { ...t, unreadCount: 0 } : t)));
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("oneos:notifications-changed"));
+      }
     } catch {
       setError("Could not open thread");
     } finally {
@@ -487,6 +491,34 @@ export function AdminInboxRoute({
   useEffect(() => {
     if (activeThreadId) void loadThread(activeThreadId);
   }, [activeThreadId, loadThread]);
+
+  // Poll per-mailbox unread counts so the mailbox tabs (Karman / Sales / Support)
+  // show numeric indicators when new mail arrives.
+  useEffect(() => {
+    if (viewerRole !== "admin") return;
+    let cancelled = false;
+    const fetchCounts = async () => {
+      try {
+        const res = await fetch("/api/notifications/summary", { cache: "no-store" });
+        if (!res.ok) return;
+        const json = (await res.json()) as { inboxCountsByMailbox?: Record<string, number> };
+        if (!cancelled && json.inboxCountsByMailbox) {
+          setMailboxUnreadCounts(json.inboxCountsByMailbox);
+        }
+      } catch {
+        // ignore — tabs will fall back to no badge
+      }
+    };
+    void fetchCounts();
+    const interval = setInterval(() => void fetchCounts(), 30_000);
+    const onChange = () => void fetchCounts();
+    window.addEventListener("oneos:notifications-changed", onChange);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      window.removeEventListener("oneos:notifications-changed", onChange);
+    };
+  }, [viewerRole]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -658,6 +690,7 @@ export function AdminInboxRoute({
         <div className="grid gap-2 sm:grid-cols-3">
           {senderOptions.map((option) => {
             const active = option.value === activeMailboxOption?.value;
+            const unread = mailboxUnreadCounts[option.email] ?? 0;
             return (
               <button
                 key={option.email}
@@ -670,7 +703,14 @@ export function AdminInboxRoute({
                     : "border-white/8 bg-white/[0.025] text-white/64 hover:border-white/16 hover:text-white",
                 )}
               >
-                <span className="block text-sm font-medium">{option.label}</span>
+                <span className="flex items-center justify-between gap-2">
+                  <span className="block text-sm font-medium">{option.label}</span>
+                  {unread > 0 ? (
+                    <span className="inline-flex min-w-[1.4rem] items-center justify-center rounded-full border border-amber-300/30 bg-amber-300/[0.12] px-1.5 py-0.5 text-[0.62rem] font-semibold text-amber-100">
+                      {unread > 99 ? "99+" : unread}
+                    </span>
+                  ) : null}
+                </span>
                 <span className="mt-1 block truncate text-xs text-white/44">{option.email}</span>
               </button>
             );

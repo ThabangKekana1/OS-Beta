@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerAuthSession } from "@/lib/auth-server";
 import { getUnreadThreadCount } from "@/lib/email-threads";
 import { listNotifications, type NotificationAudience } from "@/lib/notifications";
+import { getAdminSenderOptions } from "@/lib/admin-mailboxes";
 
 export const runtime = "nodejs";
 
@@ -21,12 +22,29 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const unreadInboxCount = session.role === "client"
-    ? 0
-    : await getUnreadThreadCount({
-        mailboxOwnerUserId: session.role === "sales" ? session.userId : null,
-        mailboxAddress: session.role === "sales" ? session.email : null,
-      });
+  let unreadInboxCount = 0;
+  let inboxCountsByMailbox: Record<string, number> = {};
+
+  if (session.role === "admin") {
+    const senderOptions = getAdminSenderOptions();
+    const counts = await Promise.all(
+      senderOptions.map((option) =>
+        getUnreadThreadCount({ mailboxAddress: option.email }).then((count) => ({
+          email: option.email,
+          count,
+        })),
+      ),
+    );
+    for (const entry of counts) {
+      inboxCountsByMailbox[entry.email] = entry.count;
+      unreadInboxCount += entry.count;
+    }
+  } else if (session.role === "sales") {
+    unreadInboxCount = await getUnreadThreadCount({
+      mailboxOwnerUserId: session.userId,
+      mailboxAddress: session.email,
+    });
+  }
 
   const scope = notificationScope(session);
   const notifications = scope
@@ -38,5 +56,9 @@ export async function GET() {
     : [];
   const unreadNotificationCount = notifications.filter((notification) => !notification.readAt).length;
 
-  return NextResponse.json({ unreadInboxCount, unreadNotificationCount });
+  return NextResponse.json({
+    unreadInboxCount,
+    unreadNotificationCount,
+    inboxCountsByMailbox,
+  });
 }
