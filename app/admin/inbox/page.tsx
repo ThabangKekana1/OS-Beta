@@ -24,10 +24,18 @@ export default async function AdminInboxPage({
     requireServerAuthSession("admin"),
   ]);
   const senderOptions = getAdminSenderOptions();
+  const hasComposeIntent = Boolean(
+    params.to ||
+      params.subject ||
+      params.body ||
+      params.template ||
+      params.company ||
+      params.name,
+  );
   return (
     <AdminInboxRoute
       initialThreadId={params.thread ?? null}
-      initialLeadFilter={params.lead ?? null}
+      initialLeadFilter={!params.thread && !hasComposeIntent ? params.lead ?? null : null}
       initialMailbox={params.mailbox ?? null}
       viewerRole="admin"
       viewerAgentId={null}

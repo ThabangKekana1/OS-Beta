@@ -21,11 +21,19 @@ export default async function SalesInboxPage({
     searchParams,
     requireServerAuthSession("sales"),
   ]);
+  const hasComposeIntent = Boolean(
+    params.to ||
+      params.subject ||
+      params.body ||
+      params.template ||
+      params.company ||
+      params.name,
+  );
 
   return (
     <AdminInboxRoute
       initialThreadId={params.thread ?? null}
-      initialLeadFilter={params.lead ?? null}
+      initialLeadFilter={!params.thread && !hasComposeIntent ? params.lead ?? null : null}
       viewerRole="sales"
       viewerAgentId={session.agentId}
       viewerEmail={session.email}
