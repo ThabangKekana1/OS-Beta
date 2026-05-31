@@ -9,6 +9,8 @@ export const FOUNDATION_BUSINESS_ADDRESS_TEXT = [
   "Gauteng. 2191",
 ].join("\n");
 
+export const KARMAN_LINKEDIN_URL = "https://www.linkedin.com/in/karman-kekana-26011674/";
+
 export const KARMAN_EMAIL_SIGNATURE_TEXT = [
   "Regards,",
   "Karman Kekana",
@@ -16,6 +18,7 @@ export const KARMAN_EMAIL_SIGNATURE_TEXT = [
   "Foundation-1",
   "karman@foundation-1.co.za",
   "www.foundation-1.co.za",
+  `LinkedIn: ${KARMAN_LINKEDIN_URL}`,
   "",
   FOUNDATION_BUSINESS_ADDRESS_TEXT,
   "",

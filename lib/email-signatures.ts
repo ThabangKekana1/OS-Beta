@@ -221,8 +221,26 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+const EMAIL_LINK_STYLE = "color:#0f766e;text-decoration:underline;";
+
+function renderTextWithLinks(value: string): string {
+  const linkPattern = /(https?:\/\/[^\s<>]+|www\.[^\s<>]+)/gi;
+  return value
+    .split(linkPattern)
+    .map((part) => {
+      if (!/^(https?:\/\/|www\.)/i.test(part)) return escapeHtml(part);
+
+      const trailingPunctuationMatch = part.match(/[),.;:!?]+$/);
+      const trailingPunctuation = trailingPunctuationMatch?.[0] ?? "";
+      const linkText = trailingPunctuation ? part.slice(0, -trailingPunctuation.length) : part;
+      const href = /^www\./i.test(linkText) ? `https://${linkText}` : linkText;
+      return `<a href="${escapeHtml(href)}" style="${EMAIL_LINK_STYLE}" target="_blank" rel="noopener noreferrer">${escapeHtml(linkText)}</a>${escapeHtml(trailingPunctuation)}`;
+    })
+    .join("");
+}
+
 function textToHtml(value: string): string {
-  return escapeHtml(value).replace(/\n/g, "<br>");
+  return renderTextWithLinks(value).replace(/\n/g, "<br>");
 }
 
 function hasSignatureContent(signature: EmailSignature | null | undefined): boolean {
