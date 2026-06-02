@@ -7,12 +7,14 @@ const root = process.cwd();
 const read = (path) => readFileSync(join(root, path), "utf8");
 const exists = (path) => existsSync(join(root, path));
 
-test("admin navigation exposes Leads, Sales, and Inbox", () => {
+test("admin navigation exposes Leads, Sales, Activity, and Inbox", () => {
   const sidebar = read("components/admin/AdminSidebar.tsx");
   assert.match(sidebar, /label: "Leads"/);
   assert.match(sidebar, /href: `\$\{rootPath\}\/leads`/);
   assert.match(sidebar, /label: "Sales"/);
   assert.match(sidebar, /href: "\/admin\/sales"/);
+  assert.match(sidebar, /label: "Activity"/);
+  assert.match(sidebar, /href: "\/admin\/activity"/);
   assert.match(sidebar, /label: "Inbox"/);
   assert.match(sidebar, /href: `\$\{rootPath\}\/inbox`/);
   assert.doesNotMatch(sidebar, /KPI|Settings|Partners|Clients|Workspace|Pipeline|Archive/);
@@ -39,11 +41,22 @@ test("admin shell, sales, and inbox use the retained admin routes", () => {
   const inboxRoute = read("components/admin/routes/AdminInboxRoute.tsx");
   const salesPage = read("app/admin/sales/page.tsx");
   const salesRoute = read("components/admin/routes/AdminSalesRoute.tsx");
+  const activityPage = read("app/admin/activity/page.tsx");
+  const activityRoute = read("components/admin/routes/AdminActivityRoute.tsx");
+  const activityApi = read("app/api/admin/activity/report/route.ts");
 
   assert.match(layout, /includeSalesLeads=\{false\}/);
   assert.match(layout, /includeRegistrationDrafts=\{false\}/);
   assert.match(layout, /AdminSidebar/);
   assert.match(salesPage, /AdminSalesRoute/);
+  assert.match(activityPage, /AdminActivityRoute/);
+  assert.match(activityRoute, /Activity Report/);
+  assert.match(activityRoute, /downloadReport/);
+  assert.match(activityRoute, /Quiet Profiles/);
+  assert.match(activityApi, /oneos_user_audit_events/);
+  assert.match(activityApi, /oneos_email_messages/);
+  assert.match(activityApi, /readAdminStateSnapshot/);
+  assert.match(activityApi, /activeInWindow/);
   assert.match(salesRoute, /Sales Activity/);
   assert.match(salesRoute, /Activity Ledger/);
   assert.match(salesRoute, /Agent Profile/);

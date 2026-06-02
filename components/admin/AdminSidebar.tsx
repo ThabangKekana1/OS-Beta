@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity,
+  BarChart3,
   Bell,
   ClipboardList,
   Mail,
@@ -36,6 +37,12 @@ function navItemsFor(rootPath: "/admin" | "/sales", showSales: boolean) {
           label: "Sales",
           href: "/admin/sales",
           icon: Activity,
+        },
+        {
+          id: "activity",
+          label: "Activity",
+          href: "/admin/activity",
+          icon: BarChart3,
         },
       ]
     : []),
