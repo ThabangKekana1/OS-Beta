@@ -110,6 +110,9 @@ test("lead import and EOI dependencies remain because they are part of the appro
   const eoiTemplate = read("lib/eoi-template.ts");
 
   assert.match(leadsRoute, /import\("fflate"\)/);
+  assert.match(leadsRoute, /Role/);
+  assert.match(leadsRoute, /roleForLead/);
+  assert.match(leadsRoute, /contactPosition: quickLead\.contactPosition/);
   assert.match(eoiTemplate, /buildEoiTemplateText/);
   assert.doesNotMatch(eoiTemplate, /PDFDocument|pdf-lib/);
 });

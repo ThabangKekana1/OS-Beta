@@ -93,6 +93,7 @@ type CreateLeadShellInput = {
   email: string;
   ownerId: string;
   contactNumber?: string;
+  contactPosition?: string;
   industry?: string;
   source?: AdminLead["source"];
   origin?: AdminLeadOrigin;
@@ -1169,12 +1170,13 @@ export function AdminPortalProvider({
 
     const nextLead: AdminLead = {
       ...created.lead,
-      contactPosition: created.lead.contactPosition || "Decision Maker",
+      contactPosition: input.contactPosition?.trim() || created.lead.contactPosition || "Decision Maker",
       industry: input.industry?.trim() ?? created.lead.industry,
       source: input.source ?? created.lead.source,
       partner: input.partner ?? created.lead.partner,
       userProfile: {
         ...created.lead.userProfile,
+        role: input.contactPosition?.trim() || created.lead.userProfile.role,
         phone: input.contactNumber?.trim() ?? created.lead.userProfile.phone,
       },
     };

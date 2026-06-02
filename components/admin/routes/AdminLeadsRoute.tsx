@@ -55,6 +55,10 @@ function hasValidLeadEmail(lead: AdminLead) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.userProfile.email.trim());
 }
 
+function roleForLead(lead: AdminLead) {
+  return lead.contactPosition?.trim() || lead.userProfile.role?.trim() || "—";
+}
+
 function emailSubject(lead: AdminLead) {
   return `Foundation-1 - ${lead.company}`;
 }
@@ -193,6 +197,7 @@ export function AdminLeadsRoute({
   const [quickLead, setQuickLead] = useState({
     company: "",
     contactName: "",
+    contactPosition: "",
     email: "",
     phone: "",
     industry: "",
@@ -224,6 +229,7 @@ export function AdminLeadsRoute({
         const haystack = [
           lead.company,
           lead.contactName,
+          roleForLead(lead),
           lead.userProfile.email,
           lead.userProfile.phone,
           lead.industry,
@@ -339,6 +345,7 @@ export function AdminLeadsRoute({
       "Company",
       "Industry",
       "Contact Name",
+      "Position",
       "Email",
       "Phone",
       "Province",
@@ -362,6 +369,7 @@ export function AdminLeadsRoute({
           lead.company,
           lead.industry,
           lead.contactName,
+          roleForLead(lead),
           lead.userProfile.email,
           lead.userProfile.phone,
           lead.province,
@@ -385,7 +393,7 @@ export function AdminLeadsRoute({
 
   const defaultOwnerId = actorAgentId ?? agents[0]?.id ?? "";
   const tableColumnCount =
-    13 + (showOwnerControls ? 1 : 0) + (showPartnerControls ? 1 : 0);
+    14 + (showOwnerControls ? 1 : 0) + (showPartnerControls ? 1 : 0);
   const handleCreateLead = () => {
     setQuickLeadError(null);
     const created = createLeadShell({
@@ -393,6 +401,7 @@ export function AdminLeadsRoute({
       contactName: quickLead.contactName || quickLead.company,
       email: quickLead.email,
       contactNumber: quickLead.phone,
+      contactPosition: quickLead.contactPosition,
       industry: quickLead.industry,
       ownerId: defaultOwnerId,
       source: "Outbound",
@@ -407,6 +416,7 @@ export function AdminLeadsRoute({
     setQuickLead({
       company: "",
       contactName: "",
+      contactPosition: "",
       email: "",
       phone: "",
       industry: "",
@@ -431,7 +441,7 @@ export function AdminLeadsRoute({
       />
 
       <section className="app-surface min-w-0 rounded-[1.4rem] p-4">
-        <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)_auto]">
+        <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)_auto]">
           <input
             value={quickLead.company}
             onChange={(event) => setQuickLead((lead) => ({ ...lead, company: event.target.value }))}
@@ -442,6 +452,12 @@ export function AdminLeadsRoute({
             value={quickLead.contactName}
             onChange={(event) => setQuickLead((lead) => ({ ...lead, contactName: event.target.value }))}
             placeholder="Contact name"
+            className="admin-input min-w-0 rounded-[0.8rem] px-3 py-2 text-sm"
+          />
+          <input
+            value={quickLead.contactPosition}
+            onChange={(event) => setQuickLead((lead) => ({ ...lead, contactPosition: event.target.value }))}
+            placeholder="Role / position"
             className="admin-input min-w-0 rounded-[0.8rem] px-3 py-2 text-sm"
           />
           <input
@@ -651,6 +667,7 @@ export function AdminLeadsRoute({
                 <th className="px-3 py-3 text-left font-medium">Company</th>
                 <th className="px-3 py-3 text-left font-medium">Industry</th>
                 <th className="px-3 py-3 text-left font-medium">Contact</th>
+                <th className="px-3 py-3 text-left font-medium">Role</th>
                 <th className="px-3 py-3 text-left font-medium">Email</th>
                 <th className="px-3 py-3 text-left font-medium">Phone</th>
                 <th className="px-3 py-3 text-left font-medium">Suburb</th>
@@ -691,6 +708,7 @@ export function AdminLeadsRoute({
                     <td className="px-3 py-3 text-white/72">
                       <div>{lead.contactName}</div>
                     </td>
+                    <td className="px-3 py-3 text-white/62">{roleForLead(lead)}</td>
                     <td className="px-3 py-3 text-white/72">
                       {lead.userProfile.email ? (
                         <a
