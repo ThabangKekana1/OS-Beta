@@ -276,6 +276,17 @@ test("automatic email signature remains while editable signature API is gone", (
   assert.match(inboxRoute, /Foundation-1 email banner/);
 });
 
+test("outbound Resend sends use the sending API key only", () => {
+  const email = read("lib/email.ts");
+  const deployment = read("docs/deployment.md");
+
+  assert.match(email, /process\.env\.RESEND_API_KEY/);
+  assert.doesNotMatch(email, /RESEND_RECEIVING_API_KEY\) \|\| normalizeEnv\(process\.env\.RESEND_API_KEY/);
+  assert.match(email, /RESEND_API_KEY or EMAIL_FROM not configured/);
+  assert.match(deployment, /RESEND_API_KEY.+outbound dashboard email/);
+  assert.match(deployment, /RESEND_RECEIVING_API_KEY.+never used for outbound sends/);
+});
+
 test("sales surveillance is backed by login audit and email activity", () => {
   const migration = read("supabase/migrations/20260520120000_add_user_audit_events.sql");
   const authMigration = read("supabase/migrations/20260421090000_add_auth_and_agents.sql");
