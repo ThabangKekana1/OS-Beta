@@ -35,7 +35,7 @@ export function buildFoundationOutreachBody(lead: OutreachTemplateLead | null): 
   const name = firstName(lead?.contactName) || "[name]";
   const company = lead?.company?.trim() || "[company]";
   const shortCompany = companyShortName(company);
-  const migrationEstimateUrl = lead?.migrationEstimateUrl?.trim() || "https://www.1os.co.za/migration/start";
+  const migrationEstimateUrl = lead?.migrationEstimateUrl?.trim() || "https://www.1os.co.za";
 
   return [
     `Good day ${name},`,
@@ -44,17 +44,17 @@ export function buildFoundationOutreachBody(lead: OutreachTemplateLead | null): 
     "",
     "My name is Karman Kekana, founder of Foundation-1, an energy-as-a-service company based in Johannesburg.",
     "",
-    `I am reaching out because I came across ${company} on our google map search of potential solar targets and thought I should reach out and see what might be ${company} appetite to migrate 100% to clean energy and potentially save up to 60% on monthly electricty spend with zero capital commitment.`,
+    `I came across ${company} while mapping potential energy migration candidates and thought it would be worth reaching out. Given the nature of your operations, I wanted to see whether ${company} has an appetite to migrate to cleaner energy and potentially reduce monthly electricity spend by up to 60 percent, with zero capital commitment.`,
     "",
-    `I think we can help ${company} reduce its monthly electricity spend, carry the cost of the infrastructure, installation, maintenance, and insurance ourselves. ${shortCompany} would simply move onto a new energy tariff through a power purchase agreement from us. For example, if ${shortCompany} is currently paying around R3.00 per kilowatt-hour, we may be able to reduce that to around R2.00 per kilowatt-hour, and in strong cases as low as R0.98 per kilowatt-hour.`,
+    `Foundation-1 carries the cost of the infrastructure, installation, maintenance, and insurance. ${company} would simply move onto a new energy tariff through a power purchase agreement. For example, if ${shortCompany} currently pays around R2.00 per kilowatt-hour through Eskom, we could potentially reduce that to around R1.20c per kilowatt-hour, and in strong cases as low as R0.98 per kilowatt-hour.`,
     "",
-    "If this might be of interest to you, I would really love to have conversation, and or perhaps if you could make an introduction to the right persons to engage with.",
+    "The added benefit is no more load-shedding.",
     "",
-    `I have attached our brochure for context. You can also visit foundation-1.co.za,; you can also generate a quick migration estimate for ${company} at ${migrationEstimateUrl} using our calculator, it takes less than a minute.`,
+    `I have attached our brochure for context. You can also visit foundation-1.co.za, or generate a quick migration estimate for ${company} at ${migrationEstimateUrl} in under a minute.`,
     "",
-    "If this is worth a chat I will be hoping to hear from you.",
+    "Since launching in April, we are already migrating five companies and saving them collectively over R25 million over the next ten years, without them spending a cent on infrastructure or maintenance. It is as simple as switching from Eskom to Foundation-1. We have opened our doors and I hope you will join us on the journey to a greener future.",
     "",
-    "Thanks,",
+    "Thanks, and will be hoping to hear from you.",
   ].join("\n");
 }
 
