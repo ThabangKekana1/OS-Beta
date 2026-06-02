@@ -206,6 +206,7 @@ export function AdminInboxRoute({
   const adminPortal = useOptionalAdminPortal();
   const portalLeads = adminPortal?.leads;
   const [threads, setThreads] = useState<EmailThread[]>([]);
+  const [folderView, setFolderView] = useState<"inbox" | "sent">("inbox");
   const [activeThreadId, setActiveThreadId] = useState<string | null>(initialThreadId);
   const [activeMessages, setActiveMessages] = useState<EmailMessage[]>([]);
   const [activeThread, setActiveThread] = useState<EmailThread | null>(null);
@@ -697,6 +698,35 @@ export function AdminInboxRoute({
     }
   }, [activeMessages, activeThread?.id, composeAttachments, composeBody, composeCc, composeFrom, composeLeadId, composeMode, composeOutreachActive, composeSubject, composeTo, loadThread, refreshThreads, senderOptions.length]);
 
+  const sortedThreads = useMemo(
+    () =>
+      [...threads].sort(
+        (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime(),
+      ),
+    [threads],
+  );
+  const inboxThreads = useMemo(
+    () => sortedThreads.filter((thread) => thread.lastDirection !== "outbound"),
+    [sortedThreads],
+  );
+  const sentThreads = useMemo(
+    () => sortedThreads.filter((thread) => thread.lastDirection === "outbound"),
+    [sortedThreads],
+  );
+  const visibleThreads = folderView === "sent" ? sentThreads : inboxThreads;
+  const inboxUnreadCount = useMemo(
+    () => inboxThreads.reduce((total, thread) => total + (thread.unreadCount ?? 0), 0),
+    [inboxThreads],
+  );
+
+  useEffect(() => {
+    if (!activeThreadId) return;
+    if (visibleThreads.some((thread) => thread.id === activeThreadId)) return;
+    setActiveThreadId(null);
+    setActiveThread(null);
+    setActiveMessages([]);
+  }, [activeThreadId, visibleThreads]);
+
   const inboxDescription = viewerRole === "partner"
     ? "Send and receive emails directly from 1OS. Replies are automatically threaded to your referred lead."
     : "Send and receive emails directly from 1OS. Replies are automatically threaded to the right lead.";
@@ -774,27 +804,70 @@ export function AdminInboxRoute({
 
       <div className="grid gap-5 lg:grid-cols-[minmax(280px,360px)_1fr]">
         <aside className="rounded-2xl border border-white/8 bg-white/[0.02] p-3">
+          <div
+            role="tablist"
+            aria-label="Mailbox folders"
+            className="mb-3 flex items-center gap-1 rounded-xl border border-white/8 bg-white/[0.03] p-1"
+          >
+            {([
+              { id: "inbox" as const, label: "Inbox", count: inboxThreads.length, badge: inboxUnreadCount },
+              { id: "sent" as const, label: "Sent", count: sentThreads.length, badge: 0 },
+            ]).map((tab) => {
+              const active = folderView === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setFolderView(tab.id)}
+                  className={cn(
+                    "flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition",
+                    active
+                      ? "bg-white/[0.1] text-white"
+                      : "text-white/55 hover:bg-white/[0.05] hover:text-white/80",
+                  )}
+                >
+                  <span className="flex items-center justify-center gap-2">
+                    <span>{tab.label}</span>
+                    <span className="text-[0.62rem] text-white/45">{tab.count}</span>
+                    {tab.badge > 0 ? (
+                      <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full border border-emerald-300/40 bg-emerald-500/15 px-1.5 text-[0.6rem] font-semibold text-emerald-100">
+                        {tab.badge > 99 ? "99+" : tab.badge}
+                      </span>
+                    ) : null}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-[0.62rem] uppercase tracking-[0.26em] text-white/52">Threads</p>
-            <span className="text-[0.62rem] text-white/40">{threads.length}</span>
+            <p className="text-[0.62rem] uppercase tracking-[0.26em] text-white/52">
+              {folderView === "sent" ? "Sent threads" : "Inbox threads"}
+            </p>
+            <span className="text-[0.62rem] text-white/40">{visibleThreads.length}</span>
           </div>
           {loadingList ? (
             <div className="px-2 py-6 text-sm text-white/50">Loading…</div>
-          ) : threads.length === 0 ? (
+          ) : visibleThreads.length === 0 ? (
             <div className="px-2 py-6 text-sm text-white/50">
               {activeLeadFilter ? (
                 <>
-                  No conversations for this lead in the current mailbox. Clear the lead filter to see all threads.
+                  No {folderView === "sent" ? "sent" : "inbox"} conversations for this lead in the current mailbox. Clear the lead filter to see all threads.
+                </>
+              ) : folderView === "sent" ? (
+                <>
+                  No sent messages yet. Click <span className="font-medium text-white/80">New email</span> to start a conversation.
                 </>
               ) : (
                 <>
-                  No conversations yet. Click <span className="font-medium text-white/80">New email</span> to send your first message.
+                  No inbound messages yet. Replies to your sent emails will appear here.
                 </>
               )}
             </div>
           ) : (
             <ul className="space-y-1">
-              {threads.map((thread) => {
+              {visibleThreads.map((thread) => {
                 const isActive = thread.id === activeThreadId;
                 return (
                   <li key={thread.id}>
