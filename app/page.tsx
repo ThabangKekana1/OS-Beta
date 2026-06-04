@@ -4,7 +4,7 @@ import { MigrationShell } from "@/components/migration/MigrationShell";
 export const metadata = {
   title: "Foundation-1 Energy Migration",
   description:
-    "Instant utility profile analysis for financed solar and wheeled energy migration.",
+    "Instant migration assessment for financed solar and wheeled energy migration.",
 };
 
 export default function Page() {

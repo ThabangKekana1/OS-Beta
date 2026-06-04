@@ -46,6 +46,9 @@ import {
   documentUploadLinkPath,
   migrationLinkIdForLead,
   migrationLinkPath,
+  publicMigrationLinkOrigin,
+  proposalDownloadLinkIdForLead,
+  proposalDownloadLinkPath,
   registrationLinkIdForLead,
   registrationLinkPath,
 } from "@/lib/registration-links";
@@ -364,6 +367,7 @@ export function AdminLeadProfileRoute({
   const [copiedRegistrationLink, setCopiedRegistrationLink] = useState(false);
   const [copiedMigrationLink, setCopiedMigrationLink] = useState(false);
   const [copiedDocumentUploadLink, setCopiedDocumentUploadLink] = useState(false);
+  const [copiedProposalDownloadLink, setCopiedProposalDownloadLink] = useState(false);
   const [workflowNotice, setWorkflowNotice] = useState<string | null>(null);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploadCategory, setUploadCategory] = useState<DocumentCategoryOption>("EOI");
@@ -408,13 +412,17 @@ export function AdminLeadProfileRoute({
     : null;
   const registrationLinkUrl = registrationLinkPathForLead ? `${appOrigin}${registrationLinkPathForLead}` : null;
   const migrationLinkPathForLead = lead
-    ? migrationLinkPath(migrationLinkIdForLead({
-        leadId: lead.id,
-        clientProfileId: lead.clientProfileId,
-        email: lead.userProfile.email,
-      }))
+    ? migrationLinkPath(
+        migrationLinkIdForLead({
+          leadId: lead.id,
+          clientProfileId: lead.clientProfileId,
+          email: lead.userProfile.email,
+        }),
+        lead.company,
+      )
     : null;
-  const migrationLinkUrl = migrationLinkPathForLead ? `${appOrigin}${migrationLinkPathForLead}` : null;
+  const migrationLinkOrigin = publicMigrationLinkOrigin(appOrigin);
+  const migrationLinkUrl = migrationLinkPathForLead ? `${migrationLinkOrigin}${migrationLinkPathForLead}` : null;
   const documentUploadPathForLead = lead
     ? documentUploadLinkPath(documentUploadLinkIdForLead({
         leadId: lead.id,
@@ -423,6 +431,14 @@ export function AdminLeadProfileRoute({
       }))
     : null;
   const documentUploadUrl = documentUploadPathForLead ? `${appOrigin}${documentUploadPathForLead}` : null;
+  const proposalDownloadPathForLead = lead
+    ? proposalDownloadLinkPath(proposalDownloadLinkIdForLead({
+        leadId: lead.id,
+        clientProfileId: lead.clientProfileId,
+        email: lead.userProfile.email,
+      }))
+    : null;
+  const proposalDownloadUrl = proposalDownloadPathForLead ? `${appOrigin}${proposalDownloadPathForLead}` : null;
   const isAdminActor = actorRole === "admin";
   const isSalesActor = actorRole === "sales";
   const isPartnerActor = actorRole === "partner";
@@ -913,6 +929,17 @@ export function AdminLeadProfileRoute({
     }
   };
 
+  const handleCopyProposalDownloadLink = async () => {
+    if (!proposalDownloadUrl || typeof window === "undefined") return;
+    try {
+      await navigator.clipboard.writeText(proposalDownloadUrl);
+      setCopiedProposalDownloadLink(true);
+      window.setTimeout(() => setCopiedProposalDownloadLink(false), 2000);
+    } catch {
+      setCopiedProposalDownloadLink(false);
+    }
+  };
+
   useEffect(() => {
     setAppOrigin(window.location.origin);
   }, []);
@@ -1146,7 +1173,7 @@ export function AdminLeadProfileRoute({
       </section>
 
       <section className="app-surface rounded-[1.4rem] p-4">
-        <div className="grid gap-3 lg:grid-cols-3">
+        <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-[1.15rem] border border-emerald-300/18 bg-emerald-500/[0.055] p-4">
             <p className="line-label">Unique Migration Estimate Link</p>
             <p className="mt-2 text-sm leading-6 text-white/56">
@@ -1230,6 +1257,35 @@ export function AdminLeadProfileRoute({
                 className="rounded-[0.75rem] border border-white/14 px-3 py-2 text-[0.64rem] uppercase tracking-[0.18em] text-white/76 transition hover:border-white/26 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
               >
                 {copiedDocumentUploadLink ? "Copied" : "Copy Link"}
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-[1.15rem] border border-lime-300/18 bg-lime-300/[0.045] p-4">
+            <p className="line-label">Proposal Download Link</p>
+            <p className="mt-2 text-sm leading-6 text-white/56">
+              Upload proposal files in the workflow below, then share this unique NDA-gated download link.
+            </p>
+            <p className="mt-3 break-all rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2 text-sm text-white/72">
+              {proposalDownloadUrl ?? "Loading proposal download link..."}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {proposalDownloadUrl ? (
+                <Link
+                  href={proposalDownloadUrl}
+                  target="_blank"
+                  className="rounded-[0.75rem] border border-white/14 px-3 py-2 text-[0.64rem] uppercase tracking-[0.18em] text-white/76 transition hover:border-white/26 hover:text-white"
+                >
+                  Open
+                </Link>
+              ) : null}
+              <button
+                type="button"
+                onClick={handleCopyProposalDownloadLink}
+                disabled={!proposalDownloadUrl}
+                className="rounded-[0.75rem] border border-white/14 px-3 py-2 text-[0.64rem] uppercase tracking-[0.18em] text-white/76 transition hover:border-white/26 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {copiedProposalDownloadLink ? "Copied" : "Copy Link"}
               </button>
             </div>
           </div>

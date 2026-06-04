@@ -9,6 +9,7 @@ import {
   type AdminStateBackend,
 } from "@/lib/admin-state-store";
 import { getServerAuthSession } from "@/lib/auth-server";
+import { recordUserPresence } from "@/lib/user-audit";
 
 export const runtime = "nodejs";
 
@@ -45,6 +46,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    await recordUserPresence(session).catch((error) => {
+      console.error("[admin/state] presence update failed", error);
+    });
+
     const isSalesSession = session.role === "sales";
     const includeSalesLeads =
       !isSalesSession && request.nextUrl.searchParams.get("includeSalesLeads") !== "0";
@@ -102,6 +107,10 @@ export async function PUT(request: NextRequest) {
   }
 
   try {
+    await recordUserPresence(session).catch((error) => {
+      console.error("[admin/state] presence update failed", error);
+    });
+
     const backend = await writeAdminStateSnapshot(snapshot, session.email);
 
     return NextResponse.json({

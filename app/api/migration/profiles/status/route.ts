@@ -200,7 +200,6 @@ export async function POST(request: NextRequest) {
       migrationStatus,
       readinessScore: Number(lead.readiness_score ?? 0),
       nextAction,
-      utilityProfileComplete: migrationStatus !== "registered",
       documents,
     },
   });

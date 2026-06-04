@@ -32,7 +32,7 @@ function clientUserAgent(request: Request) {
 async function updateSeenColumns(input: {
   userId: string | null;
   email: string;
-  eventType: UserAuditEventType;
+  eventType?: UserAuditEventType;
   at: string;
 }) {
   const supabase = getSupabaseAdminClient();
@@ -41,7 +41,9 @@ async function updateSeenColumns(input: {
   const update =
     input.eventType === "login"
       ? { last_login_at: input.at, last_seen_at: input.at }
-      : { last_logout_at: input.at, last_seen_at: input.at };
+      : input.eventType === "logout"
+        ? { last_logout_at: input.at, last_seen_at: input.at }
+        : { last_seen_at: input.at };
 
   const query = supabase.from("oneos_users").update(update);
   const { error } = input.userId
@@ -63,6 +65,14 @@ async function updateSeenColumns(input: {
 
   if (isMissingRelationOrColumn(error)) return;
   throw error;
+}
+
+export async function recordUserPresence(session: AuthSession, at = new Date().toISOString()) {
+  await updateSeenColumns({
+    userId: session.userId,
+    email: session.email.trim().toLowerCase(),
+    at,
+  });
 }
 
 export async function recordUserAuditEvent({

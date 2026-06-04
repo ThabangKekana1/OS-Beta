@@ -80,6 +80,7 @@ export function LoginForm({
           headers: {
             "Content-Type": "application/json",
             "x-1os-api-client": "dashboard",
+            Authorization: `Bearer ${supabaseData.session.access_token}`,
           },
           body: JSON.stringify({ eventType: "login" }),
         }).catch((auditError) => {

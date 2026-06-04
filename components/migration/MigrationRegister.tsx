@@ -174,7 +174,7 @@ export function MigrationRegister() {
 
       writeStoredMigrationAssessment(next);
       unlockMigrationDashboard(credentials.profileId);
-      router.push(`/migration/upload?p=${credentials.profileId}`);
+      router.push(`/migration/dashboard?p=${credentials.profileId}`);
       return true;
     } catch {
       return false;
@@ -204,23 +204,18 @@ export function MigrationRegister() {
   }
 
   if (stored.registration) {
-    const uploadedTypes = new Set(stored.documents.map((document) => document.documentType));
-    const utilityProfileComplete =
-      uploadedTypes.has("expression_of_interest") && uploadedTypes.has("utility_bill");
-    const nextHref = utilityProfileComplete
-      ? `/migration/dashboard${stored.profileId ? `?p=${stored.profileId}` : ""}`
-      : `/migration/upload${stored.profileId ? `?p=${stored.profileId}` : ""}`;
+    const nextHref = `/migration/dashboard${stored.profileId ? `?p=${stored.profileId}` : ""}`;
     return (
       <section className={styles.section}>
         <div className={styles.shell}>
           <div className={`${styles.panel} ${styles.form}`}>
             <h1 className={styles.sectionTitle}>Business details complete.</h1>
             <p className={styles.sectionCopy}>
-              Your business registration is connected to this migration profile. Continue to upload the signed EOI and six months of utility bills.
+              Your business registration is connected to this migration profile. Continue to the dashboard for live proposal and approval status.
             </p>
             <div className={styles.buttonRow}>
               <Link href={nextHref} className={styles.primaryButton}>
-                {utilityProfileComplete ? "Continue to Dashboard" : "Continue to Utility Profile"}
+                Continue to Dashboard
               </Link>
             </div>
           </div>
@@ -238,7 +233,7 @@ export function MigrationRegister() {
       storageKey={`oneos:registration:migration:${stored.profileId ?? "draft"}`}
       eyebrow="Foundation-1 Migration Qualification"
       title="Complete business details to open your client profile."
-      description="This is the same secure company registration used by Foundation-1. Complete it once so the team can qualify your business and open the signed EOI and utility bill upload step."
+      description="This is the same secure company registration used by Foundation-1. Complete it once so the team can qualify your business and open your migration dashboard."
       submitLabel="Complete Business Details"
       onSubmit={submitBusinessDetails}
     />

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServerAuthSession } from "@/lib/auth-server";
+import { getServerAuthSessionFromRequest } from "@/lib/auth-server";
 import { recordUserAuditEvent, type UserAuditEventType } from "@/lib/user-audit";
 
 export const runtime = "nodejs";
@@ -10,7 +10,7 @@ function eventTypeFromPayload(value: unknown): UserAuditEventType {
 }
 
 export async function POST(request: Request) {
-  const session = await getServerAuthSession();
+  const session = await getServerAuthSessionFromRequest(request);
   if (!session || !["admin", "sales", "partner"].includes(session.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

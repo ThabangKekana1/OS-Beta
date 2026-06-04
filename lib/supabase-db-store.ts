@@ -310,7 +310,26 @@ function compactAdminLeadFromRow(
 }
 
 function adminLeadRow(lead: AdminLead) {
-  return {
+  const createdAt = toIsoOrNull(lead.createdAt);
+  const row: {
+    id: string;
+    client_profile_id: string;
+    company: string;
+    business_registration_number: string;
+    contact_name: string;
+    contact_email: string;
+    owner_id: string;
+    stage: AdminLeadStage;
+    priority: AdminLeadPriority;
+    readiness_score: number;
+    estimated_value_zar: number;
+    eoi_signing_token: string | null;
+    eoi_signed_at: string | null;
+    onboarding_completed_at: string | null;
+    disqualified_at: string | null;
+    payload: AdminLead;
+    created_at?: string;
+  } = {
     id: lead.id,
     client_profile_id: lead.clientProfileId,
     company: lead.company,
@@ -328,9 +347,14 @@ function adminLeadRow(lead: AdminLead) {
     eoi_signed_at: toIsoOrNull(lead.eoiSignedAt),
     onboarding_completed_at: toIsoOrNull(lead.onboardingCompletedAt),
     disqualified_at: lead.disqualification ? new Date().toISOString() : null,
-    created_at: toIsoOrNull(lead.createdAt) ?? undefined,
     payload: lead,
   };
+
+  if (createdAt) {
+    row.created_at = createdAt;
+  }
+
+  return row;
 }
 
 function salesLeadRow(lead: SalesLead) {
@@ -751,6 +775,69 @@ export async function upsertAdminLeadOnly(lead: AdminLead): Promise<boolean> {
       .upsert(leadDocRows, { onConflict: "id" });
     if (isMissingRelationError(docResult.error)) return false;
     if (docResult.error) throw docResult.error;
+  }
+
+  return true;
+}
+
+export async function writeAdminLeadDeltaToDatabase({
+  leadUpserts,
+  leadDeletes,
+  activeLeadId,
+  partnerOrgs,
+  updatedBy,
+}: {
+  leadUpserts: AdminLead[];
+  leadDeletes: string[];
+  activeLeadId: string | null;
+  partnerOrgs?: PartnerOrg[];
+  updatedBy: string;
+}): Promise<boolean> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return false;
+
+  const stateResult = await supabase
+    .from("oneos_admin_state")
+    .upsert(
+      {
+        id: "singleton",
+        active_lead_id: activeLeadId,
+        updated_by: updatedBy,
+        partner_orgs: partnerOrgs ?? [],
+      },
+      { onConflict: "id" },
+    );
+
+  if (isMissingRelationError(stateResult.error)) return false;
+  if (stateResult.error) throw stateResult.error;
+
+  if (leadDeletes.length > 0) {
+    const deleteResult = await supabase
+      .from("oneos_admin_leads")
+      .delete()
+      .in("id", leadDeletes);
+
+    if (isMissingRelationError(deleteResult.error)) return false;
+    if (deleteResult.error) throw deleteResult.error;
+  }
+
+  if (leadUpserts.length > 0) {
+    const leadResult = await supabase
+      .from("oneos_admin_leads")
+      .upsert(leadUpserts.map(adminLeadRow), { onConflict: "id" });
+
+    if (isMissingRelationError(leadResult.error)) return false;
+    if (leadResult.error) throw leadResult.error;
+  }
+
+  const leadDocumentRows = leadUpserts.flatMap(documentRows);
+  if (leadDocumentRows.length > 0) {
+    const documentResult = await supabase
+      .from("oneos_client_documents")
+      .upsert(leadDocumentRows, { onConflict: "id" });
+
+    if (isMissingRelationError(documentResult.error)) return false;
+    if (documentResult.error) throw documentResult.error;
   }
 
   return true;

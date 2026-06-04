@@ -20,6 +20,7 @@ test("approved public and admin routes exist", () => {
     "app/register/[linkId]/page.tsx",
     "app/upload/[token]/page.tsx",
     "app/eoi/[token]/page.tsx",
+    "app/estimate/[linkId]/page.tsx",
     "app/admin/layout.tsx",
     "app/admin/page.tsx",
     "app/admin/leads/page.tsx",
@@ -63,10 +64,13 @@ test("deleted legacy systems stay deleted", () => {
     "app/api/workspace/state/route.ts",
     "app/api/auth/signup/route.ts",
     "app/api/email/signature/route.ts",
+    "app/migration/upload/page.tsx",
+    "app/api/migration/documents/route.ts",
     "components/workspace",
     "components/partner",
     "components/sales",
     "components/utility-bills",
+    "components/migration/UtilityUpload.tsx",
     "lib/assistant",
     "lib/registration-agent.ts",
     "lib/workspace-state.ts",
@@ -108,18 +112,20 @@ test("admin leads track registration and manual-add timestamps", () => {
   assert.match(leadsRoute, /Admin added/);
   assert.match(profileRoute, /Registration submitted/);
   assert.match(profileRoute, /Manually added by admin/);
-  assert.match(supabaseStore, /created_at: toIsoOrNull\(lead\.createdAt\)/);
+  assert.match(supabaseStore, /const createdAt = toIsoOrNull\(lead\.createdAt\)/);
+  assert.match(supabaseStore, /row\.created_at = createdAt/);
 });
 
-test("migration creates a lightweight client profile before document upload", () => {
+test("migration creates a lightweight client profile before dashboard access", () => {
   const migrationRegister = read("components/migration/MigrationRegister.tsx");
   const migrationDashboard = read("components/migration/MigrationDashboard.tsx");
   const migrationReport = read("components/migration/MigrationReport.tsx");
   const migrationSuccess = read("components/migration/MigrationSuccess.tsx");
   const migrationShell = read("components/migration/MigrationShell.tsx");
-  const utilityUpload = read("components/migration/UtilityUpload.tsx");
   const migrationCalculator = read("lib/calculateMigrationAssessment.ts");
   const clientRegistration = read("lib/client-registration.ts");
+  const registrationLinks = read("lib/registration-links.ts");
+  const estimateRoute = read("app/estimate/[linkId]/page.tsx");
   const migrationAssessmentApi = read("app/api/migration/assessments/route.ts");
   const migrationIntakeApi = read("app/api/migration/intake/route.ts");
   const migrationDashboardStatusApi = read("app/api/migration/profiles/status/route.ts");
@@ -130,6 +136,7 @@ test("migration creates a lightweight client profile before document upload", ()
   assert.match(migrationRegister, /profileId: credentials\.profileId/);
   assert.match(migrationRegister, /leadId: persistedAdminLink/);
   assert.match(migrationRegister, /unlockMigrationDashboard\(credentials\.profileId\)/);
+  assert.match(migrationRegister, /\/migration\/dashboard\?p=\$\{credentials\.profileId\}/);
   assert.match(migrationDashboard, /if \(!activeStored\.registration\)/);
   assert.match(migrationDashboard, /Open Client Profile/);
   assert.match(migrationDashboard, /Open Profile From Report/);
@@ -156,18 +163,16 @@ test("migration creates a lightweight client profile before document upload", ()
   assert.match(migrationCalculator, /eskom_annual_tariff_escalation_percent/);
   assert.match(migrationCalculator, /compoundedAnnualSpendFactor/);
   assert.match(migrationShell, /stored\.registration && unlockedProfile === stored\.profileId/);
-  assert.match(migrationShell, /href="\/migration\/upload"/);
-  assert.match(utilityUpload, /documentUploadLinkIdForLead/);
-  assert.match(utilityUpload, /buildEoiTemplateText/);
-  assert.match(utilityUpload, /Company registration number for EOI/);
-  assert.match(utilityUpload, /You can still upload utility bills now/);
-  assert.match(utilityUpload, /signed_eoi/);
-  assert.match(utilityUpload, /utility_bills/);
-  assert.match(utilityUpload, /This migration profile is not linked to an admin client profile yet/);
-  assert.match(utilityUpload, /\/api\/upload\/\$\{encodeURIComponent\(token\)\}/);
+  assert.doesNotMatch(migrationShell, /\/migration\/upload|Utility Profile/);
+  assert.doesNotMatch(migrationRegister, /\/migration\/upload|Utility Profile/);
+  assert.doesNotMatch(migrationDashboard, /\/migration\/upload|Utility Profile/);
   assert.match(clientRegistration, /buildAdminLeadFromMigrationIntake/);
   assert.match(clientRegistration, /updateExistingLeadFromMigrationIntake/);
   assert.match(clientRegistration, /Complete company registration details/);
+  assert.match(registrationLinks, /\/estimate\/\$\{encodeURIComponent/);
+  assert.match(registrationLinks, /publicMigrationLinkOrigin/);
+  assert.match(estimateRoute, /migrationLinkIdFromPathSegment/);
+  assert.match(estimateRoute, /findLeadByMigrationLinkFromDatabase/);
   assert.match(migrationAssessmentApi, /profile_id: profileId \|\| null/);
   assert.match(migrationAssessmentApi, /onConflict: "profile_id"/);
   assert.match(migrationIntakeApi, /buildAdminLeadFromMigrationIntake/);

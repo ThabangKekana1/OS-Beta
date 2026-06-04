@@ -7,8 +7,10 @@ import { readJsonObject, writeJsonObject } from "@/lib/server-json-store";
 import { hasSupabaseAdminConfig } from "@/lib/supabase-admin";
 import {
   readAdminStateFromDatabase,
+  writeAdminLeadDeltaToDatabase,
   writeAdminStateToDatabase,
 } from "@/lib/supabase-db-store";
+import type { AdminLead } from "@/lib/admin-types";
 
 const ADMIN_STATE_BUCKET = "oneos-internal-state";
 const ADMIN_STATE_PATH = "admin/state-v1.json";
@@ -90,6 +92,35 @@ export async function writeAdminStateSnapshot(
   updatedBy: string,
 ) {
   const databasePersisted = await writeAdminStateToDatabase(snapshot, updatedBy);
+  if (databasePersisted) {
+    return "supabase";
+  }
+
+  const persisted = await writeJsonObject(ADMIN_STATE_BUCKET, ADMIN_STATE_PATH, {
+    ...snapshot,
+    updatedAt: new Date().toISOString(),
+    updatedBy,
+  });
+
+  return persisted ? "supabase" : "local";
+}
+
+export async function writeAdminLeadMutationSnapshot(
+  snapshot: AdminStateSnapshot,
+  updatedBy: string,
+  delta: {
+    leadUpserts: AdminLead[];
+    leadDeletes: string[];
+  },
+) {
+  const databasePersisted = await writeAdminLeadDeltaToDatabase({
+    leadUpserts: delta.leadUpserts,
+    leadDeletes: delta.leadDeletes,
+    activeLeadId: snapshot.activeLeadId,
+    partnerOrgs: snapshot.partnerOrgs,
+    updatedBy,
+  });
+
   if (databasePersisted) {
     return "supabase";
   }

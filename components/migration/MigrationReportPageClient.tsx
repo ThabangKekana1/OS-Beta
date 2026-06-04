@@ -62,7 +62,7 @@ export function MigrationReportPageClient() {
           <div className={`${styles.panel} ${styles.form}`}>
             <h1 className={styles.sectionTitle}>No migration report found.</h1>
             <p className={styles.sectionCopy}>
-              Generate the instant assessment first so the report can be calculated from your utility profile.
+              Generate the instant assessment first so the report can be calculated from your migration inputs.
             </p>
             <div className={styles.buttonRow}>
               <Link href="/migration/start" className={styles.primaryButton}>

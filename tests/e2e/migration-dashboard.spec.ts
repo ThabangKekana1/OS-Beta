@@ -84,7 +84,7 @@ test("migration success page keeps report actions after contact preference signu
   await page.goto("/migration/success?p=F1-TEST1234");
 
   await expect(page.getByText("Registration successful")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Your Foundation-1 file is open." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Your Foundation.?1 file is open\./ })).toBeVisible();
   await expect(page.getByText("via email")).toBeVisible();
   await expect(page.getByRole("button", { name: "Download Report" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Share Report" })).toBeVisible();
@@ -106,7 +106,6 @@ test("migration dashboard reflects live admin profile status projection", async 
           migrationStatus: "term_sheet_pending",
           readinessScore: 84,
           nextAction: "Review term sheet and confirm approval.",
-          utilityProfileComplete: true,
           documents: [
             {
               id: "doc-test",

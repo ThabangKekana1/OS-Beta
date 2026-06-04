@@ -48,12 +48,6 @@ export function MigrationShell({ children }: { children: React.ReactNode }) {
                 >
                   Report
                 </Link>
-                <Link
-                  href="/migration/upload"
-                  className={pathname === "/migration/upload" ? styles.navLinkActive : undefined}
-                >
-                  Utility Profile
-                </Link>
               </>
             ) : (
               (pathname === "/migration/report" || pathname?.startsWith("/migration/dashboard")) && (

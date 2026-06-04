@@ -551,20 +551,11 @@ export function AdminPortalProvider({
         if (!cancelled) {
           setSyncBackend(backend);
         }
-      } catch {
+      } catch (error) {
         if (!cancelled) {
-          const rawLocalSnapshot = readAdminStorageSnapshot();
-          const localSnapshot = rawLocalSnapshot ? applyLeadScope(rawLocalSnapshot) : null;
-          if (localSnapshot) {
-            setLeads(localSnapshot.leads);
-            setSalesLeads(localSnapshot.salesLeads);
-            setActiveLeadId(localSnapshot.activeLeadId);
-            latestSnapshotRef.current = {
-              leads: localSnapshot.leads,
-              salesLeads: localSnapshot.salesLeads,
-            };
-          }
-          setSyncBackend("local");
+          console.error("[AdminPortal] state load failed", error);
+          setSaveStatusWithAutoIdle("error");
+          setSyncBackend("loading");
         }
       } finally {
         if (!cancelled) {
@@ -639,19 +630,17 @@ export function AdminPortalProvider({
       });
 
       if (!response.ok) {
-        console.error(
-          "[AdminPortal] mutate endpoint failed",
-          response.status,
-        );
-        setSaveStatusWithAutoIdle("error");
-        setSyncBackend("local");
-        return;
+        throw new Error(`Mutation failed with status ${response.status}`);
       }
 
       const payload = (await response.json()) as {
         ok?: boolean;
         snapshot?: unknown;
       };
+
+      if (!payload.ok) {
+        throw new Error("Mutation returned a non-ok payload.");
+      }
 
       const snapshot = normalizeAdminStateSnapshot(payload.snapshot);
       if (snapshot) {
@@ -671,7 +660,6 @@ export function AdminPortalProvider({
     } catch (error) {
       console.error("[AdminPortal] mutate endpoint threw", error);
       setSaveStatusWithAutoIdle("error");
-      setSyncBackend("local");
     } finally {
       inflightRef.current = false;
       // If more edits arrived during the inflight call, persist them now.

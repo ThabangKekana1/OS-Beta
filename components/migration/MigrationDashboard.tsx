@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { calculateMigrationAssessment } from "@/lib/calculateMigrationAssessment";
 import {
@@ -23,7 +23,6 @@ type AdminProfileStatus = {
   migrationStatus: string;
   readinessScore: number;
   nextAction: string | null;
-  utilityProfileComplete: boolean;
   documents: Array<{
     id: string;
     title: string;
@@ -45,7 +44,7 @@ function zar(value: number) {
 const STATUS_LABELS: Record<string, string> = {
   draft_assessment: "Draft",
   instant_report_generated: "Report Generated",
-  registered: "Utility Profile Requested",
+  registered: "Client Profile Opened",
   utility_profile_uploaded: "Profile Submitted",
   proposal_pending: "Proposal Pending",
   proposal_ready: "Proposal Ready",
@@ -58,12 +57,11 @@ function formatStatus(status: string) {
   return STATUS_LABELS[status] ?? status.replaceAll("_", " ").replace(/^\w/, (c) => c.toUpperCase());
 }
 
-function progressIndexForStatus(status: string, utilityProfileComplete: boolean) {
-  if (status === "approved" || status === "declined") return 5;
-  if (status === "term_sheet_pending") return 4;
-  if (status === "proposal_pending" || status === "proposal_ready") return 3;
-  if (status === "utility_profile_uploaded" || utilityProfileComplete) return 2;
-  if (status === "registered") return 1;
+function progressIndexForStatus(status: string) {
+  if (status === "approved" || status === "declined") return 4;
+  if (status === "term_sheet_pending") return 3;
+  if (status === "proposal_pending" || status === "proposal_ready") return 2;
+  if (status === "utility_profile_uploaded" || status === "registered") return 2;
   return 0;
 }
 
@@ -184,12 +182,6 @@ export function MigrationDashboard() {
       setLoginLoading(false);
     }
   }
-
-  const uploadedTypes = useMemo(() => {
-    return new Set(activeStored?.documents.map((document) => document.documentType) ?? []);
-  }, [activeStored]);
-  const localUtilityProfileComplete =
-    uploadedTypes.has("expression_of_interest") && uploadedTypes.has("utility_bill");
 
   useEffect(() => {
     if (!unlocked || !activeStored?.registration || !activeStored.profileId || !activeStored.accessCode) {
@@ -315,7 +307,7 @@ export function MigrationDashboard() {
           <div className={`${styles.panel} ${styles.form}`} style={{ maxWidth: 560 }}>
             <h1 className={styles.sectionTitle} style={{ fontSize: "1.4rem" }}>Open Client Profile</h1>
             <p className={styles.sectionCopy}>
-              This dashboard opens once Foundation-1 has opened your client file from the report. Add the short contact details first, then upload the signed EOI and utility bills.
+              This dashboard opens once Foundation-1 has opened your client file from the report. Add the short contact details first to activate live proposal and approval status.
             </p>
             <div className={styles.buttonRow}>
               <Link href="/migration/report" className={styles.primaryButton}>
@@ -334,28 +326,14 @@ export function MigrationDashboard() {
   const result = hasCompleteDashboardResult(activeStored.result)
     ? activeStored.result
     : calculateMigrationAssessment(activeStored.input);
-  const eoiDocument = activeStored.documents.find(
-    (document) => document.documentType === "expression_of_interest",
-  );
-  const utilityBillDocument = activeStored.documents.find(
-    (document) => document.documentType === "utility_bill",
-  );
-  const utilityProfileComplete = localUtilityProfileComplete || adminStatus?.utilityProfileComplete === true;
   const displayStatus = adminStatus?.migrationStatus ?? activeStored.status;
-  const progressIndex = progressIndexForStatus(displayStatus, utilityProfileComplete);
-  const nextAction = utilityProfileComplete
-    ? {
-        title: "Proposal Review Pending",
-        copy: adminStatus?.nextAction ?? "Foundation-1 can now review your utility profile and prepare the Migration Proposal.",
-        primaryHref: "/migration/proposal-status",
-        primaryLabel: "View Proposal Status",
-      }
-    : {
-        title: "Utility Profile Required",
-        copy: "Upload your signed Expression of Interest and six months of utility bills to unlock proposal preparation.",
-        primaryHref: "/migration/upload",
-        primaryLabel: "Upload Utility Profile",
-      };
+  const progressIndex = progressIndexForStatus(displayStatus);
+  const nextAction = {
+    title: "Proposal Review Pending",
+    copy: adminStatus?.nextAction ?? "Foundation-1 can now review your client profile and prepare the Migration Proposal.",
+    primaryHref: "/migration/proposal-status",
+    primaryLabel: "View Proposal Status",
+  };
 
   return (
     <section className={styles.section}>
@@ -411,7 +389,7 @@ export function MigrationDashboard() {
 
         <div className={`${styles.panel} ${styles.split}`} style={{ marginTop: 20 }}>
           <section className={styles.form}>
-            <span className={styles.cardLabel}>Profile files</span>
+            <span className={styles.cardLabel}>Client profile</span>
             <div className={styles.documentList}>
               {adminStatus ? (
                 <div className={styles.documentRow}>
@@ -419,14 +397,6 @@ export function MigrationDashboard() {
                   <strong>{adminStatus.adminStage}</strong>
                 </div>
               ) : null}
-              <div className={styles.documentRow}>
-                <span>Expression of Interest</span>
-                <strong>{eoiDocument?.fileName ?? "Pending"}</strong>
-              </div>
-              <div className={styles.documentRow}>
-                <span>Six months utility bills</span>
-                <strong>{utilityBillDocument?.fileName ?? "Pending"}</strong>
-              </div>
               {adminStatus?.documents[0] ? (
                 <div className={styles.documentRow}>
                   <span>Latest admin document</span>

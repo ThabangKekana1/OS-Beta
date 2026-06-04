@@ -18,7 +18,7 @@ import {
   splitSignatureForBanner,
   systemSignatureTextForSender,
 } from "@/lib/email-signature-copy";
-import { migrationLinkIdForLead, migrationLinkPath } from "@/lib/registration-links";
+import { migrationLinkIdForLead, migrationLinkPath, publicMigrationLinkOrigin } from "@/lib/registration-links";
 import { cn } from "@/lib/utils";
 
 type EmailDirection = "inbound" | "outbound";
@@ -98,13 +98,16 @@ type ComposeLeadDetails = {
 };
 
 function buildOutreachBody(lead: ComposeLeadDetails | null): string {
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const origin = publicMigrationLinkOrigin(typeof window !== "undefined" ? window.location.origin : null);
   const migrationEstimateUrl = lead?.id && lead.clientProfileId
-    ? `${origin}${migrationLinkPath(migrationLinkIdForLead({
-        leadId: lead.id,
-        clientProfileId: lead.clientProfileId,
-        email: lead.email,
-      }))}`
+    ? `${origin}${migrationLinkPath(
+        migrationLinkIdForLead({
+          leadId: lead.id,
+          clientProfileId: lead.clientProfileId,
+          email: lead.email,
+        }),
+        lead.company ?? lead.label,
+      )}`
     : null;
 
   return buildFoundationOutreachBody({

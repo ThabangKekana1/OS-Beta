@@ -92,6 +92,11 @@ export interface AdminLeadNote {
   body: string;
   author: string;
   createdAt: string;
+  actorUserId?: string | null;
+  actorEmail?: string | null;
+  actorName?: string | null;
+  actorAgentId?: string | null;
+  actorRole?: string | null;
 }
 
 export interface AdminLeadEvent {
@@ -100,6 +105,11 @@ export interface AdminLeadEvent {
   detail: string;
   createdAt: string;
   tone: AdminEventTone;
+  actorUserId?: string | null;
+  actorEmail?: string | null;
+  actorName?: string | null;
+  actorAgentId?: string | null;
+  actorRole?: string | null;
 }
 
 export interface AdminLeadDocument {
@@ -116,6 +126,11 @@ export interface AdminLeadDocument {
   storagePath?: string | null;
   fileName?: string | null;
   contentType?: string | null;
+  actorUserId?: string | null;
+  actorEmail?: string | null;
+  actorName?: string | null;
+  actorAgentId?: string | null;
+  actorRole?: string | null;
 }
 
 export interface OneOSUserProfile {
