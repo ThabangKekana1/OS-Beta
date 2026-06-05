@@ -15,6 +15,13 @@ export type RegistrationLeadProfile = {
   email?: string | null;
 };
 
+function stripCompanyLegalSuffixes(value: string) {
+  return value
+    .replace(/\([^)]*\b(?:pty|proprietary|ltd|limited|inc|llc|cc|plc)[^)]*\)/gi, " ")
+    .replace(/\b(?:pty|proprietary|ltd|limited|incorporated|inc|llc|cc|plc)\b\.?/gi, " ")
+    .replace(/\bcompany\b/gi, " ");
+}
+
 function slugifyPathSegment(value: string | null | undefined) {
   return (value ?? "")
     .trim()
@@ -28,9 +35,13 @@ function slugifyPathSegment(value: string | null | undefined) {
     .replace(/-+$/g, "");
 }
 
+export function migrationEstimateSlugForLabel(label?: string | null) {
+  return slugifyPathSegment(stripCompanyLegalSuffixes(label ?? ""));
+}
+
 function migrationEstimatePathSegment(linkId: string, label?: string | null) {
-  const companySlug = slugifyPathSegment(label);
-  return companySlug ? `${companySlug}-${linkId}` : linkId;
+  const companySlug = migrationEstimateSlugForLabel(label);
+  return companySlug || linkId;
 }
 
 function isLocalOrigin(origin: string) {
@@ -87,7 +98,10 @@ export function migrationStartPath(linkId: string) {
 export function migrationLinkIdFromPathSegment(segment: string) {
   const trimmed = segment.trim();
   const match = trimmed.match(/(?:^|-)(mig-[0-9a-z]+)$/i);
-  return (match?.[1] ?? trimmed).toLowerCase();
+  if (match?.[1]) return match[1].toLowerCase();
+
+  const withoutBrokenLegacySuffix = trimmed.replace(/(?:^|-)(?:mig-?)$/i, "");
+  return migrationEstimateSlugForLabel(withoutBrokenLegacySuffix) || trimmed.toLowerCase();
 }
 
 export function publicMigrationLinkOrigin(currentOrigin?: string | null) {

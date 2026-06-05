@@ -4,7 +4,11 @@ import {
   type AdminStateSnapshot,
 } from "@/lib/admin-state";
 import { normalizeAdminLeads } from "@/lib/admin-storage";
-import { migrationLinkIdForLead, registrationLinkIdForLead } from "@/lib/registration-links";
+import {
+  migrationEstimateSlugForLabel,
+  migrationLinkIdForLead,
+  registrationLinkIdForLead,
+} from "@/lib/registration-links";
 import {
   adminLeadContactStatuses,
   adminLeadOrigins,
@@ -679,11 +683,17 @@ export async function findLeadByMigrationLinkFromDatabase(
   const supabase = getSupabaseAdminClient();
   if (!supabase) return null;
 
-  const rows: Array<{ id: string; client_profile_id: string | null; contact_email: string | null }> = [];
+  const normalizedLinkId = linkId.trim().toLowerCase();
+  const rows: Array<{
+    id: string;
+    client_profile_id: string | null;
+    contact_email: string | null;
+    company: string | null;
+  }> = [];
   for (let from = 0; ; from += SUPABASE_PAGE_SIZE) {
     const { data, error } = await supabase
       .from("oneos_admin_leads")
-      .select("id, client_profile_id, contact_email")
+      .select("id, client_profile_id, contact_email, company")
       .range(from, from + SUPABASE_PAGE_SIZE - 1);
 
     if (isMissingRelationError(error)) return null;
@@ -700,7 +710,8 @@ export async function findLeadByMigrationLinkFromDatabase(
         leadId: row.id,
         clientProfileId: row.client_profile_id ?? "",
         email: row.contact_email ?? "",
-      }) === linkId,
+      }) === normalizedLinkId ||
+      migrationEstimateSlugForLabel(row.company) === normalizedLinkId,
   );
 
   if (!matchedRow) return null;

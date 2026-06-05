@@ -125,6 +125,7 @@ test("migration creates a lightweight client profile before dashboard access", (
   const migrationCalculator = read("lib/calculateMigrationAssessment.ts");
   const clientRegistration = read("lib/client-registration.ts");
   const registrationLinks = read("lib/registration-links.ts");
+  const supabaseStore = read("lib/supabase-db-store.ts");
   const estimateRoute = read("app/estimate/[linkId]/page.tsx");
   const migrationAssessmentApi = read("app/api/migration/assessments/route.ts");
   const migrationIntakeApi = read("app/api/migration/intake/route.ts");
@@ -170,9 +171,14 @@ test("migration creates a lightweight client profile before dashboard access", (
   assert.match(clientRegistration, /updateExistingLeadFromMigrationIntake/);
   assert.match(clientRegistration, /Complete company registration details/);
   assert.match(registrationLinks, /\/estimate\/\$\{encodeURIComponent/);
+  assert.match(registrationLinks, /stripCompanyLegalSuffixes/);
+  assert.match(registrationLinks, /return companySlug \|\| linkId/);
+  assert.match(registrationLinks, /migrationEstimateSlugForLabel\(withoutBrokenLegacySuffix\)/);
+  assert.doesNotMatch(registrationLinks, /\`\$\{companySlug\}-\$\{linkId\}\`/);
   assert.match(registrationLinks, /publicMigrationLinkOrigin/);
   assert.match(estimateRoute, /migrationLinkIdFromPathSegment/);
   assert.match(estimateRoute, /findLeadByMigrationLinkFromDatabase/);
+  assert.match(supabaseStore, /migrationEstimateSlugForLabel\(row\.company\) === normalizedLinkId/);
   assert.match(migrationAssessmentApi, /profile_id: profileId \|\| null/);
   assert.match(migrationAssessmentApi, /onConflict: "profile_id"/);
   assert.match(migrationIntakeApi, /buildAdminLeadFromMigrationIntake/);
