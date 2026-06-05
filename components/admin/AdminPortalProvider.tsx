@@ -244,7 +244,7 @@ function diffById<T extends { id: string }>(
   for (const item of next) {
     seenIds.add(item.id);
     const prior = baseline.get(item.id);
-    if (!prior || prior !== item) {
+    if (!prior || JSON.stringify(prior) !== JSON.stringify(item)) {
       upserts.push(item);
     }
   }

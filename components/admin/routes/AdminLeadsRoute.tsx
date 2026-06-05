@@ -1195,18 +1195,36 @@ function normalizeSource(value: string): AdminLead["source"] {
   return "Outbound";
 }
 
+function ownerLookupKey(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/@.*$/, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
 function resolveOwnerId(
   raw: string,
   agents: { id: string; name: string }[],
   fallback: string,
 ) {
-  const value = raw.trim();
-  if (!value) return fallback;
-  const lower = value.toLowerCase();
-  const byId = agents.find((agent) => agent.id.toLowerCase() === lower);
-  if (byId) return byId.id;
-  const byName = agents.find((agent) => agent.name.toLowerCase() === lower);
-  if (byName) return byName.id;
+  const key = ownerLookupKey(raw);
+  if (!key) return fallback;
+
+  const exactMatches = agents.filter((agent) => {
+    const idKey = ownerLookupKey(agent.id);
+    const nameKey = ownerLookupKey(agent.name);
+    const firstNameKey = ownerLookupKey(agent.name.split(/\s+/)[0] ?? "");
+    return key === idKey || key === nameKey || key === firstNameKey;
+  });
+  if (exactMatches.length === 1) return exactMatches[0].id;
+
+  const containsMatches = agents.filter((agent) => {
+    const nameKey = ownerLookupKey(agent.name);
+    return nameKey.includes(key) || key.includes(nameKey);
+  });
+  if (containsMatches.length === 1) return containsMatches[0].id;
+
   return fallback;
 }
 

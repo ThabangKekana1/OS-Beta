@@ -88,6 +88,7 @@ test("lead profile exposes the approved registration and document upload links",
 
 test("state mutation API mutates admin leads and sales-owned leads only", () => {
   const route = read("app/api/admin/state/mutate/route.ts");
+  const provider = read("components/admin/AdminPortalProvider.tsx");
   assert.match(route, /leadUpserts/);
   assert.match(route, /leadDeletes/);
   assert.match(route, /session\.role === "admin"/);
@@ -95,6 +96,8 @@ test("state mutation API mutates admin leads and sales-owned leads only", () => 
   assert.match(route, /Sales users can only mutate their own leads/);
   assert.match(route, /Sales users cannot delete leads/);
   assert.doesNotMatch(route, /salesLeadUpserts|salesLeadDeletes|partnerCanAccessClientLead|buildAdminLeadStubFromSalesLead/);
+  assert.match(provider, /JSON\.stringify\(prior\) !== JSON\.stringify\(item\)/);
+  assert.doesNotMatch(provider, /prior !== item/);
 });
 
 test("public Get Started keeps routing to generic registration", () => {
@@ -110,6 +113,9 @@ test("lead import and EOI dependencies remain because they are part of the appro
   const eoiTemplate = read("lib/eoi-template.ts");
 
   assert.match(leadsRoute, /import\("fflate"\)/);
+  assert.match(leadsRoute, /function ownerLookupKey/);
+  assert.match(leadsRoute, /firstNameKey/);
+  assert.match(leadsRoute, /nameKey\.includes\(key\) \|\| key\.includes\(nameKey\)/);
   assert.match(leadsRoute, /Role/);
   assert.match(leadsRoute, /roleForLead/);
   assert.match(leadsRoute, /contactPosition: quickLead\.contactPosition/);
