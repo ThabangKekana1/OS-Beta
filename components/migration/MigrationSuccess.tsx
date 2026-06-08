@@ -5,6 +5,10 @@ import { Check, Download, Mail, Share2 } from "lucide-react";
 import { useState } from "react";
 import { useStoredMigrationAssessment } from "@/components/migration/MigrationState";
 import {
+  calculateMigrationAssessment,
+  type MigrationAssessmentResult,
+} from "@/lib/calculateMigrationAssessment";
+import {
   downloadMigrationReportPDF,
   emailMigrationReport,
 } from "@/components/migration/MigrationReport";
@@ -24,16 +28,15 @@ function contactMethodLabel(value: string | undefined) {
   return "WhatsApp";
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function shareText(stored: any) {
-  const result = stored.result;
+function shareText(
+  stored: NonNullable<ReturnType<typeof useStoredMigrationAssessment>>,
+  result: MigrationAssessmentResult,
+) {
   const bestSaving = Math.max(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...result.ufmsSolar.scenarios.map((s: any) => s.tenYearSavingAgainstEskom),
+    ...result.ufmsSolar.scenarios.map((scenario) => scenario.tenYearSavingAgainstEskom),
     result.wheeling.conservative.tenYearSavingAgainstEskom,
     result.wheeling.photovoltaicOnlyReference.tenYearSavingAgainstEskom,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...result.combinedScenarios.map((s: any) => s.combinedTenYearSavingAgainstEskom),
+    ...result.combinedScenarios.map((scenario) => scenario.combinedTenYearSavingAgainstEskom),
   );
   return [
     "Foundation-1 Energy Migration Estimate",
@@ -71,10 +74,11 @@ export function MigrationSuccess() {
   }
 
   const preferredContact = contactMethodLabel(stored.registration.preferredContactMethod);
+  const result = calculateMigrationAssessment(stored.input);
 
   async function shareReport() {
     if (!stored) return;
-    const text = shareText(stored);
+    const text = shareText(stored, result);
     setShareStatus("");
     try {
       if (navigator.share) {
@@ -126,7 +130,7 @@ export function MigrationSuccess() {
               disabled={pdfLoading}
               onClick={async () => {
                 setPdfLoading(true);
-                try { await downloadMigrationReportPDF(stored.result); }
+                try { await downloadMigrationReportPDF(result); }
                 finally { setPdfLoading(false); }
               }}
             >
@@ -137,7 +141,7 @@ export function MigrationSuccess() {
               <Share2 size={15} strokeWidth={2.5} />
               Share Report
             </button>
-            <button className={styles.ghostButton} type="button" onClick={() => emailMigrationReport(stored.result)}>
+            <button className={styles.ghostButton} type="button" onClick={() => emailMigrationReport(result)}>
               <Mail size={15} strokeWidth={2.5} />
               Email Report
             </button>
@@ -159,7 +163,7 @@ export function MigrationSuccess() {
             <div className={styles.successDataDivider} aria-hidden="true" />
             <div className={styles.successDataItem}>
               <span>Monthly spend</span>
-              <strong>{zar(stored.result.currentUtilityProjection.currentMonthlySpend)}</strong>
+              <strong>{zar(result.currentUtilityProjection.currentMonthlySpend)}</strong>
             </div>
           </div>
 

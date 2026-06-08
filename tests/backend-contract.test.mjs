@@ -123,6 +123,8 @@ test("migration creates a lightweight client profile before dashboard access", (
   const migrationSuccess = read("components/migration/MigrationSuccess.tsx");
   const migrationShell = read("components/migration/MigrationShell.tsx");
   const migrationCalculator = read("lib/calculateMigrationAssessment.ts");
+  const calculationConfig = read("lib/calculation-config.ts");
+  const energySavingsChart = read("components/migration/EnergySavingsChart.tsx");
   const clientRegistration = read("lib/client-registration.ts");
   const registrationLinks = read("lib/registration-links.ts");
   const supabaseStore = read("lib/supabase-db-store.ts");
@@ -150,6 +152,14 @@ test("migration creates a lightweight client profile before dashboard access", (
   assert.match(migrationReport, /Choose email, WhatsApp, or phone/);
   assert.match(migrationReport, /Submit Registration/);
   assert.match(migrationReport, /\/migration\/success\?p=/);
+  assert.match(migrationReport, /Entered monthly electricity spend/);
+  assert.match(migrationReport, /Monthly electricity spend used/);
+  assert.match(migrationReport, /EnergySavingsChart/);
+  assert.match(migrationReport, /10-Year Cumulative Cost Comparison/);
+  assert.match(calculationConfig, /eskom_annual_tariff_escalation_percent: 12\.5/);
+  assert.match(calculationConfig, /foundation_one_ten_year_factor: 13\.1808/);
+  assert.match(energySavingsChart, /const ESKOM_ESCALATION_RATE = 0\.125/);
+  assert.match(energySavingsChart, /const FOUNDATION_ONE_ESCALATION_RATE = 0\.06/);
   assert.match(migrationSuccess, /Registration successful/);
   assert.match(migrationSuccess, /Download Report/);
   assert.match(migrationSuccess, /Share Report/);

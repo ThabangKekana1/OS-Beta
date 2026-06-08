@@ -4,33 +4,13 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { MigrationReport } from "@/components/migration/MigrationReport";
-import {
-  calculateMigrationAssessment,
-  type MigrationAssessmentResult,
-} from "@/lib/calculateMigrationAssessment";
+import { calculateMigrationAssessment } from "@/lib/calculateMigrationAssessment";
 import {
   useStoredMigrationAssessment,
 } from "@/components/migration/MigrationState";
 import styles from "@/components/migration/migration.module.css";
 
 const QUALIFICATION_THRESHOLD_ZAR = 10000;
-
-function isCurrentMigrationAssessmentResult(
-  result: unknown,
-): result is MigrationAssessmentResult {
-  if (!result || typeof result !== "object") return false;
-
-  const candidate = result as Partial<MigrationAssessmentResult>;
-  return Boolean(
-    candidate.currentUtilityProjection &&
-      Array.isArray(candidate.ufmsSolar?.scenarios) &&
-      candidate.ufmsSolar.scenarios.length === 3 &&
-      candidate.wheeling?.conservative &&
-      candidate.wheeling?.photovoltaicOnlyReference &&
-      Array.isArray(candidate.combinedScenarios) &&
-      (candidate.combinedScenarios as unknown[]).length > 0,
-  );
-}
 
 export function MigrationReportPageClient() {
   const stored = useStoredMigrationAssessment();
@@ -75,9 +55,7 @@ export function MigrationReportPageClient() {
     );
   }
 
-  const result = isCurrentMigrationAssessmentResult(stored.result)
-    ? stored.result
-    : calculateMigrationAssessment(stored.input);
+  const result = calculateMigrationAssessment(stored.input);
 
   return <MigrationReport result={result} />;
 }

@@ -13,6 +13,11 @@ import {
 } from "@/components/migration/MigrationState";
 import { QualificationBadge } from "@/components/migration/QualificationBadge";
 import { SavingsCard } from "@/components/migration/SavingsCard";
+import {
+  buildEnergySavingsProjection,
+  EnergySavingsChart,
+  formatCompactRand,
+} from "@/components/migration/EnergySavingsChart";
 import styles from "@/components/migration/migration.module.css";
 
 function zar(value: number) {
@@ -33,7 +38,7 @@ function tariff(value: number) {
 }
 
 function eskomEscalationPercentage(result: MigrationAssessmentResult) {
-  return result.currentUtilityProjection.annualTariffEscalationPercentage ?? 12;
+  return result.currentUtilityProjection.annualTariffEscalationPercentage ?? 12.5;
 }
 
 type IntakeApiResponse = {
@@ -129,6 +134,7 @@ export async function downloadMigrationReportPDF(result: MigrationAssessmentResu
   const eskomTenYear = currentUtilityProjection.tenYearSpend;
   const base = ufmsSolar.scenarios[1];
   const wh = wheeling.conservative;
+  const energyProjection = buildEnergySavingsProjection(eskomMonthly);
   const bestCombined = [...combinedScenarios].sort(
     (a, b) => b.combinedTenYearSavingAgainstEskom - a.combinedTenYearSavingAgainstEskom,
   )[0];
@@ -208,6 +214,65 @@ export async function downloadMigrationReportPDF(result: MigrationAssessmentResu
     y += 2;
   }
 
+  function drawCumulativeChart() {
+    const chartHeight = 54;
+    const chartWidth = contentWidth - 14;
+    const chartX = margin + 8;
+    const chartY = y + 4;
+    const maxValue = Math.max(...energyProjection.points.map((point) => point.eskomCumulative));
+
+    ensureSpace(chartHeight + 18);
+    pdf.setDrawColor(210, 210, 210);
+    pdf.setLineWidth(0.2);
+    pdf.line(chartX, chartY, chartX, chartY + chartHeight);
+    pdf.line(chartX, chartY + chartHeight, chartX + chartWidth, chartY + chartHeight);
+
+    function xFor(index: number) {
+      return chartX + (chartWidth * index) / (energyProjection.points.length - 1);
+    }
+
+    function yFor(value: number) {
+      return chartY + chartHeight - (value / maxValue) * chartHeight;
+    }
+
+    function drawLine(
+      values: number[],
+      color: [number, number, number],
+      dash: number[] = [],
+    ) {
+      pdf.setDrawColor(...color);
+      pdf.setLineWidth(0.7);
+      pdf.setLineDashPattern(dash, 0);
+      values.forEach((value, index) => {
+        if (index === 0) return;
+        pdf.line(xFor(index - 1), yFor(values[index - 1]), xFor(index), yFor(value));
+      });
+      pdf.setLineDashPattern([], 0);
+    }
+
+    drawLine(energyProjection.points.map((point) => point.eskomCumulative), [226, 75, 74]);
+    drawLine(
+      energyProjection.points.map((point) => point.foundationOne35Cumulative),
+      [239, 159, 39],
+      [2.8, 1.8],
+    );
+    drawLine(
+      energyProjection.points.map((point) => point.foundationOne60Cumulative),
+      [59, 109, 17],
+      [0.8, 1.6],
+    );
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(7);
+    pdf.setTextColor(100, 100, 100);
+    [0, 4, 9].forEach((index) => {
+      pdf.text(`Yr ${index + 1}`, xFor(index) - 3, chartY + chartHeight + 5);
+    });
+    pdf.text(formatCompactRand(maxValue), chartX + chartWidth - 14, chartY - 2);
+
+    y = chartY + chartHeight + 11;
+  }
+
   pdf.setProperties({
     title: "Foundation-1 Energy Migration Report",
     subject: "Indicative energy migration assessment",
@@ -219,6 +284,52 @@ export async function downloadMigrationReportPDF(result: MigrationAssessmentResu
     size: 9,
     color: [100, 100, 100],
     lineGap: 5,
+  });
+
+  heading("Entered Monthly Electricity Spend");
+  text(
+    "This is the monthly electricity spend entered in the assessment. All projections and indicative savings in this report are calculated from this value.",
+    { size: 9, color: [85, 85, 85] },
+  );
+  table(
+    ["Monthly electricity spend used"],
+    [[r(currentUtilityProjection.currentMonthlySpend)]],
+    [contentWidth],
+  );
+
+  heading("10-Year Cumulative Cost Comparison");
+  text(
+    "Cumulative cost projection using Eskom at 12.5% annual escalation, Foundation-1 PPA at 6% annual CPI-linked escalation, and the Foundation-1 35% and Blender 60% saving paths.",
+    { size: 9, color: [85, 85, 85] },
+  );
+  drawCumulativeChart();
+  table(
+    ["Scenario", "10-year total", "Year 10 annual rate", "Saving vs Eskom"],
+    [
+      [
+        "Eskom",
+        formatCompactRand(energyProjection.totals.eskom),
+        formatCompactRand(energyProjection.yearTenAnnualRates.eskom),
+        "-",
+      ],
+      [
+        "Foundation-1 35%",
+        formatCompactRand(energyProjection.totals.foundationOne35),
+        formatCompactRand(energyProjection.yearTenAnnualRates.foundationOne35),
+        formatCompactRand(energyProjection.savings.foundationOne35),
+      ],
+      [
+        "Foundation-1 Blender 60%",
+        formatCompactRand(energyProjection.totals.foundationOne60),
+        formatCompactRand(energyProjection.yearTenAnnualRates.foundationOne60),
+        formatCompactRand(energyProjection.savings.foundationOne60),
+      ],
+    ],
+    [52, 38, 48, contentWidth - 138],
+  );
+  text("Eskom at 12.5%/yr | Foundation-1 PPA at 6%/yr CPI-linked | Zero capex", {
+    size: 8,
+    color: [100, 100, 100],
   });
 
   heading("Current Utility Ten-Year Projection");
@@ -460,7 +571,18 @@ export function MigrationReport({ result }: { result: MigrationAssessmentResult 
   return (
     <section className={styles.section}>
       <div className={styles.shell}>
-        <div className={styles.sectionHeader}>
+        <div className={styles.reportLeadMetric}>
+          <p>Entered monthly electricity spend</p>
+          <strong>{zar(currentUtilityProjection.currentMonthlySpend)}</strong>
+          <span>
+            This is the value used to model your ten-year utility path and every indicative
+            Foundation-1 saving scenario below.
+          </span>
+        </div>
+
+        <EnergySavingsChart monthlySpend={currentUtilityProjection.currentMonthlySpend} />
+
+        <div className={`${styles.sectionHeader} ${styles.afterChartSection}`}>
           <div>
             <h2 className={styles.sectionTitle}>Current Utility Ten-Year Projection</h2>
             <p className={styles.sectionCopy}>

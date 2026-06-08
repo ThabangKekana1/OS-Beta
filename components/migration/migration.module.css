@@ -536,6 +536,10 @@
   line-height: 1.6;
 }
 
+.afterChartSection {
+  margin-top: 42px;
+}
+
 .dashboardHeaderActions {
   display: grid;
   justify-items: end;
@@ -1285,6 +1289,43 @@
 /* ─── Report section spacing ──────────────────────────────────── */
 .reportSection {
   margin-top: 40px;
+}
+
+.reportLeadMetric {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 28px;
+  padding: clamp(20px, 4vw, 34px);
+  border: 1px solid rgba(120, 220, 140, 0.3);
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(120, 220, 140, 0.1), rgba(120, 220, 140, 0.025)),
+    #0a0a0a;
+}
+
+.reportLeadMetric p {
+  margin: 0;
+  color: rgba(200, 245, 215, 0.86);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.reportLeadMetric strong {
+  display: block;
+  color: #fff;
+  font-size: clamp(2rem, 5vw, 4rem);
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.reportLeadMetric span {
+  max-width: 680px;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.86rem;
+  line-height: 1.55;
 }
 
 /* ─── Start page preview list ─────────────────────────────────── */
