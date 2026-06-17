@@ -17,7 +17,7 @@ export const KARMAN_EMAIL_SIGNATURE_TEXT = [
   "Karman Kekana",
   "Founder & Platform Engineer",
   "Foundation-1",
-  "karman@foundation-1.co.za",
+  "karman@1os.foundation-1.co.za",
   "www.foundation-1.co.za",
   KARMAN_LINKEDIN_LABEL,
   "",
@@ -53,13 +53,13 @@ export const TIISETSO_EMAIL_SIGNATURE_TEXT = [
 ].join("\n");
 
 const FOUNDATION_STAFF_DISPLAY_NAMES = new Map<string, string>([
-  ["karman@foundation-1.co.za", "Karman Kekana"],
+  ["karman@1os.foundation-1.co.za", "Karman Kekana"],
   ["moeketsi@foundation-1.co.za", "Moeketsi Moima"],
   ["tiisetso@foundation-1.co.za", "Tiisetso Mogotlane"],
 ]);
 
 const SYSTEM_SIGNATURES_BY_EMAIL = new Map<string, string>([
-  ["karman@foundation-1.co.za", KARMAN_EMAIL_SIGNATURE_TEXT],
+  ["karman@1os.foundation-1.co.za", KARMAN_EMAIL_SIGNATURE_TEXT],
   ["moeketsi@foundation-1.co.za", MOEKETSI_EMAIL_SIGNATURE_TEXT],
   ["tiisetso@foundation-1.co.za", TIISETSO_EMAIL_SIGNATURE_TEXT],
 ]);

@@ -136,7 +136,7 @@ export function buildSystemEmailSignature(input: {
   const now = new Date().toISOString();
   return {
     ownerUserId: input.ownerUserId ?? "system",
-    ownerEmail: input.ownerEmail ?? "karman@foundation-1.co.za",
+    ownerEmail: input.ownerEmail ?? "karman@1os.foundation-1.co.za",
     ownerRole: input.ownerRole ?? "admin",
     signatureText: systemSignatureTextForSender(input) ?? SYSTEM_EMAIL_SIGNATURE_TEXT,
     footerImage: input.footerImage ?? null,

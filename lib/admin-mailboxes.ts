@@ -10,7 +10,7 @@ export type AdminSenderOption = {
 const ADMIN_SENDERS = [
   {
     label: "Karman Kekana",
-    email: "karman@foundation-1.co.za",
+    email: "karman@1os.foundation-1.co.za",
     aliases: ["karman@replies.1os.co.za"],
   },
   {

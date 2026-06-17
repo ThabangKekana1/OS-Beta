@@ -8,7 +8,7 @@ import {
 } from "@/lib/eoi-template";
 import { downloadTextFile } from "@/lib/download-utils";
 
-const EOI_RETURN_EMAIL = "karman@foundation-1.co.za";
+const EOI_RETURN_EMAIL = "karman@1os.foundation-1.co.za";
 
 type EoiLeadView = EoiTemplateLead & {
   stage: string;

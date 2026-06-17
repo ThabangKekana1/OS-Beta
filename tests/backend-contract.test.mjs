@@ -281,7 +281,7 @@ test("automatic email signature remains while editable signature API is gone", (
   assert.match(sendRoute, /buildSystemEmailSignature/);
   assert.match(sendRoute, /shouldAppendSystemSignature/);
   assert.match(sendRoute, /foundationDisplayNameForEmail/);
-  assert.match(adminMailboxes, /email: "karman@foundation-1\.co\.za"/);
+  assert.match(adminMailboxes, /email: "karman@1os\.foundation-1\.co\.za"/);
   assert.match(adminMailboxes, /label: "Support"/);
   assert.match(adminMailboxes, /email: "support@foundation-1\.co\.za"/);
   assert.match(adminMailboxes, /label: "Sales"/);
