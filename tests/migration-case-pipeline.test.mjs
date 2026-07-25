@@ -226,14 +226,29 @@ test("optional visitor-entered kWh keeps physical uncertainty bands and remains 
   assert.match(report.limitations.join(" "), /has not been reconciled to a statement/i);
 });
 
-test("new pipeline requires all six source files in one submission", () => {
+test("bills may be collected progressively, but the audit still needs all six periods", () => {
   const processor = source("lib/migration-case-bill-pack.ts");
   const uploadRoute = source("app/api/migration-cases/[token]/bill-pack/route.ts");
 
   assert.equal(REQUIRED_FORMAL_BILLING_PERIODS, 6);
-  assert.match(processor, /COMPLETE_BILL_PACK_MIN_FILES = 6/);
-  assert.match(uploadRoute, /files\.length < COMPLETE_BILL_PACK_MIN_FILES/);
+
+  // Collection is incremental: a client may add bills as they find them.
+  assert.match(uploadRoute, /addMigrationBillFiles/);
+  assert.doesNotMatch(uploadRoute, /files\.length < COMPLETE_BILL_PACK_MIN_FILES/);
+  assert.match(processor, /export async function addMigrationBillFiles/);
+
+  // The audit remains atomic and gated on six recognised periods. A partial
+  // history must never produce a proposal.
+  assert.match(
+    processor,
+    /readyForAudit: portfolio\.uniquePeriodCount >= REQUIRED_FORMAL_BILLING_PERIODS/,
+  );
+  assert.match(processor, /if \(progress\.readyForAudit\)/);
   assert.doesNotMatch(processor, /proposalReadiness\(/);
+
+  // A stalled pack now has an operator exit in both directions.
+  assert.match(processor, /export async function reauditMigrationBillPack/);
+  assert.match(processor, /export async function reopenMigrationBillPack/);
 });
 
 test("EOI is a post-proposal gate and produces an immutable PDF certificate", () => {

@@ -358,9 +358,68 @@ function TermSheetControl({ data }: { data: MigrationCaseOpsData }) {
  * readiness → submission (SLA) → pathway proposal → KYC verification →
  * handoff → term sheet.
  */
+/**
+ * The exit from bill_pack_review.
+ *
+ * A pack that fails recognition used to have no way out: no route and no
+ * button, so the case sat until the client happened to re-upload everything.
+ */
+function BillPackReviewControl({ data }: { data: MigrationCaseOpsData }) {
+  const [busy, setBusy] = useState<"rerun" | "reopen" | null>(null);
+  const [note, setNote] = useState("");
+  const [error, setError] = useState("");
+
+  async function run(action: "rerun" | "reopen") {
+    setBusy(action);
+    setError("");
+    try {
+      await postJson(
+        `/api/admin/migration-cases/${encodeURIComponent(data.caseId)}/bill-pack-review`,
+        { action, note },
+      );
+      window.location.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "The operation failed.");
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="space-y-3 rounded-xl border border-amber-300/20 bg-amber-300/[0.04] p-3">
+      <p className="text-[0.62rem] font-medium uppercase tracking-[0.13em] text-amber-100/80">
+        Bill pack in review
+      </p>
+      <p className="text-[0.68rem] leading-5 text-white/50">
+        Re-run the audit over the stored files after a catalogue or parser fix, or return the
+        pack to the client so they can add what is missing. Returning it emails them the reason.
+      </p>
+      <input
+        value={note}
+        onChange={(event) => setNote(event.target.value)}
+        placeholder="Reason shown to the client (optional)"
+        className="h-8 w-full rounded-lg border border-white/12 bg-white/[0.03] px-3 text-[0.68rem] text-white placeholder:text-white/25"
+      />
+      {error ? <p className="text-[0.65rem] text-amber-200">{error}</p> : null}
+      <div className="flex flex-wrap gap-2">
+        <ActionButton busy={busy === "rerun"} onClick={() => void run("rerun")}>
+          Re-run audit
+        </ActionButton>
+        <ActionButton busy={busy === "reopen"} tone="outline" onClick={() => void run("reopen")}>
+          Return to client
+        </ActionButton>
+      </div>
+    </div>
+  );
+}
+
 export function MigrationCaseOps({ data }: { data: MigrationCaseOpsData }) {
   if (!data.eoiSignedAt) {
-    return <p className="text-[0.68rem] leading-5 text-white/30">Pre-EOI. Operator actions unlock after the signed EOI.</p>;
+    return (
+      <div className="space-y-3">
+        {data.stage === "bill_pack_review" ? <BillPackReviewControl data={data} /> : null}
+        <p className="text-[0.68rem] leading-5 text-white/30">Pre-EOI. Operator actions unlock after the signed EOI.</p>
+      </div>
+    );
   }
   const showKyc = Boolean(data.partnerProposal?.signedAt) || data.kyc.documents.some((slot) => slot.status !== "outstanding");
   const showTermSheet = Boolean(data.kyc.handedOffAt) || data.termSheets.length > 0 || data.stage === "kyc_direct_submitted";

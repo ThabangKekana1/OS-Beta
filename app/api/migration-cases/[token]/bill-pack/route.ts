@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   COMPLETE_BILL_PACK_MAX_FILES,
   COMPLETE_BILL_PACK_MAX_TOTAL_BYTES,
-  COMPLETE_BILL_PACK_MIN_FILES,
-  processCompleteMigrationBillPack,
+  addMigrationBillFiles,
 } from "@/lib/migration-case-bill-pack";
 import {
   findMigrationCaseByToken,
@@ -57,18 +56,15 @@ export async function POST(
     );
   }
   const files = form.getAll("files").filter((value): value is File => value instanceof File);
-  if (files.length < COMPLETE_BILL_PACK_MIN_FILES) {
+  if (!files.length) {
     return NextResponse.json(
-      {
-        ok: false,
-        error: `Submit all six recent bill files together; ${files.length} ${files.length === 1 ? "file was" : "files were"} selected.`,
-      },
+      { ok: false, error: "Select at least one utility bill file." },
       { status: 400 },
     );
   }
   if (files.length > COMPLETE_BILL_PACK_MAX_FILES) {
     return NextResponse.json(
-      { ok: false, error: `Submit at most ${COMPLETE_BILL_PACK_MAX_FILES} files in one bill pack.` },
+      { ok: false, error: `Add at most ${COMPLETE_BILL_PACK_MAX_FILES} files at a time.` },
       { status: 400 },
     );
   }
@@ -78,30 +74,35 @@ export async function POST(
     if (!caseRow) {
       return NextResponse.json({ ok: false, error: "Migration case not found." }, { status: 404 });
     }
-    const result = await processCompleteMigrationBillPack(caseRow, files);
+    const result = await addMigrationBillFiles(caseRow, files);
     const relations = await getMigrationCaseRelations(result.caseRow);
     const state = publicMigrationCaseState(result.caseRow, relations);
     const proposalReady = Boolean(result.proposal);
+    const stillCollecting = !result.progress.readyForAudit;
 
-    void createNotification({
-      audience: "admin",
-      kind: "customer_uploaded_document",
-      title: proposalReady
-        ? `Proposal completed: ${caseRow.business_name}`
-        : `Bill pack needs review: ${caseRow.business_name}`,
-      body: proposalReady
-        ? `${result.billPack.recognised_period_count} billing periods validated and the bill-audited proposal was completed automatically.`
-        : `${result.billPack.recognised_period_count} billing periods were recognised. ${result.billPack.blockers[0] ?? "Manual review is required."}`,
-      link: "/admin/migration-cases",
-      metadata: {
-        migrationCaseId: caseRow.id,
-        publicReference: caseRow.public_reference,
-        billPackId: result.billPack.id,
-        proposalId: result.proposal?.id ?? null,
-        recognisedBillingPeriods: result.billPack.recognised_period_count,
-        blockers: result.billPack.blockers,
-      },
-    });
+    // Only interrupt an operator once the pack is actually decided. Files
+    // arriving one at a time must not generate a notification each time.
+    if (!stillCollecting) {
+      void createNotification({
+        audience: "admin",
+        kind: "customer_uploaded_document",
+        title: proposalReady
+          ? `Proposal completed: ${caseRow.business_name}`
+          : `Bill pack needs review: ${caseRow.business_name}`,
+        body: proposalReady
+          ? `${result.billPack.recognised_period_count} billing periods validated and the bill-audited proposal was completed automatically.`
+          : `${result.billPack.recognised_period_count} billing periods were recognised. ${result.billPack.blockers[0] ?? "Manual review is required."}`,
+        link: "/admin/migration-cases",
+        metadata: {
+          migrationCaseId: caseRow.id,
+          publicReference: caseRow.public_reference,
+          billPackId: result.billPack.id,
+          proposalId: result.proposal?.id ?? null,
+          recognisedBillingPeriods: result.billPack.recognised_period_count,
+          blockers: result.billPack.blockers,
+        },
+      });
+    }
 
     return NextResponse.json({
       ...state,
@@ -109,11 +110,12 @@ export async function POST(
         receivedFiles: files.length,
         analysedFiles: result.analyses.length,
         proposalCompleted: proposalReady,
+        progress: result.progress,
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to process the complete bill pack.";
-    const clientError = /submit|selected|supported|empty|larger|duplicate|locked/i.test(message);
+    const message = error instanceof Error ? error.message : "Unable to add the utility bills.";
+    const clientError = /submit|select|supported|empty|larger|duplicate|already|locked|at a time/i.test(message);
     return NextResponse.json(
       { ok: false, error: message },
       { status: clientError ? 400 : 500 },

@@ -432,9 +432,20 @@ export async function sendCaseLifecycleMessage(
   caseRow: MigrationCaseRow,
   key: LifecycleMessageKey,
   context: LifecycleContext = {},
+  /**
+   * Discriminator for messages that may legitimately recur.
+   *
+   * Reminders stay exactly-once for the life of the case, so they pass
+   * nothing. A repeatable event — a bill pack failing recognition a second
+   * time, or an operator reopening a pack — passes something that identifies
+   * the occurrence, so each distinct event notifies exactly once.
+   */
+  dedupeSuffix?: string,
 ): Promise<"sent" | "duplicate" | "suppressed" | "skipped" | "failed"> {
   const supabase = getSupabaseAdminClient();
   if (!supabase) return "skipped";
+
+  const messageKey = dedupeSuffix ? `${key}:${dedupeSuffix}`.slice(0, 180) : key;
 
   // Claim the message first. The unique constraint makes this the lock: if the
   // insert conflicts, another run already owns this message.
@@ -442,7 +453,7 @@ export async function sendCaseLifecycleMessage(
     .from("migration_case_lifecycle_messages")
     .insert({
       case_id: caseRow.id,
-      message_key: key,
+      message_key: messageKey,
       channel: "email",
       recipient: caseRow.contact_email,
       outcome: "sent",
@@ -456,7 +467,7 @@ export async function sendCaseLifecycleMessage(
       .from("migration_case_lifecycle_messages")
       .update({ outcome, detail: detail?.slice(0, 500) ?? null })
       .eq("case_id", caseRow.id)
-      .eq("message_key", key);
+      .eq("message_key", messageKey);
   };
 
   if (!caseRow.contact_email) {
