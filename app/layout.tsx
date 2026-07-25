@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Orbitron } from "next/font/google";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import ClientBehaviorTelemetry from "@/components/intelligence/ClientBehaviorTelemetry";
 import "./globals.css";
 
 const inter = Inter({
@@ -16,13 +17,14 @@ const orbitron = Orbitron({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.1os.co.za"),
   title: "1OS | Energy-as-a-Service and Commercial Solar in South Africa",
   description:
     "1OS builds energy infrastructure for South Africa through commercial solar, energy-as-a-service, and guided business migration workflows.",
   keywords: [
     "1OS",
     "energy migration",
-    "Generocity",
+    "Eden",
     "Lumen-1",
     "migration operating system",
     "business qualification",
@@ -59,10 +61,19 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const telemetryEnvironment =
+    process.env.NODE_ENV === "test"
+      ? "test"
+      : process.env.VERCEL_ENV === "production"
+        ? "production"
+        : process.env.VERCEL_ENV === "preview"
+          ? "preview"
+          : "development";
   return (
     <html lang="en-ZA" className={`${inter.variable} ${orbitron.variable}`} data-scroll-behavior="smooth">
       <body>
         <ErrorBoundary>{children}</ErrorBoundary>
+        <ClientBehaviorTelemetry environment={telemetryEnvironment} />
       </body>
     </html>
   );

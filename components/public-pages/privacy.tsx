@@ -11,7 +11,7 @@ export default function PrivacyPage() {
                         Privacy Policy
                     </h1>
                     <p style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--space-12)' }}>
-                        Last Updated: February 26, 2026
+                        Last Updated: July 23, 2026
                     </p>
 
                     <div style={{ lineHeight: '1.8', color: 'var(--color-text-primary)' }}>
@@ -33,12 +33,13 @@ export default function PrivacyPage() {
 
                         <h2 style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>3. Information Collected Automatically</h2>
                         <div>
-                            <p style={{ marginBottom: 'var(--space-4)' }}>When you access our Services, we automatically collect certain information about your device and usage, including:</p>
+                            <p style={{ marginBottom: 'var(--space-4)' }}>If you choose “Allow” in a client migration workspace, we collect a deliberately limited set of first-party product-usage signals:</p>
                             <ul style={{ paddingLeft: 'var(--space-6)', marginBottom: 'var(--space-4)' }}>
-                                <li>IP address, browser type, operating system, and referral URLs.</li>
-                                <li>Log information, such as the date and time of visits and pages viewed.</li>
-                                <li>Real-time telemetry from installed energy assets (solar generation, battery state, etc.).</li>
+                                <li>Redacted page paths, page views, button or link interactions, form submission events, scroll milestones and 15- or 60-second engagement milestones.</li>
+                                <li>Broad viewport class and generic client error categories.</li>
+                                <li>Random visitor and session identifiers that are pseudonymised before storage.</li>
                             </ul>
+                            <p style={{ marginBottom: 'var(--space-4)' }}>This product-intelligence system does not store form values, case or document access links, utility-bill or KYC contents, document names, keystrokes, raw IP addresses, full user-agent strings, referral URLs, or cross-site activity. Network metadata may be processed transiently by our hosting and abuse-prevention infrastructure but is not written to the product-intelligence event store. Raw product-usage events are retained for 90 days before deletion; aggregated operational metrics may be retained for longer.</p>
                         </div>
 
                         <h2 style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>4. How We Use Your Information</h2>
@@ -71,7 +72,7 @@ export default function PrivacyPage() {
 
                         <h2 style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>7. Your Privacy Choices</h2>
                         <p>
-                            You have the right to access, correct, or delete your personal information held by us. You can also opt out of certain data collection practices by contacting our support team or updating your account settings. Note that some data collection is essential for the operation of Virtual Power Plant assets.
+                            You have the right to access, correct, or delete your personal information held by us. Optional product intelligence does not start until you select “Allow”; selecting “Decline” or enabling Global Privacy Control prevents it. Your choice is stored in your browser and can be reset by clearing site data. You can also contact our Privacy Officer to exercise your rights. Operational records that are necessary to provide the migration service remain separate from optional product intelligence.
                         </p>
 
                         <h2 style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>8. Third-Party Links</h2>

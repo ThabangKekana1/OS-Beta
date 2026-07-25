@@ -75,6 +75,8 @@ export async function POST(request: NextRequest) {
 
   const result = calculateMigrationAssessment({
     monthlyElectricitySpend: monthlySpend,
+    monthlyKwh: Number(input?.monthlyKwh) > 0 ? Number(input?.monthlyKwh) : undefined,
+    blendedTariff: Number(input?.blendedTariff) > 0 ? Number(input?.blendedTariff) : undefined,
   });
   const baseSolar = result.ufmsSolar.scenarios[1];
 

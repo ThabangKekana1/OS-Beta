@@ -31,9 +31,9 @@ export function buildEoiTemplateText(
     "",
     "To Whom It May Concern: Foundation-1",
     "",
-    `${lead.company} has been approached by Foundation-1 to assess renewable energy supply and energy migration options for ${lead.company} sites and facilities.`,
+    `${lead.company} has reviewed the completed Foundation-1 energy migration assessment prepared from its submitted operating evidence.`,
     "",
-    "Subject to the receipt of the relevant approvals, we hereby confirm our interest to procure renewable energy through Foundation-1 and its approved supply partners, and would like to enter into an information sharing and terms formulation period with the intent of reaching commercial and technical alignment. We hereby request you to commence your engagement with the relevant stakeholder in order to procure the approvals required to make the said terms available.",
+    "Subject to the receipt of the relevant approvals, we confirm our interest in continuing from that assessment through Foundation-1 and its approved supply partners. We authorise a terms-formulation period and request engagement with the relevant stakeholders to prepare formal commercial, financial and technical options.",
     "",
     `Should we reach commercial and technical alignment, ${lead.company} would want to explore entering into a comprehensive Zero-Capex energy migration agreement.`,
     "",
@@ -55,9 +55,8 @@ export function buildEoiTemplateFilename(company: string) {
 }
 
 /**
- * Builds a blank, printable Expression of Interest template for new prospects.
- * The client fills in the bracketed fields, prints on company letterhead, signs,
- * scans, and uploads it alongside their 6-month utility bills.
+ * Legacy offline fallback retained for exceptional manual onboarding only.
+ * The standard client journey uses the secure digital EOI signing route.
  */
 export function buildBlankEoiTemplateText(): string {
   const today = new Date().toLocaleDateString("en-ZA", {
@@ -68,8 +67,8 @@ export function buildBlankEoiTemplateText(): string {
 
   return [
     "════════════════════════════════════════════════════════════════",
-    "  IMPORTANT: Print this document on your official company",
-    "  letterhead before signing. Replace all [BRACKETED] fields.",
+    "  OFFLINE FALLBACK ONLY: Use the secure digital EOI signing",
+    "  link whenever available. Replace all [BRACKETED] fields.",
     "════════════════════════════════════════════════════════════════",
     "",
     `Date: ${today}`,
@@ -79,17 +78,13 @@ export function buildBlankEoiTemplateText(): string {
     "To Whom It May Concern,",
     "Foundation-1",
     "",
-    "[COMPANY NAME] has been approached by Foundation-1 to assess",
-    "renewable energy supply and energy migration options for [COMPANY NAME]",
-    "sites and facilities.",
+    "[COMPANY NAME] has reviewed the completed Foundation-1 energy migration",
+    "assessment prepared from its submitted operating evidence.",
     "",
-    "Subject to the receipt of the relevant approvals, we hereby confirm our",
-    "interest to procure renewable energy through Foundation-1 and its approved",
-    "supply partners, and would like",
-    "to enter into an information sharing and terms formulation period with the",
-    "intent of reaching commercial and technical alignment. We hereby request",
-    "you to commence your engagement with the relevant stakeholder in order to",
-    "procure the approvals required to make the said terms available.",
+    "Subject to the receipt of the relevant approvals, we confirm our interest",
+    "in continuing from that assessment through Foundation-1 and its approved",
+    "supply partners. We authorise a terms-formulation period and request",
+    "engagement with the relevant stakeholders to prepare formal options.",
     "",
     "Should we reach commercial and technical alignment, [COMPANY NAME] would",
     "want to explore entering into a comprehensive Zero-Capex energy migration",
@@ -113,13 +108,11 @@ export function buildBlankEoiTemplateText(): string {
     "────────────────────────────────────────────────────────────────",
     "SUBMISSION INSTRUCTIONS",
     "────────────────────────────────────────────────────────────────",
-    "1. Print on your official company letterhead.",
-    "2. Complete all [BRACKETED] fields in ink.",
-    "3. Sign the letter and add the company stamp if applicable.",
-    "4. Scan to PDF.",
-    "5. Upload the signed EOI together with your 6 months of utility",
-    "   bills at the secure link provided by your Foundation-1",
-    "   consultant, or email to support@foundation-1.co.za.",
+    "1. Complete all [BRACKETED] fields.",
+    "2. Sign the document as the authorised representative.",
+    "3. Scan or export it to PDF.",
+    "4. Return only the signed EOI through the secure link supplied by",
+    "   Foundation-1. Utility evidence must already have been assessed.",
     "",
     "Questions? Contact Foundation-1:",
     "  Email:  support@foundation-1.co.za",

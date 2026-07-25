@@ -16,6 +16,7 @@ export type DbUserProfile = {
   role: UserRole;
   agentId: string | null;
   partnerOrgId: string | null;
+  supabaseAuthUserId: string | null;
   isActive: boolean;
 };
 
@@ -60,7 +61,12 @@ function rowToProfile(row: Record<string, unknown>): DbUserProfile {
     name: row.name as string,
     role: row.role as UserRole,
     agentId: (row.agent_id as string | null) ?? null,
-    partnerOrgId: (row.partner_org_id as string | null) ?? null,
+    partnerOrgId:
+      (row.partner_organisation_id as string | null)
+      ?? (row.partner_org_id as string | null)
+      ?? null,
+    supabaseAuthUserId:
+      (row.supabase_auth_user_id as string | null) ?? null,
     isActive: Boolean(row.is_active),
   };
 }
@@ -69,13 +75,51 @@ export async function findProfileByEmail(email: string): Promise<DbUserProfile |
   const supabase = getSupabaseAdminClient();
   if (!supabase) return null;
 
-  const { data, error } = await supabase
+  let result = await supabase
     .from("oneos_users")
-    .select("id, email, name, role, agent_id, partner_org_id, is_active")
+    .select(
+      "id, email, name, role, agent_id, partner_org_id, partner_organisation_id, supabase_auth_user_id, is_active",
+    )
     .eq("email", email.trim().toLowerCase())
     .maybeSingle();
 
+  if (
+    result.error
+    && /partner_organisation_id|supabase_auth_user_id/i.test(result.error.message)
+  ) {
+    result = await supabase
+      .from("oneos_users")
+      .select("id, email, name, role, agent_id, partner_org_id, is_active")
+      .eq("email", email.trim().toLowerCase())
+      .maybeSingle();
+  }
+  const { data, error } = result;
   if (isMissingRelationError(error)) return null;
+  if (error) throw error;
+  return data ? rowToProfile(data) : null;
+}
+
+export async function findProfileByAuthUserId(
+  authUserId: string,
+): Promise<DbUserProfile | null> {
+  const supabase = getSupabaseAdminClient();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from("oneos_users")
+    .select(
+      "id, email, name, role, agent_id, partner_org_id, partner_organisation_id, supabase_auth_user_id, is_active",
+    )
+    .eq("supabase_auth_user_id", authUserId)
+    .maybeSingle();
+
+  if (
+    isMissingRelationError(error)
+    || error?.code === "42703"
+    || /supabase_auth_user_id/i.test(error?.message ?? "")
+  ) {
+    return null;
+  }
   if (error) throw error;
   return data ? rowToProfile(data) : null;
 }
@@ -86,6 +130,7 @@ export type UpsertProfileInput = {
   role: UserRole;
   agentId?: string | null;
   partnerOrgId?: string | null;
+  supabaseAuthUserId?: string | null;
   isActive?: boolean;
 };
 
@@ -93,19 +138,36 @@ export async function upsertProfile(input: UpsertProfileInput): Promise<void> {
   const supabase = getSupabaseAdminClient();
   if (!supabase) return;
 
-  const { error } = await supabase
+  const profileRow = {
+    email: input.email.trim().toLowerCase(),
+    name: input.name,
+    role: input.role,
+    agent_id: input.agentId ?? null,
+    partner_org_id: input.partnerOrgId ?? null,
+    partner_organisation_id: input.partnerOrgId ?? null,
+    supabase_auth_user_id: input.supabaseAuthUserId ?? null,
+    is_active: input.isActive ?? true,
+  };
+  let result = await supabase
     .from("oneos_users")
-    .upsert(
-      {
-        email: input.email.trim().toLowerCase(),
-        name: input.name,
-        role: input.role,
-        agent_id: input.agentId ?? null,
-        partner_org_id: input.partnerOrgId ?? null,
-        is_active: input.isActive ?? true,
-      },
-      { onConflict: "email" },
-    );
+    .upsert(profileRow, { onConflict: "email" });
 
+  if (
+    result.error
+    && /partner_organisation_id|supabase_auth_user_id/i.test(result.error.message)
+  ) {
+    const legacyProfileRow = {
+      email: profileRow.email,
+      name: profileRow.name,
+      role: profileRow.role,
+      agent_id: profileRow.agent_id,
+      partner_org_id: profileRow.partner_org_id,
+      is_active: profileRow.is_active,
+    };
+    result = await supabase
+      .from("oneos_users")
+      .upsert(legacyProfileRow, { onConflict: "email" });
+  }
+  const { error } = result;
   if (error && !isMissingRelationError(error)) throw error;
 }

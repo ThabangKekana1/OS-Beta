@@ -2,7 +2,12 @@
 
 import { useMemo, useRef, useState } from "react";
 
-type UploadDocumentType = "expression_of_interest" | "signed_eoi" | "utility_bills" | "signed_proposal";
+type UploadDocumentType =
+  | "expression_of_interest"
+  | "signed_eoi"
+  | "utility_bills"
+  | "signed_proposal"
+  | "signed_mandate";
 
 type UploadLeadView = {
   clientProfileId: string;
@@ -16,6 +21,17 @@ type UploadLeadView = {
 type ClientDocumentUploadPortalProps = {
   token: string;
   initialLead: UploadLeadView;
+};
+
+type PublicBillAnalysisSummary = {
+  fileName: string;
+  status: "analysed" | "manual-review" | "unsupported" | "failed";
+  accountMonth: string | null;
+  tariffName: string | null;
+  monthlyKwh: number | null;
+  currentPeriodChargesExVat: number | null;
+  confidence: "high" | "medium" | "low" | "manual-review";
+  warnings: string[];
 };
 
 const documentOptions: Array<{
@@ -52,11 +68,19 @@ const documentOptions: Array<{
   },
   {
     id: "signed_proposal",
-    eyebrow: "Commercial",
-    label: "Signed Proposal",
-    description: "Upload a signed proposal after commercial approval or client acceptance.",
-    promise: "The team will review it and move the profile into the next stage.",
+    eyebrow: "Formal UFMS terms",
+    label: "Signed Formal UFMS Proposal",
+    description: "Return the complete proposal issued by the UFMS funding route after authorised signature.",
+    promise: "The direct-to-UFMS bank KYC handoff opens after this signed proposal is recorded.",
     accent: "from-fuchsia-300/24 via-white/[0.045] to-white/[0.02]",
+  },
+  {
+    id: "signed_mandate",
+    eyebrow: "Commercial",
+    label: "Signed Foundation-1 Mandate",
+    description: "Upload the signed coordination mandate. It excludes Foundation-1 custody of bank KYC documents.",
+    promise: "Formal proposal coordination follows; bank KYC remains direct-to-UFMS only.",
+    accent: "from-violet-300/24 via-white/[0.045] to-white/[0.02]",
   },
 ];
 
@@ -77,6 +101,7 @@ export function ClientDocumentUploadPortal({ token, initialLead }: ClientDocumen
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [billAnalyses, setBillAnalyses] = useState<PublicBillAnalysisSummary[]>([]);
   const [hasStarted, setHasStarted] = useState(false);
   const [step, setStep] = useState<"choose" | "upload" | "complete">("choose");
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -137,6 +162,7 @@ export function ClientDocumentUploadPortal({ token, initialLead }: ClientDocumen
         error?: string;
         lead?: UploadLeadView;
         uploadedCount?: number;
+        billAnalyses?: PublicBillAnalysisSummary[];
       };
 
       if (!response.ok || !payload.ok || !payload.lead) {
@@ -146,6 +172,7 @@ export function ClientDocumentUploadPortal({ token, initialLead }: ClientDocumen
 
       setLead(payload.lead);
       setFiles([]);
+      setBillAnalyses(payload.billAnalyses ?? []);
       setSuccess(`${payload.uploadedCount ?? files.length} file${(payload.uploadedCount ?? files.length) === 1 ? "" : "s"} uploaded to your profile.`);
       setStep("complete");
     } catch {
@@ -179,8 +206,9 @@ export function ClientDocumentUploadPortal({ token, initialLead }: ClientDocumen
             ))}
           </div>
           <div className="mt-4 space-y-1 text-xs text-white/36">
-            <p>Accepted: PDF, PNG, JPG, DOCX, XLSX, TXT — up to 15 MB each.</p>
+            <p>Accepted: PDF, photos (JPG, PNG, HEIC), DOCX, XLSX, TXT — up to 15 MB each.</p>
             <p>Return to this link any time to upload additional documents.</p>
+            <p className="text-white/62">Bank KYC is never uploaded here. After the formal proposal is signed, send it directly to info@UFMS.net only.</p>
           </div>
           <button
             type="button"
@@ -323,7 +351,7 @@ export function ClientDocumentUploadPortal({ token, initialLead }: ClientDocumen
                   ref={inputRef}
                   type="file"
                   multiple
-                  accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.txt"
+                  accept=".pdf,.docx,.xlsx,.txt,image/*,.heic,.heif"
                   onChange={(event) => {
                     if (event.target.files) addFiles(event.target.files);
                     event.target.value = "";
@@ -386,11 +414,42 @@ export function ClientDocumentUploadPortal({ token, initialLead }: ClientDocumen
               <p className="mt-2 max-w-xs text-xs leading-5 text-white/42">
                 {success ?? "Your documents were uploaded to the profile."} You can upload another category now or return later using the same link.
               </p>
+              {billAnalyses.length > 0 ? (
+                <div className="mt-5 w-full max-w-lg rounded-xl border border-white/10 bg-black/20 p-3 text-left">
+                  <p className="text-[0.56rem] uppercase tracking-[0.18em] text-lime-200/60">
+                    Bill reading check
+                  </p>
+                  <ul className="mt-2 space-y-2">
+                    {billAnalyses.map((analysis) => (
+                      <li key={analysis.fileName} className="rounded-lg border border-white/7 bg-white/[0.025] p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <span className="min-w-0 truncate text-xs text-white/70">{analysis.fileName}</span>
+                          <span className={`shrink-0 text-[0.54rem] uppercase tracking-[0.14em] ${analysis.status === "analysed" ? "text-emerald-200/70" : "text-amber-200/70"}`}>
+                            {analysis.status === "analysed" ? `${analysis.confidence} read` : "review needed"}
+                          </span>
+                        </div>
+                        {analysis.status === "analysed" ? (
+                          <p className="mt-1 text-[0.68rem] leading-5 text-white/42">
+                            {[analysis.accountMonth, analysis.tariffName, analysis.monthlyKwh ? `${Math.round(analysis.monthlyKwh).toLocaleString("en-ZA")} kWh` : null]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        ) : (
+                          <p className="mt-1 text-[0.68rem] leading-5 text-amber-100/50">
+                            Your file is safely stored. Foundation-1 will OCR or review it manually before issuing figures.
+                          </p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               <div className="mt-6 flex flex-wrap justify-center gap-2">
                 <button
                   type="button"
                   onClick={() => {
                     setSuccess(null);
+                    setBillAnalyses([]);
                     setStep("choose");
                   }}
                   className="rounded-full border border-white bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-black transition hover:bg-lime-200"

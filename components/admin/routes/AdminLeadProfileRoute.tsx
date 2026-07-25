@@ -52,6 +52,7 @@ import {
   registrationLinkIdForLead,
   registrationLinkPath,
 } from "@/lib/registration-links";
+import { hasCompletedFoundationAssessment } from "@/lib/post-assessment-eoi";
 
 const priorities: AdminLeadPriority[] = ["Standard", "Priority", "Executive"];
 const taskOwners: AdminTaskOwner[] = ["Agent", "Client", "Ops", "Legal"];
@@ -60,12 +61,6 @@ const documentCategoryOptions = [
   "EOI",
   "Utility Bills",
   "Proposal",
-  "Company Registration",
-  "FICA",
-  "Audited Financials",
-  "Management Accounts",
-  "Bank Statements",
-  "Tax Clearance",
   "Term Sheet",
 ] as const;
 type DocumentCategoryOption = (typeof documentCategoryOptions)[number];
@@ -74,12 +69,6 @@ const documentCategoryStatusMap: Record<DocumentCategoryOption, AdminDocumentSta
   EOI: "signed",
   "Utility Bills": "received",
   Proposal: "issued",
-  "Company Registration": "received",
-  FICA: "received",
-  "Audited Financials": "received",
-  "Management Accounts": "received",
-  "Bank Statements": "received",
-  "Tax Clearance": "received",
   "Term Sheet": "issued",
 };
 type WorkflowFileKey =
@@ -401,7 +390,8 @@ export function AdminLeadProfileRoute({
     });
     return signatureText ? splitSignatureForBanner(signatureText) : null;
   }, [actorRole, selectedEmailSenderOption?.email]);
-  const eoiSigningPath = lead?.eoiSigningToken ? `/eoi/${lead.eoiSigningToken}` : null;
+  const assessmentCompleted = lead ? hasCompletedFoundationAssessment(lead) : false;
+  const eoiSigningPath = lead?.eoiSigningToken && assessmentCompleted ? `/eoi/${lead.eoiSigningToken}` : null;
   const eoiSigningUrl = eoiSigningPath ? `${appOrigin}${eoiSigningPath}` : null;
   const registrationLinkPathForLead = lead
     ? registrationLinkPath(registrationLinkIdForLead({
@@ -448,7 +438,7 @@ export function AdminLeadProfileRoute({
     () => (lead ? registrationMissingFields(lead) : []),
     [lead],
   );
-  const canGenerateEoi = missingRegistrationFields.length === 0;
+  const canGenerateEoi = missingRegistrationFields.length === 0 && assessmentCompleted;
 
   const refreshLeadThreads = useCallback(async () => {
     if (!activeLeadId) {
@@ -825,14 +815,16 @@ export function AdminLeadProfileRoute({
   const handleGenerateEoi = async () => {
     if (!canGenerateEoi) {
       setWorkflowNotice(
-        `Complete registration before generating the EOI: ${missingRegistrationFields.slice(0, 5).join(", ")}${missingRegistrationFields.length > 5 ? "…" : ""}.`,
+        assessmentCompleted
+          ? `Complete registration before generating the EOI: ${missingRegistrationFields.slice(0, 5).join(", ")}${missingRegistrationFields.length > 5 ? "…" : ""}.`
+          : "Complete and release the bill-audited Foundation-1 assessment before generating the EOI.",
       );
       return;
     }
 
     const uploaded = await uploadGeneratedEoiDocument();
     if (uploaded) {
-      setWorkflowNotice("EOI generated from the template and client copy link is active.");
+      setWorkflowNotice("EOI generated and the secure client signing link is active.");
     }
   };
 
@@ -1235,7 +1227,7 @@ export function AdminLeadProfileRoute({
           <div className="rounded-[1.15rem] border border-white/10 bg-black/30 p-4">
             <p className="line-label">Document Upload Link</p>
             <p className="mt-2 text-sm leading-6 text-white/56">
-              Send this for EOI files, signed EOI, 6-month utility bills, and signed proposal uploads.
+              Send this for EOI files, utility bills, and signed formal proposal uploads. Never use it for bank KYC; those files go directly to info@UFMS.net only.
             </p>
             <p className="mt-3 break-all rounded-xl border border-white/10 bg-white/[0.035] px-3 py-2 text-sm text-white/72">
               {documentUploadUrl ?? "Loading document upload link..."}
@@ -1299,8 +1291,10 @@ export function AdminLeadProfileRoute({
               <p className="line-label">Lead Details</p>
               <p className="mt-2 text-sm text-white/56">
                 {canGenerateEoi
-                  ? "Registration profile complete. EOI generation is unlocked."
-                  : `Complete registration before EOI: ${missingRegistrationFields.slice(0, 4).join(", ")}${missingRegistrationFields.length > 4 ? "…" : ""}.`}
+                  ? "The assessment is complete. Post-assessment EOI generation is unlocked."
+                  : assessmentCompleted
+                    ? `Complete registration before EOI: ${missingRegistrationFields.slice(0, 4).join(", ")}${missingRegistrationFields.length > 4 ? "…" : ""}.`
+                    : "EOI remains locked until the bill-audited Foundation-1 assessment is complete."}
               </p>
             </div>
             <button
@@ -1680,12 +1674,13 @@ export function AdminLeadProfileRoute({
       <section className="app-surface rounded-[1.4rem] p-4">
         <p className="line-label">Onboarding Workflow</p>
         <p className="mt-2 text-sm text-white/60">
-          Flow: Client copies EOI onto letterhead and sends back signed EOI{" -> "}Client uploads 6-month utility bills{" -> "}Admin uploads proposal{" -> "}Admin uploads term sheet{" -> "}Mark onboarding complete.
+          Flow: Client reviews the Foundation-1 assessment and signs the non-binding EOI{" -> "}formal UFMS proposal is issued and signed{" -> "}client sends bank KYC directly to info@UFMS.net{" -> "}Foundation-1 follows up on receipt and formal terms.
         </p>
         {!canGenerateEoi ? (
           <p className="mt-2 rounded-[0.8rem] border border-amber-300/20 bg-amber-300/[0.06] px-3 py-2 text-sm text-amber-100/82">
-            EOI locked until registration is complete: {missingRegistrationFields.slice(0, 6).join(", ")}
-            {missingRegistrationFields.length > 6 ? "…" : ""}.
+            {assessmentCompleted
+              ? `EOI locked until registration is complete: ${missingRegistrationFields.slice(0, 6).join(", ")}${missingRegistrationFields.length > 6 ? "…" : ""}.`
+              : "EOI locked until the bill-audited Foundation-1 assessment is completed and available to the client."}
           </p>
         ) : null}
         {workflowNotice ? (
@@ -1693,10 +1688,10 @@ export function AdminLeadProfileRoute({
         ) : null}
         <div className="mt-3 rounded-[0.9rem] border border-white/10 bg-black/35 p-3">
           <p className="text-xs uppercase tracking-[0.2em] text-white/45">
-            Client EOI Template Link
+            Secure Client EOI Link
           </p>
           <p className="mt-2 text-sm text-white/70">
-            {eoiSigningUrl ?? "Generate EOI to create the client template link."}
+            {eoiSigningUrl ?? "Generate EOI to create the secure digital signing link."}
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             {eoiSigningUrl ? (
@@ -1705,7 +1700,7 @@ export function AdminLeadProfileRoute({
                 target="_blank"
                 className="rounded-[0.7rem] border border-white/14 px-2.5 py-1.5 text-[0.64rem] uppercase tracking-[0.18em] text-white/76 transition hover:border-white/26 hover:text-white"
               >
-                Open Client Template Page
+                Open Signing Page
               </Link>
             ) : null}
             <button
@@ -1723,7 +1718,7 @@ export function AdminLeadProfileRoute({
                 Signed EOI received from {lead.eoiSignedBy ?? "Client"} • {new Date(lead.eoiSignedAt).toLocaleString("en-ZA")}
               </>
             ) : (
-              "Awaiting signed EOI by email or document upload."
+              "Awaiting the authorised representative's secure digital signature."
             )}
           </p>
         </div>
@@ -1957,7 +1952,7 @@ export function AdminLeadProfileRoute({
           </div>
         </div>
         <p className="mt-2 text-sm text-white/60">
-          All files below are attached only to client profile {lead.clientProfileId}.
+          Non-KYC migration files below are attached to client profile {lead.clientProfileId}. Bank KYC must never be uploaded to this vault.
         </p>
         <div className="mt-4 rounded-[0.9rem] border border-white/10 bg-black/30 p-3">
           <p className="text-xs uppercase tracking-[0.2em] text-white/45">

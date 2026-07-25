@@ -8,7 +8,10 @@ import {
 import { foundationDisplayNameForEmail } from "@/lib/email-signature-copy";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
-import { findProfileByEmail } from "@/lib/users-db";
+import {
+  findProfileByAuthUserId,
+  findProfileByEmail,
+} from "@/lib/users-db";
 
 function hasSupabaseAuthEnv() {
   return Boolean(
@@ -23,7 +26,9 @@ async function authSessionFromSupabaseUser(user: User): Promise<AuthSession | nu
   if (!user.email_confirmed_at && !user.confirmed_at) return null;
 
   const email = user.email.toLowerCase();
-  const profile = await findProfileByEmail(email).catch(() => null);
+  const profile =
+    await findProfileByAuthUserId(user.id).catch(() => null)
+    ?? await findProfileByEmail(email).catch(() => null);
 
   const metaName =
     (user.user_metadata?.full_name as string | undefined) ??

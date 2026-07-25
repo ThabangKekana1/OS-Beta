@@ -3,6 +3,7 @@ import { LoginForm } from "@/components/auth/LoginForm";
 function loginVariantForPath(nextPath: string | null) {
   if (nextPath?.startsWith("/admin")) return "admin" as const;
   if (nextPath?.startsWith("/sales")) return "sales" as const;
+  if (nextPath?.startsWith("/partner")) return "partner" as const;
   return "admin" as const;
 }
 

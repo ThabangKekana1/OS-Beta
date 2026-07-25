@@ -15,6 +15,17 @@ import type {
 export const runtime = "nodejs";
 
 const DOCUMENT_BUCKET = "oneos-client-documents";
+const ALLOWED_DOCUMENT_CATEGORIES = new Set([
+  "EOI",
+  "Onboarding",
+  "Utility Bills",
+  "Qualification",
+  "Proposal",
+  "Commercial",
+  "Term Sheet",
+  "Legal",
+]);
+const BANK_KYC_PATTERN = /\b(company registration|cipc|fica|director id|proof of residence|proof of address|audited financial|management account|bank statement|tax clearance|sars pin|kyc)\b/i;
 
 function cleanFileSegment(value: string) {
   return value
@@ -191,6 +202,16 @@ export async function POST(
       ? formData.get("category")!.toString().trim()
       : "Client Upload";
   const status = toDocumentStatus(formData.get("status"));
+
+  if (!ALLOWED_DOCUMENT_CATEGORIES.has(category) || BANK_KYC_PATTERN.test(`${title} ${category} ${file.name}`)) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Bank KYC documents cannot be stored in the Foundation-1 vault. The client must send them directly to info@UFMS.net only.",
+      },
+      { status: 403 },
+    );
+  }
 
   const { snapshot } = await readAdminStateSnapshot();
   const targetLead = snapshot.leads.find((entry) => entry.id === id || entry.clientProfileId === id);

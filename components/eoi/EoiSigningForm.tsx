@@ -1,182 +1,189 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import {
-  buildEoiTemplateFilename,
-  buildEoiTemplateText,
-  type EoiTemplateLead,
-} from "@/lib/eoi-template";
-import { downloadTextFile } from "@/lib/download-utils";
-
-const EOI_RETURN_EMAIL = "karman@1os.foundation-1.co.za";
+import Image from "next/image";
+import { useState } from "react";
+import { Check, Download, LockKeyhole, PenLine, ShieldCheck, Sparkles } from "lucide-react";
+import { downloadBlobFile } from "@/lib/download-utils";
+import type { EoiTemplateLead } from "@/lib/eoi-template";
+import styles from "@/components/eoi/eoi.module.css";
 
 type EoiLeadView = EoiTemplateLead & {
   stage: string;
   eoiSignatureId: string | null;
   eoiSignedBy: string | null;
   eoiSignedAt: string | null;
+  eoiAcceptedTermsAt: string | null;
   isSigned: boolean;
 };
 
-type EoiSigningFormProps = {
-  initialLead: EoiLeadView;
-};
-
-function signedAtLabel(value: string | null) {
-  if (!value) return null;
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-
-  return new Intl.DateTimeFormat("en-ZA", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(parsed);
+function formatDate(value: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("en-ZA", { dateStyle: "long", timeStyle: "short" });
 }
 
-function EoiTemplatePreview({ templateText }: { templateText: string }) {
+function EoiDocument({ lead }: { lead: EoiLeadView }) {
+  const signer = lead.eoiSignedBy || lead.contactName;
   return (
-    <article className="mx-auto w-full max-w-[210mm] bg-white px-7 py-10 text-black shadow-[0_30px_120px_rgba(0,0,0,0.48)] sm:px-[24mm] sm:py-[24mm]">
-      <pre className="whitespace-pre-wrap break-words font-sans text-[clamp(0.82rem,1.45vw,1.05rem)] leading-7 text-black">
-        {templateText}
-      </pre>
+    <article className={styles.document} aria-label="Expression of Interest document">
+      <header className={styles.documentHeader}>
+        <div className={styles.documentBrand}>
+          <Image src="/foundation-1-icon.png" alt="" width={34} height={34} />
+          <strong>Foundation-1</strong>
+        </div>
+        <div className={styles.documentMeta}>
+          <span>Non-binding EOI</span>
+          <strong>{lead.clientProfileId}</strong>
+        </div>
+      </header>
+      <div className={styles.documentRule} />
+      <p className={styles.documentEyebrow}>Renewable energy supply</p>
+      <h2>Expression of Interest</h2>
+      <p className={styles.addressLine}>To: Foundation-1 (Pty) Ltd</p>
+      <div className={styles.documentBody}>
+        <p><strong>{lead.company}</strong> has reviewed the completed Foundation-1 energy-migration assessment prepared from its submitted operating evidence.</p>
+        <p>Subject to all relevant approvals, we confirm our interest in continuing from that assessment with Foundation-1 and its approved supply and funding partners. We authorise a terms-formulation period so formal commercial, financial and technical options can be prepared.</p>
+        <p>We request Foundation-1 to engage the relevant stakeholders to obtain the information and approvals required to formulate formal terms.</p>
+        <p>If commercial and technical alignment is reached, <strong>{lead.company}</strong> wishes to explore a comprehensive zero-capex solar, storage, wheeling or related energy-migration agreement.</p>
+        <p><strong>This Expression of Interest is non-binding.</strong> It does not oblige {lead.company}, Foundation-1 or any supply or funding partner to conclude a transaction. A binding relationship can arise only through a separate definitive agreement signed by the relevant parties.</p>
+      </div>
+      <footer className={styles.signatureBlock}>
+        <div>
+          <span>Authorised signatory</span>
+          <strong className={styles.signatureName}>{signer}</strong>
+          <p>{lead.userProfile.role || "Authorised representative"}</p>
+          <p>{lead.company}</p>
+          <p>{lead.businessRegistrationNumber || "Registration number not supplied"}</p>
+        </div>
+        <div className={styles.signatureCertificate}>
+          {lead.isSigned ? <Check size={20} aria-hidden="true" /> : <PenLine size={20} aria-hidden="true" />}
+          <span>{lead.isSigned ? "Digitally signed" : "Awaiting signature"}</span>
+          {lead.eoiSignedAt ? <small>{formatDate(lead.eoiSignedAt)}</small> : null}
+          {lead.eoiSignatureId ? <small>Record {lead.eoiSignatureId}</small> : null}
+        </div>
+      </footer>
     </article>
   );
 }
 
-function copyTextWithTextarea(value: string) {
-  const textarea = document.createElement("textarea");
-  textarea.value = value;
-  textarea.setAttribute("readonly", "");
-  textarea.style.position = "fixed";
-  textarea.style.left = "-9999px";
-  textarea.style.top = "0";
-  document.body.appendChild(textarea);
-  textarea.select();
-  const copied = document.execCommand("copy");
-  document.body.removeChild(textarea);
-  if (!copied) {
-    throw new Error("Copy command failed");
-  }
-}
+export function EoiSigningForm({ token, initialLead }: { token: string; initialLead: EoiLeadView }) {
+  const [lead, setLead] = useState(initialLead);
+  const [signedBy, setSignedBy] = useState(initialLead.contactName);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [signing, setSigning] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [error, setError] = useState("");
 
-export function EoiSigningForm({ initialLead }: EoiSigningFormProps) {
-  const [copied, setCopied] = useState(false);
-  const [copyError, setCopyError] = useState<string | null>(null);
-  const signedAt = signedAtLabel(initialLead.eoiSignedAt);
-  const templateText = useMemo(
-    () => buildEoiTemplateText(initialLead),
-    [initialLead],
-  );
-  const filename = useMemo(
-    () => buildEoiTemplateFilename(initialLead.company),
-    [initialLead.company],
-  );
-  const mailtoHref = `mailto:${EOI_RETURN_EMAIL}?subject=${encodeURIComponent(
-    `Signed Expression of Interest - ${initialLead.company}`,
-  )}`;
-
-  const copyTemplate = async () => {
-    setCopyError(null);
-
+  async function signEoi() {
+    setSigning(true);
+    setError("");
     try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(templateText);
-      } else {
-        copyTextWithTextarea(templateText);
+      const response = await fetch(`/api/eoi/${token}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ signedBy, acceptedTerms }),
+      });
+      const payload = (await response.json().catch(() => null)) as { ok?: boolean; error?: string; lead?: EoiLeadView } | null;
+      if (!response.ok || !payload?.ok || !payload.lead) {
+        setError(payload?.error ?? "Unable to sign the EOI.");
+        return;
       }
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2200);
+      setLead(payload.lead);
+      setAcceptedTerms(false);
     } catch {
-      try {
-        copyTextWithTextarea(templateText);
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 2200);
-      } catch {
-        setCopied(false);
-        setCopyError("Clipboard access failed. Download the text file and copy it from there.");
-      }
+      setError("Unable to reach the signature service. Try again.");
+    } finally {
+      setSigning(false);
     }
-  };
+  }
 
-  const downloadTemplate = () => {
-    downloadTextFile(filename, templateText);
-  };
+  async function downloadSignedEoi() {
+    setDownloading(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/eoi/${token}`, { method: "PUT" });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        setError(payload?.error ?? "Unable to prepare the signed EOI.");
+        return;
+      }
+      const disposition = response.headers.get("content-disposition") ?? "";
+      const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] ?? "foundation-1-signed-eoi.pdf";
+      downloadBlobFile(filename, await response.blob());
+    } catch {
+      setError("Unable to download the signed EOI. Try again.");
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   return (
-    <div className="w-full max-w-5xl">
-      <section className="mb-5 rounded-[1.4rem] border border-white/12 bg-white/[0.04] px-5 py-4">
-        <p className="text-[0.66rem] uppercase tracking-[0.26em] text-white/46">
-          Expression of Interest
-        </p>
-        <h1 className="mt-3 text-3xl font-medium tracking-[-0.04em] text-white">
-          Copy EOI template for {initialLead.company}
-        </h1>
-        <p className="mt-3 max-w-3xl text-sm leading-7 text-white/68">
-          The template below is already filled with the registered client information. Copy it onto
-          your company letterhead, sign it through your normal internal process, then email the
-          signed letter back to Foundation-1.
-        </p>
+    <main className={styles.experience}>
+      <div className={styles.ambientOne} />
+      <div className={styles.ambientTwo} />
+      <header className={styles.topbar}>
+        <Image src="/logo.png" alt="Foundation-1" width={120} height={40} className={styles.topbarLogo} />
+        <span><LockKeyhole size={14} /> Secure digital agreement</span>
+      </header>
 
-        {initialLead.isSigned ? (
-          <p className="mt-3 rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100/78">
-            Signed EOI already recorded{signedAt ? ` on ${signedAt}` : ""}. You can still copy the
-            template if it needs to be reissued.
-          </p>
-        ) : null}
-
-        <div className="mt-4 grid gap-3 rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-white/70 md:grid-cols-3">
-          <div>
-            <p className="text-[0.62rem] uppercase tracking-[0.2em] text-white/42">Step 1</p>
-            <p className="mt-1">Copy the filled EOI text.</p>
-          </div>
-          <div>
-            <p className="text-[0.62rem] uppercase tracking-[0.2em] text-white/42">Step 2</p>
-            <p className="mt-1">Paste it onto company letterhead and sign it.</p>
-          </div>
-          <div>
-            <p className="text-[0.62rem] uppercase tracking-[0.2em] text-white/42">Step 3</p>
-            <p className="mt-1">
-              Email the signed letter to{" "}
-              <a className="text-white underline-offset-4 hover:underline" href={mailtoHref}>
-                {EOI_RETURN_EMAIL}
-              </a>
-              .
-            </p>
-          </div>
+      <section className={styles.hero}>
+        <div>
+          <p className={styles.heroEyebrow}><Sparkles size={14} /> Assessment complete · authorization next</p>
+          <h1>{lead.isSigned ? "Interest confirmed." : "Continue from the evidence."}</h1>
+          <p>{lead.isSigned
+            ? "Your signed Expression of Interest is securely recorded. Foundation-1 can now coordinate the formal UFMS proposal."
+            : "Review the non-binding letter after the completed assessment, confirm your authority, and digitally sign. This authorises formal-proposal preparation—not a purchase."}</p>
         </div>
-
-        {copyError ? (
-          <p className="mt-3 rounded-lg border border-rose-500/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
-            {copyError}
-          </p>
-        ) : null}
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={copyTemplate}
-            className="rounded-xl border border-white/18 bg-white px-4 py-2.5 text-sm font-medium text-black transition hover:bg-white/90"
-          >
-            {copied ? "Copied" : "Copy Template"}
-          </button>
-          <button
-            type="button"
-            onClick={downloadTemplate}
-            className="rounded-xl border border-white/14 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white/78 transition hover:border-white/26 hover:text-white"
-          >
-            Download Text
-          </button>
-          <a
-            href={mailtoHref}
-            className="rounded-xl border border-white/14 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white/78 transition hover:border-white/26 hover:text-white"
-          >
-            Email Signed EOI
-          </a>
+        <div className={styles.trustRail}>
+          <span><ShieldCheck size={16} /> Non-binding</span>
+          <span><LockKeyhole size={16} /> Timestamped</span>
+          <span><Download size={16} /> Downloadable</span>
         </div>
       </section>
 
-      <EoiTemplatePreview templateText={templateText} />
-    </div>
+      <div className={styles.layout}>
+        <EoiDocument lead={lead} />
+        <aside className={styles.signingPanel}>
+          {lead.isSigned ? (
+            <>
+              <div className={styles.successMark}><Check size={26} /></div>
+              <p className={styles.panelEyebrow}>Signature complete</p>
+              <h2>Your EOI is safely recorded.</h2>
+              <p>Signed by <strong>{lead.eoiSignedBy}</strong> on {formatDate(lead.eoiSignedAt)}. A permanent signature record is attached to the client profile.</p>
+              <button type="button" className={styles.primaryAction} onClick={downloadSignedEoi} disabled={downloading}>
+                <Download size={17} /> {downloading ? "Preparing PDF…" : "Download signed EOI"}
+              </button>
+              <a href="/migration/dashboard" className={styles.secondaryAction}>Continue to dashboard</a>
+            </>
+          ) : (
+            <>
+              <p className={styles.panelEyebrow}>Digital signature</p>
+              <h2>Confirm on behalf of {lead.company}</h2>
+              <label className={styles.fieldLabel}>
+                Full name of authorised signatory
+                <input value={signedBy} onChange={(event) => setSignedBy(event.target.value)} autoComplete="name" />
+              </label>
+              <div className={styles.termsBox}>
+                <strong>What you are agreeing to</strong>
+                <ul>
+                  <li>Foundation-1 may continue from the completed assessment and formulate formal options.</li>
+                  <li>This EOI is non-binding and creates no purchase obligation.</li>
+                  <li>Any final transaction requires a separate signed agreement and approvals.</li>
+                </ul>
+              </div>
+              <label className={styles.consentRow}>
+                <input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} />
+                <span>I confirm that I am authorised to act for {lead.company}, have read this EOI, and accept the <a href="/terms" target="_blank">Terms of Service</a> and <a href="/privacy" target="_blank">Privacy Notice</a>.</span>
+              </label>
+              <button type="button" className={styles.primaryAction} onClick={signEoi} disabled={signing || !acceptedTerms || signedBy.trim().length < 2}>
+                <PenLine size={17} /> {signing ? "Applying secure signature…" : "Sign non-binding EOI"}
+              </button>
+              <p className={styles.securityNote}><ShieldCheck size={15} /> A server timestamp and unique signature record are created when you sign.</p>
+            </>
+          )}
+          {error ? <p className={styles.error} role="alert">{error}</p> : null}
+        </aside>
+      </div>
+    </main>
   );
 }

@@ -25,12 +25,12 @@ type NavItem =
 
 const products = [
   {
-    title: "Generocity",
+    title: "Eden",
     description:
       "Fully funded on-site solar installations. Zero capital expenditure, immediate savings.",
-    image: "/generocity-clay.jpg",
+    image: "/eden-clay.jpg",
     linkText: "Explore",
-    href: "/generocity",
+    href: "/eden",
   },
   {
     title: "Lumen",
@@ -109,7 +109,7 @@ const navItems: NavItem[] = [
   {
     label: "Products",
     items: [
-      { label: "Generocity", href: "/generocity" },
+      { label: "Eden", href: "/eden" },
       { label: "Lumen", href: "/lumen" },
       { label: "How It Works", href: "/how-it-works" },
     ],
@@ -135,7 +135,7 @@ const footerColumns = [
   {
     title: "Ecosystem",
     links: [
-      { label: "Generocity", href: "/generocity" },
+      { label: "Eden", href: "/eden" },
       { label: "Lumen", href: "/lumen" },
       { label: "Business", href: "/for-business" },
       { label: "Developers", href: "/for-developers" },

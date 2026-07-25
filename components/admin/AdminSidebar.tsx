@@ -7,7 +7,9 @@ import {
   Activity,
   BarChart3,
   Bell,
+  BrainCircuit,
   ClipboardList,
+  FileStack,
   Mail,
   PanelLeftClose,
   PanelLeftOpen,
@@ -24,6 +26,22 @@ type NotificationSummary = {
 
 function navItemsFor(rootPath: "/admin" | "/sales", showSales: boolean) {
   return [
+  ...(rootPath === "/admin"
+    ? [
+        {
+          id: "migration-cases",
+          label: "Migration Cases",
+          href: "/admin/migration-cases",
+          icon: FileStack,
+        },
+        {
+          id: "intelligence",
+          label: "Intelligence",
+          href: "/admin/intelligence",
+          icon: BrainCircuit,
+        },
+      ]
+    : []),
   {
     id: "leads",
     label: "Leads",

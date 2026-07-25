@@ -5,6 +5,9 @@ export type NotificationAudience = "admin" | "sales" | "customer";
 
 export type NotificationKind =
   | "eoi_signed"
+  | "proposal_accepted"
+  | "mandate_signed"
+  | "direct_kyc_submitted"
   | "customer_uploaded_document"
   | "admin_uploaded_document"
   | "email_reply"

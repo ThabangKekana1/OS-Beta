@@ -258,7 +258,7 @@ export function EnergyWaitingRoomBackground() {
 
         <rect x="170" y="716" width="1060" height="24" rx="2" fill="#040404" stroke="white" strokeWidth="1.2" />
         <text className="energy-bg-ticker" y="733" clipPath="url(#energy-bg-ticker-clip)" fill="white" fontFamily="monospace" fontSize="10">
-          FOUNDATION-1 ZERO CAPEX SOLAR - GENEROCITY PPA ACTIVE - LUMEN WHEELING ONLINE - SOUTH AFRICA - FOUNDATION-1 ZERO CAPEX SOLAR
+          FOUNDATION-1 ZERO CAPEX SOLAR - EDEN PPA ACTIVE - LUMEN WHEELING ONLINE - SOUTH AFRICA - FOUNDATION-1 ZERO CAPEX SOLAR
         </text>
       </svg>
       <div className="absolute inset-0 bg-black/76" />

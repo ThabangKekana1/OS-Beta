@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   allowedDevOrigins: ["127.0.0.1", "localhost"],
+  serverExternalPackages: ["pdf-parse", "pdfjs-dist", "@napi-rs/canvas"],
   poweredByHeader: false,
   async headers() {
     return [
@@ -22,6 +23,11 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
+      {
+        source: "/generocity",
+        destination: "/eden",
+        permanent: true,
+      },
       {
         source: "/get-started",
         destination: "/login",

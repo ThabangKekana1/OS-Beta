@@ -31,7 +31,7 @@ function resolveNextPath(searchParams: URLSearchParams) {
 }
 
 export default function AuthConfirmPage() {
-  const [status, setStatus] = useState("Signing you in to 1OS…");
+  const [status, setStatus] = useState("Confirming your Foundation-1 access…");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -110,7 +110,7 @@ export default function AuthConfirmPage() {
         <p className="mt-4 text-sm leading-7 text-white/68">
           {error
             ? "Your verification link could not be completed automatically."
-            : "We’re opening the 1OS admin dashboard."}
+            : "We’re opening your approved Foundation-1 workspace."}
         </p>
         {error ? (
           <p className="mt-4 rounded-lg border border-rose-500/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">

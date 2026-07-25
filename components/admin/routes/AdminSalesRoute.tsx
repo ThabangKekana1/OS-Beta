@@ -31,6 +31,7 @@ const PROGRESS_STAGES = new Set<AdminLeadStage>([
   "EOI Generated",
   "EOI Signed",
   "Utility Bills Uploaded",
+  "Direct KYC Submitted",
   "Compliance Pack Uploaded",
   "Term Sheet Uploaded",
   "Onboarding Complete",

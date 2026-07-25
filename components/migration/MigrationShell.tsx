@@ -9,6 +9,9 @@ import {
 } from "@/components/migration/MigrationState";
 import styles from "@/components/migration/migration.module.css";
 
+const WEBSITE_ORIGIN = process.env.NEXT_PUBLIC_WEBSITE_ORIGIN ?? "https://foundation-1.co.za";
+const WEBSITE_ASSESSMENT_URL = `${WEBSITE_ORIGIN}/pricing`;
+
 export function MigrationShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const stored = useStoredMigrationAssessment();
@@ -31,27 +34,29 @@ export function MigrationShell({ children }: { children: React.ReactNode }) {
               height={26}
               className={styles.brandIcon}
             />
-            <span className={styles.brandName}>Foundation-1</span>
+            <span className={styles.brandName}>Foundation—1 <span className={styles.brandPill}>Migration OS</span></span>
           </Link>
           <div className={styles.navLinks}>
             {!isSuccessPage && hasDashboardSession ? (
               <>
-                <Link
-                  href="/migration/start"
-                  className={pathname === "/migration/start" ? styles.navLinkActive : undefined}
-                >
+                <a href={WEBSITE_ASSESSMENT_URL}>
                   Assessment
-                </Link>
+                </a>
                 <Link
-                  href="/migration/report"
-                  className={pathname === "/migration/report" ? styles.navLinkActive : undefined}
+                  href="/migration/proposal-status"
+                  className={pathname === "/migration/proposal-status" ? styles.navLinkActive : undefined}
                 >
-                  Report
+                  Decision report
                 </Link>
               </>
             ) : (
-              (pathname === "/migration/report" || pathname?.startsWith("/migration/dashboard")) && (
-                <Link href="/migration/report">Report</Link>
+              (pathname === "/migration/proposal-status" || pathname?.startsWith("/migration/dashboard")) && (
+                <Link
+                  href="/migration/proposal-status"
+                  className={pathname === "/migration/proposal-status" ? styles.navLinkActive : undefined}
+                >
+                  Decision report
+                </Link>
               )
             )}
           </div>

@@ -1,0 +1,165 @@
+.experience {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  background: #040806;
+  color: #f5f8f6;
+  padding: 0 24px 72px;
+}
+
+.ambientOne,
+.ambientTwo {
+  position: fixed;
+  pointer-events: none;
+  border-radius: 999px;
+  filter: blur(90px);
+  opacity: 0.16;
+}
+
+.ambientOne { width: 440px; height: 440px; background: #52e39c; top: -180px; right: -80px; }
+.ambientTwo { width: 360px; height: 360px; background: #8fb7ff; bottom: -180px; left: -120px; }
+
+.topbar {
+  position: relative;
+  z-index: 2;
+  width: min(1240px, 100%);
+  min-height: 76px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255,255,255,.09);
+}
+
+.topbarLogo { width: 102px; height: auto; object-fit: contain; }
+.topbar span { display: inline-flex; align-items: center; gap: 8px; color: #b8c4bc; font-size: .78rem; }
+
+.hero {
+  position: relative;
+  z-index: 1;
+  width: min(1240px, 100%);
+  margin: 0 auto;
+  padding: 74px 0 42px;
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 40px;
+}
+
+.heroEyebrow,
+.panelEyebrow,
+.documentEyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  color: #b9ff91;
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+.hero h1 { max-width: 780px; margin: 0; font-size: clamp(3rem, 7vw, 6.5rem); line-height: .93; letter-spacing: -.065em; font-weight: 540; }
+.hero > div > p:last-child { max-width: 680px; margin: 24px 0 0; color: #aab6ae; font-size: 1.05rem; line-height: 1.7; }
+.trustRail { display: grid; gap: 12px; flex-shrink: 0; }
+.trustRail span { display: flex; align-items: center; gap: 9px; color: #cfdbd3; font-size: .8rem; }
+
+.layout {
+  position: relative;
+  z-index: 1;
+  width: min(1240px, 100%);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 24px;
+  align-items: start;
+}
+
+.document {
+  min-height: 1050px;
+  border-radius: 22px;
+  background: #f8fbf9;
+  color: #152019;
+  padding: clamp(34px, 7vw, 76px);
+  box-shadow: 0 40px 120px rgba(0,0,0,.42);
+}
+
+.documentHeader { display: flex; justify-content: space-between; align-items: center; gap: 24px; }
+.documentLogo { width: 150px; height: auto; object-fit: contain; }
+.documentBrand { display: flex; align-items: center; gap: 10px; color: #132019; text-transform: uppercase; letter-spacing: .09em; font-size: .78rem; }
+.documentBrand img { width: 34px; height: 34px; object-fit: contain; filter: invert(1); }
+.documentMeta { display: grid; justify-items: end; gap: 4px; font-size: .72rem; color: #627168; }
+.documentMeta strong { color: #17251d; }
+.documentRule { height: 1px; margin: 28px 0 50px; background: #d9e2dc; }
+.documentEyebrow { color: #19865b; }
+.document h2 { margin: 0; font-size: clamp(2.3rem, 5vw, 4.2rem); letter-spacing: -.055em; line-height: 1; font-weight: 580; }
+.addressLine { margin: 48px 0 28px; font-weight: 700; }
+.documentBody { display: grid; gap: 17px; max-width: 760px; font-size: .98rem; line-height: 1.75; color: #35433b; }
+.documentBody p { margin: 0; }
+.documentBody strong { color: #142019; }
+
+.signatureBlock { margin-top: 58px; padding-top: 28px; border-top: 1px solid #d9e2dc; display: flex; justify-content: space-between; gap: 32px; }
+.signatureBlock span { color: #718078; font-size: .66rem; letter-spacing: .12em; text-transform: uppercase; }
+.signatureName { display: block; margin: 12px 0 8px; font-family: "Snell Roundhand", "Segoe Script", cursive; font-size: 2rem; font-weight: 500; color: #142019; }
+.signatureBlock p { margin: 3px 0; color: #66736b; font-size: .8rem; }
+.signatureCertificate { min-width: 210px; align-self: end; display: grid; justify-items: start; gap: 6px; border-radius: 14px; padding: 18px; background: #eaf6ef; color: #177751; }
+.signatureCertificate span { color: #177751; font-weight: 800; }
+.signatureCertificate small { color: #5c7165; font-size: .67rem; word-break: break-all; }
+
+.signingPanel {
+  position: sticky;
+  top: 24px;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 22px;
+  padding: 28px;
+  background: rgba(10,18,13,.86);
+  box-shadow: 0 32px 90px rgba(0,0,0,.35);
+  backdrop-filter: blur(24px);
+}
+
+.signingPanel h2 { margin: 0; font-size: 1.9rem; line-height: 1.1; letter-spacing: -.045em; }
+.signingPanel > p:not(.panelEyebrow):not(.securityNote):not(.error) { color: #aab6ae; line-height: 1.65; font-size: .88rem; }
+.fieldLabel { display: grid; gap: 9px; margin-top: 26px; color: #c6d1ca; font-size: .75rem; font-weight: 650; }
+.fieldLabel input { min-height: 50px; border: 1px solid rgba(255,255,255,.16); border-radius: 12px; background: rgba(255,255,255,.045); padding: 0 14px; color: #fff; font-size: .95rem; outline: none; }
+.fieldLabel input:focus { border-color: #b9ff91; box-shadow: 0 0 0 3px rgba(185,255,145,.1); }
+.termsBox { margin-top: 18px; border-radius: 14px; padding: 17px; background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.08); }
+.termsBox strong { font-size: .78rem; }
+.termsBox ul { margin: 10px 0 0; padding-left: 18px; display: grid; gap: 7px; color: #9eaaa2; font-size: .75rem; line-height: 1.5; }
+.consentRow { display: flex; align-items: flex-start; gap: 11px; margin-top: 18px; color: #aeb9b2; font-size: .75rem; line-height: 1.55; cursor: pointer; }
+.consentRow input { margin-top: 3px; accent-color: #b9ff91; }
+.consentRow a { color: #e7eee9; text-decoration: underline; text-underline-offset: 3px; }
+.primaryAction,
+.secondaryAction { width: 100%; min-height: 50px; margin-top: 20px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 9px; font: inherit; font-size: .76rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; text-decoration: none; }
+.primaryAction { border: 1px solid #b9ff91; background: #b9ff91; color: #071009; }
+.primaryAction:disabled { cursor: not-allowed; opacity: .35; }
+.secondaryAction { margin-top: 10px; border: 1px solid rgba(255,255,255,.15); color: #d6dfd9; background: transparent; }
+.securityNote { display: flex; gap: 8px; margin-top: 15px; color: #839087; font-size: .7rem; line-height: 1.45; }
+.successMark { width: 54px; height: 54px; margin-bottom: 22px; display: grid; place-items: center; border-radius: 50%; color: #071009; background: #b9ff91; box-shadow: 0 0 50px rgba(185,255,145,.22); }
+.error { margin-top: 14px; border-radius: 10px; padding: 10px 12px; background: rgba(255,100,100,.1); border: 1px solid rgba(255,120,120,.25); color: #ffc2c2; font-size: .75rem; line-height: 1.5; }
+
+@media (max-width: 960px) {
+  .hero { display: block; padding-top: 52px; }
+  .trustRail { grid-template-columns: repeat(3, auto); margin-top: 28px; justify-content: start; }
+  .layout { grid-template-columns: 1fr; }
+  .signingPanel { position: relative; top: auto; grid-row: 1; }
+}
+
+@media (max-width: 640px) {
+  .experience { padding: 0 14px 44px; }
+  .topbar { min-height: 64px; }
+  .topbar span { font-size: .68rem; }
+  .hero { padding: 40px 0 28px; }
+  .hero h1 { font-size: clamp(2.6rem, 15vw, 4rem); }
+  .trustRail { grid-template-columns: 1fr; }
+  .document { min-height: auto; padding: 28px 22px; border-radius: 16px; }
+  .documentLogo { width: 112px; }
+  .documentMeta { font-size: .61rem; }
+  .documentRule { margin: 20px 0 34px; }
+  .document h2 { font-size: 2.35rem; }
+  .addressLine { margin-top: 34px; }
+  .documentBody { font-size: .85rem; }
+  .signatureBlock { display: grid; }
+  .signatureCertificate { min-width: 0; width: 100%; }
+  .signingPanel { padding: 22px; border-radius: 16px; }
+}

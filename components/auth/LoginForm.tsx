@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
-type LoginVariant = "admin" | "sales";
+type LoginVariant = "admin" | "sales" | "partner";
 
 const LOGIN_COPY: Record<
   LoginVariant,
@@ -35,20 +35,34 @@ const LOGIN_COPY: Record<
     formTitle: "Continue to sales portal",
     footer: "Need sales access? Ask an administrator to provision your profile.",
   },
+  partner: {
+    heroEyebrow: "Migration Leader access",
+    heroTitle: "Continue your member migration mission.",
+    heroDescription:
+      "Use the password you created from your Foundation-1 partner invitation.",
+    formEyebrow: "Partner sign in",
+    formTitle: "Continue to Mission Control",
+    footer:
+      "Partner accounts are invitation-only and must be provisioned by Foundation-1.",
+  },
 };
 
 export function LoginForm({
   nextPath,
   variant,
   initialError,
+  initialEmail,
+  initialNotice,
 }: {
   nextPath: string | null;
   variant: LoginVariant;
   initialError?: string | null;
+  initialEmail?: string | null;
+  initialNotice?: string | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail ?? "");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(initialError ?? null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -75,6 +89,24 @@ export function LoginForm({
         });
 
       if (supabaseData?.session) {
+        if (variant === "partner") {
+          const profileResponse = await fetch("/api/auth/me", {
+            headers: {
+              Authorization: `Bearer ${supabaseData.session.access_token}`,
+            },
+          });
+          const profilePayload = (await profileResponse.json()) as {
+            session?: { role?: string } | null;
+          };
+          if (profilePayload.session?.role !== "partner") {
+            await supabase.auth.signOut();
+            setError(
+              "This account does not have active Foundation-1 partner access.",
+            );
+            return;
+          }
+        }
+
         await fetch("/api/auth/login-event", {
           method: "POST",
           headers: {
@@ -86,7 +118,9 @@ export function LoginForm({
         }).catch((auditError) => {
           console.error("[auth] login audit failed", auditError);
         });
-        router.replace(nextPath ?? "/");
+        router.replace(
+          nextPath ?? (variant === "partner" ? "/partner" : "/"),
+        );
         router.refresh();
         return;
       }
@@ -139,6 +173,11 @@ export function LoginForm({
           </h2>
 
           <form className="space-y-5" onSubmit={onSubmit}>
+            {initialNotice ? (
+              <p className="rounded-lg border border-lime-300/35 bg-lime-300/10 px-3 py-2 text-sm text-lime-100">
+                {initialNotice}
+              </p>
+            ) : null}
             <div>
               <label className="mb-2 block text-xs uppercase tracking-[0.18em] text-white/54" htmlFor="email">
                 Email

@@ -131,6 +131,10 @@ export function normalizeAdminLead(lead: AdminLead): AdminLead {
     eoiSignedBy: lead.eoiSignedBy ?? null,
     eoiSignedAt: lead.eoiSignedAt ?? null,
     eoiAcceptedTermsAt: lead.eoiAcceptedTermsAt ?? null,
+    directKycSubmittedAt: lead.directKycSubmittedAt ?? null,
+    directKycSubmittedBy: lead.directKycSubmittedBy ?? null,
+    directKycRecipient: lead.directKycRecipient ?? null,
+    directKycAttestationVersion: lead.directKycAttestationVersion ?? null,
     onboardingCompletedAt: lead.onboardingCompletedAt ?? null,
   };
 }

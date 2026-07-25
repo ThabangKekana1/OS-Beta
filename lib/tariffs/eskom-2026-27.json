@@ -1,0 +1,1395 @@
+{
+  "schemaVersion": 2,
+  "title": "Eskom direct-customer standard tariffs 2026/27",
+  "effectiveFrom": "2026-04-01",
+  "effectiveTo": "2027-03-31",
+  "vatRate": 0.15,
+  "source": {
+    "publisher": "Eskom",
+    "url": "https://www.eskom.co.za/distribution/wp-content/uploads/2026/03/Eskom-tariffs-1-April-2026-Public.xlsm",
+    "workbook": "eskom-2026-27.xlsm",
+    "sha256": "aeebe852d693cc43a13440dedb2f8312646c6b8a94ae1b4309cc11fe979737ad",
+    "scope": "Non-local-authority customers directly supplied by Eskom"
+  },
+  "caveats": [
+    "All stored rates exclude VAT.",
+    "A bill code, transmission zone, voltage, customer category, season and billed determinants must be matched before a tariff is repriced.",
+    "Municipal customers require the municipality's approved tariff schedule and are not priced from this catalogue."
+  ],
+  "flatTariffs": [
+    {
+      "family": "businessrate",
+      "tariff": "Businessrate 1",
+      "tariffCode": "B1",
+      "billCode": "B101N",
+      "description": "Businessrate 1",
+      "transmissionZone": 0,
+      "voltageCode": 1,
+      "ratesExVat": {
+        "energyCentsPerKwh": 242.9,
+        "ancillaryCentsPerKwh": 0.45,
+        "networkDemandCentsPerKwh": 15.81,
+        "networkCapacityRandPerPodDay": 22.12,
+        "serviceAndAdministrationRandPerPodDay": 15.99,
+        "electrificationRuralSubsidyCentsPerKwh": 5.37,
+        "generationCapacityRandPerPodDay": 3
+      }
+    },
+    {
+      "family": "businessrate",
+      "tariff": "Businessrate 2",
+      "tariffCode": "B2",
+      "billCode": "B201N",
+      "description": "Businessrate 2",
+      "transmissionZone": 0,
+      "voltageCode": 1,
+      "ratesExVat": {
+        "energyCentsPerKwh": 242.9,
+        "ancillaryCentsPerKwh": 0.45,
+        "networkDemandCentsPerKwh": 15.81,
+        "networkCapacityRandPerPodDay": 32.86,
+        "serviceAndAdministrationRandPerPodDay": 15.99,
+        "electrificationRuralSubsidyCentsPerKwh": 5.37,
+        "generationCapacityRandPerPodDay": 4.48
+      }
+    },
+    {
+      "family": "businessrate",
+      "tariff": "Businessrate 3",
+      "tariffCode": "B3",
+      "billCode": "B301N",
+      "description": "Businessrate 3",
+      "transmissionZone": 0,
+      "voltageCode": 1,
+      "ratesExVat": {
+        "energyCentsPerKwh": 242.9,
+        "ancillaryCentsPerKwh": 0.45,
+        "networkDemandCentsPerKwh": 15.81,
+        "networkCapacityRandPerPodDay": 81.98,
+        "serviceAndAdministrationRandPerPodDay": 15.99,
+        "electrificationRuralSubsidyCentsPerKwh": 5.37,
+        "generationCapacityRandPerPodDay": 11.18
+      }
+    },
+    {
+      "family": "businessrate",
+      "tariff": "Businessrate 4",
+      "tariffCode": "B4",
+      "billCode": "B401N",
+      "description": "Businessrate 4",
+      "transmissionZone": 0,
+      "voltageCode": 1,
+      "ratesExVat": {
+        "energyCentsPerKwh": 378.06,
+        "ancillaryCentsPerKwh": 0.45,
+        "networkDemandCentsPerKwh": 15.81,
+        "networkCapacityRandPerPodDay": null,
+        "serviceAndAdministrationRandPerPodDay": null,
+        "electrificationRuralSubsidyCentsPerKwh": 5.37,
+        "generationCapacityRandPerPodDay": 0
+      }
+    },
+    {
+      "family": "landrate",
+      "tariff": "Landrate 1",
+      "tariffCode": "L1",
+      "billCode": "L101N",
+      "description": "Landrate 1",
+      "transmissionZone": 0,
+      "voltageCode": 1,
+      "ratesExVat": {
+        "energyCentsPerKwh": 242.9,
+        "ancillaryCentsPerKwh": 0.45,
+        "networkDemandCentsPerKwh": 67.06,
+        "networkCapacityRandPerPodDay": 67.65,
+        "serviceAndAdministrationRandPerPodDay": 26.65,
+        "electrificationRuralSubsidyCentsPerKwh": null,
+        "generationCapacityRandPerPodDay": 4.11
+      }
+    },
+    {
+      "family": "landrate",
+      "tariff": "Landrate 2",
+      "tariffCode": "L2",
+      "billCode": "L201N",
+      "description": "Landrate 2",
+      "transmissionZone": 0,
+      "voltageCode": 1,
+      "ratesExVat": {
+        "energyCentsPerKwh": 242.9,
+        "ancillaryCentsPerKwh": 0.45,
+        "networkDemandCentsPerKwh": 67.06,
+        "networkCapacityRandPerPodDay": 105.49,
+        "serviceAndAdministrationRandPerPodDay": 26.65,
+        "electrificationRuralSubsidyCentsPerKwh": null,
+        "generationCapacityRandPerPodDay": 8.15
+      }
+    },
+    {
+      "family": "landrate",
+      "tariff": "Landrate 3",
+      "tariffCode": "L3",
+      "billCode": "L301N",
+      "description": "Landrate 3",
+      "transmissionZone": 0,
+      "voltageCode": 1,
+      "ratesExVat": {
+        "energyCentsPerKwh": 242.9,
+        "ancillaryCentsPerKwh": 0.45,
+        "networkDemandCentsPerKwh": 67.06,
+        "networkCapacityRandPerPodDay": 168.93,
+        "serviceAndAdministrationRandPerPodDay": 26.65,
+        "electrificationRuralSubsidyCentsPerKwh": null,
+        "generationCapacityRandPerPodDay": 15.93
+      }
+    },
+    {
+      "family": "landrate",
+      "tariff": "Landrate 4",
+      "tariffCode": "L4",
+      "billCode": "L401N",
+      "description": "Landrate 4",
+      "transmissionZone": 0,
+      "voltageCode": 1,
+      "ratesExVat": {
+        "energyCentsPerKwh": 398.82,
+        "ancillaryCentsPerKwh": 0.45,
+        "networkDemandCentsPerKwh": 67.06,
+        "networkCapacityRandPerPodDay": 49.94,
+        "serviceAndAdministrationRandPerPodDay": null,
+        "electrificationRuralSubsidyCentsPerKwh": null,
+        "generationCapacityRandPerPodDay": 2.7
+      }
+    },
+    {
+      "family": "landrate",
+      "tariff": "Landrate Dx",
+      "tariffCode": "Ld",
+      "billCode": "Ld01N",
+      "description": "LandrateDx*",
+      "transmissionZone": 0,
+      "voltageCode": 1,
+      "ratesExVat": {
+        "energyCentsPerKwh": null,
+        "ancillaryCentsPerKwh": null,
+        "networkDemandCentsPerKwh": null,
+        "networkCapacityRandPerPodDay": null,
+        "serviceAndAdministrationRandPerPodDay": 94.62,
+        "electrificationRuralSubsidyCentsPerKwh": null,
+        "generationCapacityRandPerPodDay": null
+      }
+    },
+    {
+      "family": "landrate",
+      "tariff": "Landlight",
+      "tariffCode": "Lt20",
+      "billCode": "Lt2001N",
+      "description": "Landlight 20A",
+      "transmissionZone": 0,
+      "voltageCode": 1,
+      "ratesExVat": {
+        "energyCentsPerKwh": 656.41,
+        "ancillaryCentsPerKwh": null,
+        "networkDemandCentsPerKwh": null,
+        "networkCapacityRandPerPodDay": null,
+        "serviceAndAdministrationRandPerPodDay": null,
+        "electrificationRuralSubsidyCentsPerKwh": null,
+        "generationCapacityRandPerPodDay": null
+      }
+    },
+    {
+      "family": "landrate",
+      "tariff": "Landlight",
+      "tariffCode": "Lt60",
+      "billCode": "Lt6001N",
+      "description": "Landlight 60A",
+      "transmissionZone": 0,
+      "voltageCode": 1,
+      "ratesExVat": {
+        "energyCentsPerKwh": 909.23,
+        "ancillaryCentsPerKwh": null,
+        "networkDemandCentsPerKwh": null,
+        "networkCapacityRandPerPodDay": null,
+        "serviceAndAdministrationRandPerPodDay": null,
+        "electrificationRuralSubsidyCentsPerKwh": null,
+        "generationCapacityRandPerPodDay": null
+      }
+    },
+    {
+      "family": "landrate",
+      "tariff": "Landrate Dx",
+      "tariffCode": "Ld",
+      "billCode": "Ld01N",
+      "description": "Landrate Dx*",
+      "transmissionZone": 0,
+      "voltageCode": 1,
+      "ratesExVat": {
+        "energyCentsPerKwh": null,
+        "ancillaryCentsPerKwh": null,
+        "networkDemandCentsPerKwh": null,
+        "networkCapacityRandPerPodDay": null,
+        "serviceAndAdministrationRandPerPodDay": 94.62,
+        "electrificationRuralSubsidyCentsPerKwh": null,
+        "generationCapacityRandPerPodDay": null
+      }
+    }
+  ],
+  "ruraflex": {
+    "variants": [
+      {
+        "family": "ruraflex",
+        "tariff": "Ruraflex",
+        "tariffCode": "Ru",
+        "billCode": "Ru01N",
+        "transmissionZone": 0,
+        "transmissionZoneDescription": "≤ 300km",
+        "voltageCode": 1,
+        "voltageDescription": "< 500V",
+        "ratesExVat": {
+          "highSeasonCentsPerKwh": {
+            "peak": 746.19,
+            "standard": 186.55,
+            "offPeak": 124.36
+          },
+          "lowSeasonCentsPerKwh": {
+            "peak": 309.68,
+            "standard": 174.11,
+            "offPeak": 124.36
+          },
+          "legacyCentsPerKwh": 25.01,
+          "generationCapacityRandPerKvaMonth": 5.07,
+          "networkCapacityRandPerKvaMonth": 56.6
+        }
+      },
+      {
+        "family": "ruraflex",
+        "tariff": "Ruraflex",
+        "tariffCode": "Ru",
+        "billCode": "Ru02N",
+        "transmissionZone": 0,
+        "transmissionZoneDescription": "≤ 300km",
+        "voltageCode": 2,
+        "voltageDescription": "≥ 500V & ≤ 22kV",
+        "ratesExVat": {
+          "highSeasonCentsPerKwh": {
+            "peak": 732.98,
+            "standard": 183.23,
+            "offPeak": 122.16
+          },
+          "lowSeasonCentsPerKwh": {
+            "peak": 304.19,
+            "standard": 171.03,
+            "offPeak": 122.16
+          },
+          "legacyCentsPerKwh": 24.57,
+          "generationCapacityRandPerKvaMonth": 7.63,
+          "networkCapacityRandPerKvaMonth": 52.55
+        }
+      },
+      {
+        "family": "ruraflex",
+        "tariff": "Ruraflex",
+        "tariffCode": "Ru",
+        "billCode": "Ru11N",
+        "transmissionZone": 1,
+        "transmissionZoneDescription": "> 300km and ≤ 600km",
+        "voltageCode": 1,
+        "voltageDescription": "< 500V",
+        "ratesExVat": {
+          "highSeasonCentsPerKwh": {
+            "peak": 753.66,
+            "standard": 188.42,
+            "offPeak": 125.6
+          },
+          "lowSeasonCentsPerKwh": {
+            "peak": 312.78,
+            "standard": 175.85,
+            "offPeak": 125.6
+          },
+          "legacyCentsPerKwh": 25.01,
+          "generationCapacityRandPerKvaMonth": 5.07,
+          "networkCapacityRandPerKvaMonth": 56.71
+        }
+      },
+      {
+        "family": "ruraflex",
+        "tariff": "Ruraflex",
+        "tariffCode": "Ru",
+        "billCode": "Ru12N",
+        "transmissionZone": 1,
+        "transmissionZoneDescription": "> 300km and ≤ 600km",
+        "voltageCode": 2,
+        "voltageDescription": "≥ 500V & ≤ 22kV",
+        "ratesExVat": {
+          "highSeasonCentsPerKwh": {
+            "peak": 740.31,
+            "standard": 185.08,
+            "offPeak": 123.38
+          },
+          "lowSeasonCentsPerKwh": {
+            "peak": 307.24,
+            "standard": 172.75,
+            "offPeak": 123.38
+          },
+          "legacyCentsPerKwh": 24.57,
+          "generationCapacityRandPerKvaMonth": 7.63,
+          "networkCapacityRandPerKvaMonth": 52.66
+        }
+      },
+      {
+        "family": "ruraflex",
+        "tariff": "Ruraflex",
+        "tariffCode": "Ru",
+        "billCode": "Ru21N",
+        "transmissionZone": 2,
+        "transmissionZoneDescription": "> 600km and ≤ 900km",
+        "voltageCode": 1,
+        "voltageDescription": "< 500V",
+        "ratesExVat": {
+          "highSeasonCentsPerKwh": {
+            "peak": 761.12,
+            "standard": 190.27,
+            "offPeak": 126.84
+          },
+          "lowSeasonCentsPerKwh": {
+            "peak": 315.86,
+            "standard": 177.59,
+            "offPeak": 126.84
+          },
+          "legacyCentsPerKwh": 25.01,
+          "generationCapacityRandPerKvaMonth": 5.07,
+          "networkCapacityRandPerKvaMonth": 56.83
+        }
+      },
+      {
+        "family": "ruraflex",
+        "tariff": "Ruraflex",
+        "tariffCode": "Ru",
+        "billCode": "Ru22N",
+        "transmissionZone": 2,
+        "transmissionZoneDescription": "> 600km and ≤ 900km",
+        "voltageCode": 2,
+        "voltageDescription": "≥ 500V & ≤ 22kV",
+        "ratesExVat": {
+          "highSeasonCentsPerKwh": {
+            "peak": 747.64,
+            "standard": 186.92,
+            "offPeak": 124.61
+          },
+          "lowSeasonCentsPerKwh": {
+            "peak": 310.28,
+            "standard": 174.45,
+            "offPeak": 124.61
+          },
+          "legacyCentsPerKwh": 24.57,
+          "generationCapacityRandPerKvaMonth": 7.63,
+          "networkCapacityRandPerKvaMonth": 52.78
+        }
+      },
+      {
+        "family": "ruraflex",
+        "tariff": "Ruraflex",
+        "tariffCode": "Ru",
+        "billCode": "Ru31N",
+        "transmissionZone": 3,
+        "transmissionZoneDescription": "> 900km",
+        "voltageCode": 1,
+        "voltageDescription": "< 500V",
+        "ratesExVat": {
+          "highSeasonCentsPerKwh": {
+            "peak": 768.58,
+            "standard": 192.14,
+            "offPeak": 128.08
+          },
+          "lowSeasonCentsPerKwh": {
+            "peak": 318.96,
+            "standard": 179.34,
+            "offPeak": 128.08
+          },
+          "legacyCentsPerKwh": 25.01,
+          "generationCapacityRandPerKvaMonth": 5.07,
+          "networkCapacityRandPerKvaMonth": 56.95
+        }
+      },
+      {
+        "family": "ruraflex",
+        "tariff": "Ruraflex",
+        "tariffCode": "Ru",
+        "billCode": "Ru32N",
+        "transmissionZone": 3,
+        "transmissionZoneDescription": "> 900km",
+        "voltageCode": 2,
+        "voltageDescription": "≥ 500V & ≤ 22kV",
+        "ratesExVat": {
+          "highSeasonCentsPerKwh": {
+            "peak": 754.97,
+            "standard": 188.74,
+            "offPeak": 125.83
+          },
+          "lowSeasonCentsPerKwh": {
+            "peak": 313.33,
+            "standard": 176.16,
+            "offPeak": 125.83
+          },
+          "legacyCentsPerKwh": 24.57,
+          "generationCapacityRandPerKvaMonth": 7.63,
+          "networkCapacityRandPerKvaMonth": 52.9
+        }
+      }
+    ],
+    "sharedCharges": {
+      "customerCategoryChargesExVat": [
+        {
+          "category": "≤ 100 kVA",
+          "serviceRandPerPodDay": 25.18,
+          "administrationRandPerPodDay": 1.47
+        },
+        {
+          "category": "> 100 kVA & ≤ 500 kVA",
+          "serviceRandPerPodDay": 69.91,
+          "administrationRandPerPodDay": 13.49
+        },
+        {
+          "category": "> 500 kVA & ≤ 1 MVA",
+          "serviceRandPerPodDay": 215.91,
+          "administrationRandPerPodDay": 21.07
+        },
+        {
+          "category": "> 1 MVA",
+          "serviceRandPerPodDay": 215.91,
+          "administrationRandPerPodDay": 21.07
+        },
+        {
+          "category": "Key customers",
+          "serviceRandPerPodDay": 1216.44,
+          "administrationRandPerPodDay": 21.07
+        }
+      ],
+      "ancillaryCentsPerKwh": 0.45,
+      "networkDemandCentsPerKwhByVoltage": {
+        "below500V": 52.55,
+        "atLeast500VTo22kV": 45.56
+      },
+      "reactiveEnergyCentsPerKvarh": {
+        "highSeason": 21.57,
+        "lowSeason": 0
+      }
+    }
+  },
+  "nightsaveRural": {
+    "variants": [
+      {
+        "family": "nightsave-rural",
+        "tariff": "Nightsave Rural",
+        "tariffCode": "NR",
+        "billCode": "NR01N",
+        "transmissionZone": 0,
+        "transmissionZoneDescription": "≤ 300km",
+        "voltageCode": 1,
+        "voltageDescription": "< 500V",
+        "ratesExVat": {
+          "activeEnergyCentsPerKwh": {
+            "highSeason": 165.97,
+            "lowSeason": 159.53
+          },
+          "energyDemandRandPerKvaMonth": {
+            "highSeason": 444.28,
+            "lowSeason": 103.96
+          },
+          "networkCapacityRandPerKvaMonth": 56.6,
+          "legacyCentsPerKwh": 25.01,
+          "generationCapacityRandPerKvaMonth": 5.07
+        }
+      },
+      {
+        "family": "nightsave-rural",
+        "tariff": "Nightsave Rural",
+        "tariffCode": "NR",
+        "billCode": "NR02N",
+        "transmissionZone": 0,
+        "transmissionZoneDescription": "≤ 300km",
+        "voltageCode": 2,
+        "voltageDescription": "≥ 500V & ≤ 22kV",
+        "ratesExVat": {
+          "activeEnergyCentsPerKwh": {
+            "highSeason": 163.03,
+            "lowSeason": 156.71
+          },
+          "energyDemandRandPerKvaMonth": {
+            "highSeason": 436.43,
+            "lowSeason": 102.11
+          },
+          "networkCapacityRandPerKvaMonth": 52.55,
+          "legacyCentsPerKwh": 24.57,
+          "generationCapacityRandPerKvaMonth": 7.63
+        }
+      },
+      {
+        "family": "nightsave-rural",
+        "tariff": "Nightsave Rural",
+        "tariffCode": "NR",
+        "billCode": "NR11N",
+        "transmissionZone": 1,
+        "transmissionZoneDescription": "> 300km and ≤ 600km",
+        "voltageCode": 1,
+        "voltageDescription": "< 500V",
+        "ratesExVat": {
+          "activeEnergyCentsPerKwh": {
+            "highSeason": 167.62,
+            "lowSeason": 161.12
+          },
+          "energyDemandRandPerKvaMonth": {
+            "highSeason": 448.7,
+            "lowSeason": 105
+          },
+          "networkCapacityRandPerKvaMonth": 56.71,
+          "legacyCentsPerKwh": 25.01,
+          "generationCapacityRandPerKvaMonth": 5.07
+        }
+      },
+      {
+        "family": "nightsave-rural",
+        "tariff": "Nightsave Rural",
+        "tariffCode": "NR",
+        "billCode": "NR12N",
+        "transmissionZone": 1,
+        "transmissionZoneDescription": "> 300km and ≤ 600km",
+        "voltageCode": 2,
+        "voltageDescription": "≥ 500V & ≤ 22kV",
+        "ratesExVat": {
+          "activeEnergyCentsPerKwh": {
+            "highSeason": 164.65,
+            "lowSeason": 158.27
+          },
+          "energyDemandRandPerKvaMonth": {
+            "highSeason": 440.76,
+            "lowSeason": 103.14
+          },
+          "networkCapacityRandPerKvaMonth": 52.66,
+          "legacyCentsPerKwh": 24.57,
+          "generationCapacityRandPerKvaMonth": 7.63
+        }
+      },
+      {
+        "family": "nightsave-rural",
+        "tariff": "Nightsave Rural",
+        "tariffCode": "NR",
+        "billCode": "NR21N",
+        "transmissionZone": 2,
+        "transmissionZoneDescription": "> 600km and ≤ 900km",
+        "voltageCode": 1,
+        "voltageDescription": "< 500V",
+        "ratesExVat": {
+          "activeEnergyCentsPerKwh": {
+            "highSeason": 169.27,
+            "lowSeason": 162.73
+          },
+          "energyDemandRandPerKvaMonth": {
+            "highSeason": 453.16,
+            "lowSeason": 106.04
+          },
+          "networkCapacityRandPerKvaMonth": 56.83,
+          "legacyCentsPerKwh": 25.01,
+          "generationCapacityRandPerKvaMonth": 5.07
+        }
+      },
+      {
+        "family": "nightsave-rural",
+        "tariff": "Nightsave Rural",
+        "tariffCode": "NR",
+        "billCode": "NR22N",
+        "transmissionZone": 2,
+        "transmissionZoneDescription": "> 600km and ≤ 900km",
+        "voltageCode": 2,
+        "voltageDescription": "≥ 500V & ≤ 22kV",
+        "ratesExVat": {
+          "activeEnergyCentsPerKwh": {
+            "highSeason": 166.28,
+            "lowSeason": 159.84
+          },
+          "energyDemandRandPerKvaMonth": {
+            "highSeason": 445.14,
+            "lowSeason": 104.16
+          },
+          "networkCapacityRandPerKvaMonth": 52.78,
+          "legacyCentsPerKwh": 24.57,
+          "generationCapacityRandPerKvaMonth": 7.63
+        }
+      },
+      {
+        "family": "nightsave-rural",
+        "tariff": "Nightsave Rural",
+        "tariffCode": "NR",
+        "billCode": "NR31N",
+        "transmissionZone": 3,
+        "transmissionZoneDescription": "> 900km",
+        "voltageCode": 1,
+        "voltageDescription": "< 500V",
+        "ratesExVat": {
+          "activeEnergyCentsPerKwh": {
+            "highSeason": 170.93,
+            "lowSeason": 164.3
+          },
+          "energyDemandRandPerKvaMonth": {
+            "highSeason": 457.58,
+            "lowSeason": 107.06
+          },
+          "networkCapacityRandPerKvaMonth": 56.95,
+          "legacyCentsPerKwh": 25.01,
+          "generationCapacityRandPerKvaMonth": 5.07
+        }
+      },
+      {
+        "family": "nightsave-rural",
+        "tariff": "Nightsave Rural",
+        "tariffCode": "NR",
+        "billCode": "NR32N",
+        "transmissionZone": 3,
+        "transmissionZoneDescription": "> 900km",
+        "voltageCode": 2,
+        "voltageDescription": "≥ 500V & ≤ 22kV",
+        "ratesExVat": {
+          "activeEnergyCentsPerKwh": {
+            "highSeason": 167.9,
+            "lowSeason": 161.4
+          },
+          "energyDemandRandPerKvaMonth": {
+            "highSeason": 449.48,
+            "lowSeason": 105.18
+          },
+          "networkCapacityRandPerKvaMonth": 52.9,
+          "legacyCentsPerKwh": 24.57,
+          "generationCapacityRandPerKvaMonth": 7.63
+        }
+      }
+    ],
+    "sharedCharges": {
+      "customerCategoryChargesExVat": [
+        {
+          "category": "≤ 100 kVA",
+          "serviceRandPerPodDay": 25.18,
+          "administrationRandPerPodDay": 1.47
+        },
+        {
+          "category": "> 100 kVA & ≤ 500 kVA",
+          "serviceRandPerPodDay": 69.91,
+          "administrationRandPerPodDay": 13.49
+        },
+        {
+          "category": "> 500 kVA & ≤ 1 MVA",
+          "serviceRandPerPodDay": 215.91,
+          "administrationRandPerPodDay": 21.07
+        },
+        {
+          "category": "> 1 MVA",
+          "serviceRandPerPodDay": 215.91,
+          "administrationRandPerPodDay": 21.07
+        },
+        {
+          "category": "Key customers",
+          "serviceRandPerPodDay": 1216.44,
+          "administrationRandPerPodDay": 21.07
+        }
+      ],
+      "ancillaryCentsPerKwh": 0.52,
+      "networkDemandCentsPerKwhByVoltage": {
+        "below500V": 60.43,
+        "atLeast500VTo22kV": 52.39
+      },
+      "reactiveEnergyCentsPerKvarh": null
+    }
+  },
+  "historicalReference": {
+    "effectiveFrom": "2025-04-01",
+    "effectiveTo": "2026-03-31",
+    "source": {
+      "publisher": "Eskom",
+      "url": "https://www.eskom.co.za/distribution/wp-content/uploads/2025/04/Eskom-tariffs-1-April-2025-ver-2.xlsm",
+      "workbook": "eskom-2025-26.xlsm",
+      "sha256": "24f7bc3c5719ff8ab86a9fc89ee75e8007b565eff734df7a5f1a419665205038"
+    },
+    "flatTariffs": [
+      {
+        "family": "businessrate",
+        "tariff": "Businessrate 1",
+        "tariffCode": "B1",
+        "billCode": "B101N",
+        "description": "Businessrate 1",
+        "transmissionZone": 0,
+        "voltageCode": 1,
+        "ratesExVat": {
+          "energyCentsPerKwh": 224.93,
+          "ancillaryCentsPerKwh": 0.41,
+          "networkDemandCentsPerKwh": 14.54,
+          "networkCapacityRandPerPodDay": 20.34,
+          "serviceAndAdministrationRandPerPodDay": 14.7,
+          "electrificationRuralSubsidyCentsPerKwh": 4.94,
+          "generationCapacityRandPerPodDay": 1.98
+        }
+      },
+      {
+        "family": "businessrate",
+        "tariff": "Businessrate 2",
+        "tariffCode": "B2",
+        "billCode": "B201N",
+        "description": "Businessrate 2",
+        "transmissionZone": 0,
+        "voltageCode": 1,
+        "ratesExVat": {
+          "energyCentsPerKwh": 224.93,
+          "ancillaryCentsPerKwh": 0.41,
+          "networkDemandCentsPerKwh": 14.54,
+          "networkCapacityRandPerPodDay": 30.21,
+          "serviceAndAdministrationRandPerPodDay": 14.7,
+          "electrificationRuralSubsidyCentsPerKwh": 4.94,
+          "generationCapacityRandPerPodDay": 2.95
+        }
+      },
+      {
+        "family": "businessrate",
+        "tariff": "Businessrate 3",
+        "tariffCode": "B3",
+        "billCode": "B301N",
+        "description": "Businessrate 3",
+        "transmissionZone": 0,
+        "voltageCode": 1,
+        "ratesExVat": {
+          "energyCentsPerKwh": 224.93,
+          "ancillaryCentsPerKwh": 0.41,
+          "networkDemandCentsPerKwh": 14.54,
+          "networkCapacityRandPerPodDay": 75.38,
+          "serviceAndAdministrationRandPerPodDay": 14.7,
+          "electrificationRuralSubsidyCentsPerKwh": 4.94,
+          "generationCapacityRandPerPodDay": 7.37
+        }
+      },
+      {
+        "family": "businessrate",
+        "tariff": "Businessrate 4",
+        "tariffCode": "B4",
+        "billCode": "B401N",
+        "description": "Businessrate 4",
+        "transmissionZone": 0,
+        "voltageCode": 1,
+        "ratesExVat": {
+          "energyCentsPerKwh": 350.09,
+          "ancillaryCentsPerKwh": 0.41,
+          "networkDemandCentsPerKwh": 14.54,
+          "networkCapacityRandPerPodDay": null,
+          "serviceAndAdministrationRandPerPodDay": null,
+          "electrificationRuralSubsidyCentsPerKwh": 4.94,
+          "generationCapacityRandPerPodDay": 0
+        }
+      },
+      {
+        "family": "landrate",
+        "tariff": "Landrate 1",
+        "tariffCode": "L1",
+        "billCode": "L101N",
+        "description": "Landrate 1",
+        "transmissionZone": 0,
+        "voltageCode": 1,
+        "ratesExVat": {
+          "energyCentsPerKwh": 224.93,
+          "ancillaryCentsPerKwh": 0.41,
+          "networkDemandCentsPerKwh": 61.66,
+          "networkCapacityRandPerPodDay": 62.2,
+          "serviceAndAdministrationRandPerPodDay": 24.5,
+          "electrificationRuralSubsidyCentsPerKwh": null,
+          "generationCapacityRandPerPodDay": 2.71
+        }
+      },
+      {
+        "family": "landrate",
+        "tariff": "Landrate 2",
+        "tariffCode": "L2",
+        "billCode": "L201N",
+        "description": "Landrate 2",
+        "transmissionZone": 0,
+        "voltageCode": 1,
+        "ratesExVat": {
+          "energyCentsPerKwh": 224.93,
+          "ancillaryCentsPerKwh": 0.41,
+          "networkDemandCentsPerKwh": 61.66,
+          "networkCapacityRandPerPodDay": 96.99,
+          "serviceAndAdministrationRandPerPodDay": 24.5,
+          "electrificationRuralSubsidyCentsPerKwh": null,
+          "generationCapacityRandPerPodDay": 5.37
+        }
+      },
+      {
+        "family": "landrate",
+        "tariff": "Landrate 3",
+        "tariffCode": "L3",
+        "billCode": "L301N",
+        "description": "Landrate 3",
+        "transmissionZone": 0,
+        "voltageCode": 1,
+        "ratesExVat": {
+          "energyCentsPerKwh": 224.93,
+          "ancillaryCentsPerKwh": 0.41,
+          "networkDemandCentsPerKwh": 61.66,
+          "networkCapacityRandPerPodDay": 155.32,
+          "serviceAndAdministrationRandPerPodDay": 24.5,
+          "electrificationRuralSubsidyCentsPerKwh": null,
+          "generationCapacityRandPerPodDay": 10.5
+        }
+      },
+      {
+        "family": "landrate",
+        "tariff": "Landrate 4",
+        "tariffCode": "L4",
+        "billCode": "L401N",
+        "description": "Landrate 4",
+        "transmissionZone": 0,
+        "voltageCode": 1,
+        "ratesExVat": {
+          "energyCentsPerKwh": 369.32,
+          "ancillaryCentsPerKwh": 0.41,
+          "networkDemandCentsPerKwh": 61.66,
+          "networkCapacityRandPerPodDay": 45.92,
+          "serviceAndAdministrationRandPerPodDay": null,
+          "electrificationRuralSubsidyCentsPerKwh": null,
+          "generationCapacityRandPerPodDay": 1.78
+        }
+      },
+      {
+        "family": "landrate",
+        "tariff": "Landrate Dx",
+        "tariffCode": "Ld",
+        "billCode": "Ld01N",
+        "description": "LandrateDx*",
+        "transmissionZone": 0,
+        "voltageCode": 1,
+        "ratesExVat": {
+          "energyCentsPerKwh": null,
+          "ancillaryCentsPerKwh": null,
+          "networkDemandCentsPerKwh": null,
+          "networkCapacityRandPerPodDay": null,
+          "serviceAndAdministrationRandPerPodDay": 87,
+          "electrificationRuralSubsidyCentsPerKwh": null,
+          "generationCapacityRandPerPodDay": null
+        }
+      },
+      {
+        "family": "landrate",
+        "tariff": "Landlight",
+        "tariffCode": "Lt20",
+        "billCode": "Lt2001N",
+        "description": "Landlight 20A",
+        "transmissionZone": 0,
+        "voltageCode": 1,
+        "ratesExVat": {
+          "energyCentsPerKwh": 603.54,
+          "ancillaryCentsPerKwh": null,
+          "networkDemandCentsPerKwh": null,
+          "networkCapacityRandPerPodDay": null,
+          "serviceAndAdministrationRandPerPodDay": null,
+          "electrificationRuralSubsidyCentsPerKwh": null,
+          "generationCapacityRandPerPodDay": null
+        }
+      },
+      {
+        "family": "landrate",
+        "tariff": "Landlight",
+        "tariffCode": "Lt60",
+        "billCode": "Lt6001N",
+        "description": "Landlight 60A",
+        "transmissionZone": 0,
+        "voltageCode": 1,
+        "ratesExVat": {
+          "energyCentsPerKwh": 836,
+          "ancillaryCentsPerKwh": null,
+          "networkDemandCentsPerKwh": null,
+          "networkCapacityRandPerPodDay": null,
+          "serviceAndAdministrationRandPerPodDay": null,
+          "electrificationRuralSubsidyCentsPerKwh": null,
+          "generationCapacityRandPerPodDay": null
+        }
+      },
+      {
+        "family": "landrate",
+        "tariff": "Landrate Dx",
+        "tariffCode": "Ld",
+        "billCode": "Ld01N",
+        "description": "Landrate Dx*",
+        "transmissionZone": 0,
+        "voltageCode": 1,
+        "ratesExVat": {
+          "energyCentsPerKwh": null,
+          "ancillaryCentsPerKwh": null,
+          "networkDemandCentsPerKwh": null,
+          "networkCapacityRandPerPodDay": null,
+          "serviceAndAdministrationRandPerPodDay": 87,
+          "electrificationRuralSubsidyCentsPerKwh": null,
+          "generationCapacityRandPerPodDay": null
+        }
+      }
+    ],
+    "ruraflex": {
+      "variants": [
+        {
+          "family": "ruraflex",
+          "tariff": "Ruraflex",
+          "tariffCode": "Ru",
+          "billCode": "Ru01N",
+          "transmissionZone": 0,
+          "transmissionZoneDescription": "≤ 300km",
+          "voltageCode": 1,
+          "voltageDescription": "< 500V",
+          "ratesExVat": {
+            "highSeasonCentsPerKwh": {
+              "peak": 690.99,
+              "standard": 172.75,
+              "offPeak": 115.16
+            },
+            "lowSeasonCentsPerKwh": {
+              "peak": 286.77,
+              "standard": 161.23,
+              "offPeak": 115.16
+            },
+            "legacyCentsPerKwh": 23,
+            "generationCapacityRandPerKvaMonth": 3.34,
+            "networkCapacityRandPerKvaMonth": 52.04
+          }
+        },
+        {
+          "family": "ruraflex",
+          "tariff": "Ruraflex",
+          "tariffCode": "Ru",
+          "billCode": "Ru02N",
+          "transmissionZone": 0,
+          "transmissionZoneDescription": "≤ 300km",
+          "voltageCode": 2,
+          "voltageDescription": "≥ 500V & ≤ 22kV",
+          "ratesExVat": {
+            "highSeasonCentsPerKwh": {
+              "peak": 678.76,
+              "standard": 169.68,
+              "offPeak": 113.12
+            },
+            "lowSeasonCentsPerKwh": {
+              "peak": 281.69,
+              "standard": 158.38,
+              "offPeak": 113.12
+            },
+            "legacyCentsPerKwh": 22.59,
+            "generationCapacityRandPerKvaMonth": 5.03,
+            "networkCapacityRandPerKvaMonth": 48.32
+          }
+        },
+        {
+          "family": "ruraflex",
+          "tariff": "Ruraflex",
+          "tariffCode": "Ru",
+          "billCode": "Ru11N",
+          "transmissionZone": 1,
+          "transmissionZoneDescription": "> 300km and ≤ 600km",
+          "voltageCode": 1,
+          "voltageDescription": "< 500V",
+          "ratesExVat": {
+            "highSeasonCentsPerKwh": {
+              "peak": 697.91,
+              "standard": 174.48,
+              "offPeak": 116.31
+            },
+            "lowSeasonCentsPerKwh": {
+              "peak": 289.64,
+              "standard": 162.84,
+              "offPeak": 116.31
+            },
+            "legacyCentsPerKwh": 23,
+            "generationCapacityRandPerKvaMonth": 3.34,
+            "networkCapacityRandPerKvaMonth": 52.14
+          }
+        },
+        {
+          "family": "ruraflex",
+          "tariff": "Ruraflex",
+          "tariffCode": "Ru",
+          "billCode": "Ru12N",
+          "transmissionZone": 1,
+          "transmissionZoneDescription": "> 300km and ≤ 600km",
+          "voltageCode": 2,
+          "voltageDescription": "≥ 500V & ≤ 22kV",
+          "ratesExVat": {
+            "highSeasonCentsPerKwh": {
+              "peak": 685.55,
+              "standard": 171.39,
+              "offPeak": 114.25
+            },
+            "lowSeasonCentsPerKwh": {
+              "peak": 284.51,
+              "standard": 159.97,
+              "offPeak": 114.25
+            },
+            "legacyCentsPerKwh": 22.59,
+            "generationCapacityRandPerKvaMonth": 5.03,
+            "networkCapacityRandPerKvaMonth": 48.42
+          }
+        },
+        {
+          "family": "ruraflex",
+          "tariff": "Ruraflex",
+          "tariffCode": "Ru",
+          "billCode": "Ru21N",
+          "transmissionZone": 2,
+          "transmissionZoneDescription": "> 600km and ≤ 900km",
+          "voltageCode": 1,
+          "voltageDescription": "< 500V",
+          "ratesExVat": {
+            "highSeasonCentsPerKwh": {
+              "peak": 704.82,
+              "standard": 176.2,
+              "offPeak": 117.46
+            },
+            "lowSeasonCentsPerKwh": {
+              "peak": 292.5,
+              "standard": 164.45,
+              "offPeak": 117.46
+            },
+            "legacyCentsPerKwh": 23,
+            "generationCapacityRandPerKvaMonth": 3.34,
+            "networkCapacityRandPerKvaMonth": 52.25
+          }
+        },
+        {
+          "family": "ruraflex",
+          "tariff": "Ruraflex",
+          "tariffCode": "Ru",
+          "billCode": "Ru22N",
+          "transmissionZone": 2,
+          "transmissionZoneDescription": "> 600km and ≤ 900km",
+          "voltageCode": 2,
+          "voltageDescription": "≥ 500V & ≤ 22kV",
+          "ratesExVat": {
+            "highSeasonCentsPerKwh": {
+              "peak": 692.34,
+              "standard": 173.09,
+              "offPeak": 115.39
+            },
+            "lowSeasonCentsPerKwh": {
+              "peak": 287.33,
+              "standard": 161.55,
+              "offPeak": 115.39
+            },
+            "legacyCentsPerKwh": 22.59,
+            "generationCapacityRandPerKvaMonth": 5.03,
+            "networkCapacityRandPerKvaMonth": 48.53
+          }
+        },
+        {
+          "family": "ruraflex",
+          "tariff": "Ruraflex",
+          "tariffCode": "Ru",
+          "billCode": "Ru31N",
+          "transmissionZone": 3,
+          "transmissionZoneDescription": "> 900km",
+          "voltageCode": 1,
+          "voltageDescription": "< 500V",
+          "ratesExVat": {
+            "highSeasonCentsPerKwh": {
+              "peak": 711.73,
+              "standard": 177.93,
+              "offPeak": 118.61
+            },
+            "lowSeasonCentsPerKwh": {
+              "peak": 295.37,
+              "standard": 166.07,
+              "offPeak": 118.61
+            },
+            "legacyCentsPerKwh": 23,
+            "generationCapacityRandPerKvaMonth": 3.34,
+            "networkCapacityRandPerKvaMonth": 52.36
+          }
+        },
+        {
+          "family": "ruraflex",
+          "tariff": "Ruraflex",
+          "tariffCode": "Ru",
+          "billCode": "Ru32N",
+          "transmissionZone": 3,
+          "transmissionZoneDescription": "> 900km",
+          "voltageCode": 2,
+          "voltageDescription": "≥ 500V & ≤ 22kV",
+          "ratesExVat": {
+            "highSeasonCentsPerKwh": {
+              "peak": 699.12,
+              "standard": 174.78,
+              "offPeak": 116.52
+            },
+            "lowSeasonCentsPerKwh": {
+              "peak": 290.15,
+              "standard": 163.13,
+              "offPeak": 116.52
+            },
+            "legacyCentsPerKwh": 22.59,
+            "generationCapacityRandPerKvaMonth": 5.03,
+            "networkCapacityRandPerKvaMonth": 48.64
+          }
+        }
+      ],
+      "sharedCharges": {
+        "customerCategoryChargesExVat": [
+          {
+            "category": "≤ 100 kVA",
+            "serviceRandPerPodDay": 23.15,
+            "administrationRandPerPodDay": 1.35
+          },
+          {
+            "category": "> 100 kVA & ≤ 500 kVA",
+            "serviceRandPerPodDay": 64.28,
+            "administrationRandPerPodDay": 12.4
+          },
+          {
+            "category": "> 500 kVA & ≤ 1 MVA",
+            "serviceRandPerPodDay": 198.52,
+            "administrationRandPerPodDay": 19.37
+          },
+          {
+            "category": "> 1 MVA",
+            "serviceRandPerPodDay": 198.52,
+            "administrationRandPerPodDay": 19.37
+          },
+          {
+            "category": "Key customers",
+            "serviceRandPerPodDay": 1118.46,
+            "administrationRandPerPodDay": 19.37
+          }
+        ],
+        "ancillaryCentsPerKwh": 0.41,
+        "networkDemandCentsPerKwhByVoltage": {
+          "below500V": 48.32,
+          "atLeast500VTo22kV": 41.89
+        },
+        "reactiveEnergyCentsPerKvarh": {
+          "highSeason": 19.83,
+          "lowSeason": 0
+        }
+      }
+    },
+    "nightsaveRural": {
+      "variants": [
+        {
+          "family": "nightsave-rural",
+          "tariff": "Nightsave Rural",
+          "tariffCode": "NR",
+          "billCode": "NR01N",
+          "transmissionZone": 0,
+          "transmissionZoneDescription": "≤ 300km",
+          "voltageCode": 1,
+          "voltageDescription": "< 500V",
+          "ratesExVat": {
+            "activeEnergyCentsPerKwh": {
+              "highSeason": 153.69,
+              "lowSeason": 147.73
+            },
+            "energyDemandRandPerKvaMonth": {
+              "highSeason": 408.5,
+              "lowSeason": 95.59
+            },
+            "networkCapacityRandPerKvaMonth": 52.04,
+            "legacyCentsPerKwh": 23,
+            "generationCapacityRandPerKvaMonth": 3.34
+          }
+        },
+        {
+          "family": "nightsave-rural",
+          "tariff": "Nightsave Rural",
+          "tariffCode": "NR",
+          "billCode": "NR02N",
+          "transmissionZone": 0,
+          "transmissionZoneDescription": "≤ 300km",
+          "voltageCode": 2,
+          "voltageDescription": "≥ 500V & ≤ 22kV",
+          "ratesExVat": {
+            "activeEnergyCentsPerKwh": {
+              "highSeason": 150.97,
+              "lowSeason": 145.12
+            },
+            "energyDemandRandPerKvaMonth": {
+              "highSeason": 401.28,
+              "lowSeason": 93.89
+            },
+            "networkCapacityRandPerKvaMonth": 48.32,
+            "legacyCentsPerKwh": 22.59,
+            "generationCapacityRandPerKvaMonth": 5.03
+          }
+        },
+        {
+          "family": "nightsave-rural",
+          "tariff": "Nightsave Rural",
+          "tariffCode": "NR",
+          "billCode": "NR11N",
+          "transmissionZone": 1,
+          "transmissionZoneDescription": "> 300km and ≤ 600km",
+          "voltageCode": 1,
+          "voltageDescription": "< 500V",
+          "ratesExVat": {
+            "activeEnergyCentsPerKwh": {
+              "highSeason": 155.22,
+              "lowSeason": 149.2
+            },
+            "energyDemandRandPerKvaMonth": {
+              "highSeason": 412.56,
+              "lowSeason": 96.54
+            },
+            "networkCapacityRandPerKvaMonth": 52.14,
+            "legacyCentsPerKwh": 23,
+            "generationCapacityRandPerKvaMonth": 3.34
+          }
+        },
+        {
+          "family": "nightsave-rural",
+          "tariff": "Nightsave Rural",
+          "tariffCode": "NR",
+          "billCode": "NR12N",
+          "transmissionZone": 1,
+          "transmissionZoneDescription": "> 300km and ≤ 600km",
+          "voltageCode": 2,
+          "voltageDescription": "≥ 500V & ≤ 22kV",
+          "ratesExVat": {
+            "activeEnergyCentsPerKwh": {
+              "highSeason": 152.47,
+              "lowSeason": 146.56
+            },
+            "energyDemandRandPerKvaMonth": {
+              "highSeason": 405.26,
+              "lowSeason": 94.83
+            },
+            "networkCapacityRandPerKvaMonth": 48.42,
+            "legacyCentsPerKwh": 22.59,
+            "generationCapacityRandPerKvaMonth": 5.03
+          }
+        },
+        {
+          "family": "nightsave-rural",
+          "tariff": "Nightsave Rural",
+          "tariffCode": "NR",
+          "billCode": "NR21N",
+          "transmissionZone": 2,
+          "transmissionZoneDescription": "> 600km and ≤ 900km",
+          "voltageCode": 1,
+          "voltageDescription": "< 500V",
+          "ratesExVat": {
+            "activeEnergyCentsPerKwh": {
+              "highSeason": 156.75,
+              "lowSeason": 150.69
+            },
+            "energyDemandRandPerKvaMonth": {
+              "highSeason": 416.66,
+              "lowSeason": 97.5
+            },
+            "networkCapacityRandPerKvaMonth": 52.25,
+            "legacyCentsPerKwh": 23,
+            "generationCapacityRandPerKvaMonth": 3.34
+          }
+        },
+        {
+          "family": "nightsave-rural",
+          "tariff": "Nightsave Rural",
+          "tariffCode": "NR",
+          "billCode": "NR22N",
+          "transmissionZone": 2,
+          "transmissionZoneDescription": "> 600km and ≤ 900km",
+          "voltageCode": 2,
+          "voltageDescription": "≥ 500V & ≤ 22kV",
+          "ratesExVat": {
+            "activeEnergyCentsPerKwh": {
+              "highSeason": 153.98,
+              "lowSeason": 148.02
+            },
+            "energyDemandRandPerKvaMonth": {
+              "highSeason": 409.29,
+              "lowSeason": 95.77
+            },
+            "networkCapacityRandPerKvaMonth": 48.53,
+            "legacyCentsPerKwh": 22.59,
+            "generationCapacityRandPerKvaMonth": 5.03
+          }
+        },
+        {
+          "family": "nightsave-rural",
+          "tariff": "Nightsave Rural",
+          "tariffCode": "NR",
+          "billCode": "NR31N",
+          "transmissionZone": 3,
+          "transmissionZoneDescription": "> 900km",
+          "voltageCode": 1,
+          "voltageDescription": "< 500V",
+          "ratesExVat": {
+            "activeEnergyCentsPerKwh": {
+              "highSeason": 158.29,
+              "lowSeason": 152.15
+            },
+            "energyDemandRandPerKvaMonth": {
+              "highSeason": 420.72,
+              "lowSeason": 98.44
+            },
+            "networkCapacityRandPerKvaMonth": 52.36,
+            "legacyCentsPerKwh": 23,
+            "generationCapacityRandPerKvaMonth": 3.34
+          }
+        },
+        {
+          "family": "nightsave-rural",
+          "tariff": "Nightsave Rural",
+          "tariffCode": "NR",
+          "billCode": "NR32N",
+          "transmissionZone": 3,
+          "transmissionZoneDescription": "> 900km",
+          "voltageCode": 2,
+          "voltageDescription": "≥ 500V & ≤ 22kV",
+          "ratesExVat": {
+            "activeEnergyCentsPerKwh": {
+              "highSeason": 155.48,
+              "lowSeason": 149.46
+            },
+            "energyDemandRandPerKvaMonth": {
+              "highSeason": 413.28,
+              "lowSeason": 96.71
+            },
+            "networkCapacityRandPerKvaMonth": 48.64,
+            "legacyCentsPerKwh": 22.59,
+            "generationCapacityRandPerKvaMonth": 5.03
+          }
+        }
+      ],
+      "sharedCharges": {
+        "customerCategoryChargesExVat": [
+          {
+            "category": "≤ 100 kVA",
+            "serviceRandPerPodDay": 23.15,
+            "administrationRandPerPodDay": 1.35
+          },
+          {
+            "category": "> 100 kVA & ≤ 500 kVA",
+            "serviceRandPerPodDay": 64.28,
+            "administrationRandPerPodDay": 12.4
+          },
+          {
+            "category": "> 500 kVA & ≤ 1 MVA",
+            "serviceRandPerPodDay": 198.52,
+            "administrationRandPerPodDay": 19.37
+          },
+          {
+            "category": "> 1 MVA",
+            "serviceRandPerPodDay": 198.52,
+            "administrationRandPerPodDay": 19.37
+          },
+          {
+            "category": "Key customers",
+            "serviceRandPerPodDay": 1118.46,
+            "administrationRandPerPodDay": 19.37
+          }
+        ],
+        "ancillaryCentsPerKwh": 0.47,
+        "networkDemandCentsPerKwhByVoltage": {
+          "below500V": 55.57,
+          "atLeast500VTo22kV": 48.17
+        },
+        "reactiveEnergyCentsPerKvarh": null
+      }
+    }
+  }
+}

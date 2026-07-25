@@ -19,6 +19,7 @@ import {
 } from "@/lib/supabase-db-store";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import { createNotification } from "@/lib/notifications";
+import { cleanReferralCode, findAssociationByCode, recordAssociationReferral } from "@/lib/associations";
 import type { AdminLead, AdminLeadRegistrationSource } from "@/lib/admin-types";
 
 export const runtime = "nodejs";
@@ -54,6 +55,10 @@ type IntakePayload = {
   leadLinkId?: unknown;
   sourceCampaign?: unknown;
   referrer?: unknown;
+  siteCity?: unknown;
+  province?: unknown;
+  utilityProvider?: unknown;
+  calculationBasis?: unknown;
 };
 
 const CONTACT_METHODS = new Set(["email", "whatsapp", "phone"]);
@@ -117,6 +122,12 @@ export async function POST(request: NextRequest) {
   const leadLinkId = cleanString(payload.leadLinkId);
   const sourceCampaign = cleanString(payload.sourceCampaign) || null;
   const referrer = cleanString(payload.referrer) || null;
+  const siteCity = cleanString(payload.siteCity);
+  const province = cleanString(payload.province);
+  const utilityProvider = cleanString(payload.utilityProvider);
+  const calculationBasis = cleanString(payload.calculationBasis) === "highest-recent-electricity-charge-ex-vat"
+    ? "highest-recent-electricity-charge-ex-vat" as const
+    : "monthly-spend-entered" as const;
 
   if (!Number.isFinite(monthlySpend) || monthlySpend <= 0) {
     return NextResponse.json(
@@ -140,9 +151,9 @@ export async function POST(request: NextRequest) {
   const phone = submittedPhone || linkedLead?.userProfile.phone || "";
   const preferredContactMethod = submittedPreferredContactMethod || (linkedLead ? "email" : "");
 
-  if (!businessName || !contactName || !email || (!linkedLead && !phone)) {
+  if (!businessName || !contactName || !email || (!linkedLead && !phone) || (!linkedLead && (!siteCity || !province || !utilityProvider))) {
     return NextResponse.json(
-      { ok: false, error: "Business name, contact person, email, and phone number are required." },
+      { ok: false, error: "Business, contact, site location, and electricity supplier details are required." },
       { status: 400 },
     );
   }
@@ -167,7 +178,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const result = calculateMigrationAssessment({ monthlyElectricitySpend: monthlySpend });
+  const result = calculateMigrationAssessment({
+    monthlyElectricitySpend: monthlySpend,
+    monthlyKwh: Number(input?.monthlyKwh) > 0 ? Number(input?.monthlyKwh) : undefined,
+    monthlyKwhSource: input?.monthlyKwhSource === "assumed" ? "assumed" : "bills",
+    blendedTariff: Number(input?.blendedTariff) > 0 ? Number(input?.blendedTariff) : undefined,
+  });
   const baseSolar = result.ufmsSolar.scenarios[1];
   const bestTenYearSaving = Math.max(
     ...result.ufmsSolar.scenarios.map((scenario) => scenario.tenYearSavingAgainstEskom),
@@ -181,6 +197,9 @@ export async function POST(request: NextRequest) {
     qualificationStatus: result.qualificationStatus,
     recommendedPathway: result.recommendedPathway,
     monthlySpend: result.currentUtilityProjection.currentMonthlySpend,
+    monthlyKwh: result.proposal.input.monthlyKwh,
+    monthlyKwhSource: result.proposal.input.tariffSource,
+    calculationBasis,
     annualSpend: result.currentUtilityProjection.currentAnnualSpend,
     tenYearSpend: result.currentUtilityProjection.tenYearSpend,
     bestTenYearSaving,
@@ -188,6 +207,7 @@ export async function POST(request: NextRequest) {
     sourceCampaign,
     referrer,
     generatedAt,
+    utilityProvider: utilityProvider || null,
   };
 
   const existingLeads = linkedLead ? [] : await findLeadsByEmailFromDatabase(email);
@@ -206,6 +226,8 @@ export async function POST(request: NextRequest) {
     registrationSource,
     assessmentSummary,
     preserveRegistrationState: Boolean(linkedLead),
+    siteCity,
+    province,
   };
 
   const created = existingLead
@@ -291,8 +313,8 @@ export async function POST(request: NextRequest) {
       annual_spend: result.currentUtilityProjection.currentAnnualSpend,
       ten_year_spend: result.currentUtilityProjection.tenYearSpend,
       business_type: null,
-      province: null,
-      utility_provider: null,
+      province: province || null,
+      utility_provider: utilityProvider || null,
       pain_point: null,
       qualification_status: result.qualificationStatus,
       recommended_pathway: result.recommendedPathway,
@@ -328,6 +350,25 @@ export async function POST(request: NextRequest) {
       assessmentId = data.id;
       assessmentBackend = "supabase";
     }
+  }
+
+  // Association attribution: campaigns of the form "assoc-<CODE>" credit the
+  // referring association. Fire-and-forget — attribution must never block or
+  // fail a client registration.
+  const associationCode = sourceCampaign?.startsWith("assoc-")
+    ? cleanReferralCode(sourceCampaign.slice("assoc-".length))
+    : null;
+  if (associationCode) {
+    void (async () => {
+      const association = await findAssociationByCode(associationCode);
+      if (!association) return;
+      await recordAssociationReferral({
+        associationId: association.id,
+        assessmentId: assessmentBackend === "supabase" ? assessmentId : undefined,
+        memberBusinessName: businessName,
+        stage: "registered",
+      });
+    })().catch(() => {});
   }
 
   return NextResponse.json({

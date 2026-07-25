@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { getServerAuthSession } from "@/lib/auth-server";
+import { getServerAuthSessionFromRequest } from "@/lib/auth-server";
 
 export const runtime = "nodejs";
 
-export async function GET() {
-  const session = await getServerAuthSession();
+export async function GET(request: Request) {
+  const session = await getServerAuthSessionFromRequest(request);
   if (!session) {
     return NextResponse.json({ session: null });
   }

@@ -24,5 +24,6 @@ export type AuthSession = {
 export function resolveDefaultRouteForRole(role: UserRole) {
   if (role === "admin") return "/admin";
   if (role === "sales") return "/sales";
+  if (role === "partner") return "/partner";
   return "/";
 }

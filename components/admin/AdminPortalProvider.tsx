@@ -48,6 +48,7 @@ import type {
   SalesLead,
   SalesLeadQualificationStage,
 } from "@/lib/admin-types";
+import { hasCompletedFoundationAssessment } from "@/lib/post-assessment-eoi";
 
 type RegistrationDraft = never;
 
@@ -266,10 +267,13 @@ const STAGE_RANK: Record<AdminLeadStage, number> = {
   "EOI Generated": 1,
   "EOI Signed": 2,
   "Utility Bills Uploaded": 3,
-  "Compliance Pack Uploaded": 4,
-  "Term Sheet Uploaded": 5,
-  "Onboarding Complete": 6,
-  Disqualified: 7,
+  "Proposal Accepted": 4,
+  "Mandate Signed": 5,
+  "Direct KYC Submitted": 6,
+  "Compliance Pack Uploaded": 6,
+  "Term Sheet Uploaded": 7,
+  "Onboarding Complete": 8,
+  Disqualified: 9,
 };
 
 function promoteStage(
@@ -290,13 +294,9 @@ const DOC_TITLE_TERM_SHEET_ISSUED = "Term Sheet (Admin Issued)";
 const DOC_TITLE_TERM_SHEET_SIGNED = "Signed Term Sheet";
 
 const COMPLIANCE_PACK_NEXT_ACTION =
-  "Request the Generocity compliance pack from the client: " +
-  "(1) Company registration documents (the contracting entity for UFMS), " +
-  "(2) FICA pack — director ID + proof of residence, " +
-  "(3) Latest audited financial statements, " +
-  "(4) Latest management accounts, " +
-  "(5) Last 6 months bank statements, " +
-  "(6) Valid tax clearance certificate.";
+  "Client must send the six-item bank KYC pack directly to info@UFMS.net only. " +
+  "Do not request, receive, upload, forward, CC or store those documents in Foundation-1. " +
+  "Wait for the client transmission confirmation, then follow up on receipt.";
 
 function ensureRegistrationTasks(tasks: AdminLeadTask[]) {
   const existingTitles = new Set(tasks.map((task) => task.title));
@@ -1369,10 +1369,7 @@ export function AdminPortalProvider({
         );
         const completedNow = registrationComplete && !lead.isClientRegistered;
         const timestamp = new Date().toISOString();
-        const nextStage =
-          registrationComplete && !TERMINAL_STAGES.has(lead.stage)
-            ? promoteStage(lead.stage, "EOI Generated")
-            : lead.stage;
+        const nextStage = lead.stage;
         const eoiSigningToken =
           registrationComplete
             ? lead.eoiSigningToken ?? buildEoiSigningToken(company)
@@ -1403,7 +1400,7 @@ export function AdminPortalProvider({
             : lead.readinessScore,
           lastTouched: "Just now",
           nextAction: completedNow
-            ? "Send the EOI template link and request the signed EOI on company letterhead."
+            ? "Collect the complete six-period utility-bill pack and complete the Foundation-1 assessment before requesting an EOI."
             : lead.nextAction,
           migrateAccountName: company || lead.migrateAccountName,
           eoiSigningToken,
@@ -1850,6 +1847,9 @@ export function AdminPortalProvider({
         if (TERMINAL_STAGES.has(lead.stage)) {
           return lead;
         }
+        if (!hasCompletedFoundationAssessment(lead)) {
+          return lead;
+        }
 
         const eoiSigningToken = lead.eoiSigningToken ?? buildEoiSigningToken(lead.company);
         const promotedStage = promoteStage(lead.stage, "EOI Generated");
@@ -1859,7 +1859,7 @@ export function AdminPortalProvider({
           stage: promotedStage,
           eoiSigningToken,
           readinessScore: Math.max(lead.readinessScore, 45),
-          nextAction: stageChanged ? "Request signed EOI on company letterhead from the client." : lead.nextAction,
+          nextAction: stageChanged ? "Send the secure digital EOI link to the authorised representative." : lead.nextAction,
           lastTouched: "Just now",
         };
 
@@ -1882,8 +1882,8 @@ export function AdminPortalProvider({
               title: "EOI generated",
               detail:
                 STAGE_RANK[lead.stage] > STAGE_RANK["EOI Generated"]
-                  ? `EOI regenerated and template copy link refreshed at /eoi/${eoiSigningToken}.`
-                  : `System generated Expression of Interest and shared /eoi/${eoiSigningToken} for client letterhead completion.`,
+                  ? `EOI regenerated and secure signing link refreshed at /eoi/${eoiSigningToken}.`
+                  : `System generated the non-binding Expression of Interest and opened secure digital signing at /eoi/${eoiSigningToken}.`,
               createdAt: timelineLabel(),
               tone: "system",
             },
@@ -2074,7 +2074,7 @@ export function AdminPortalProvider({
             {
               id: makeId("event"),
               title: "Signed proposal submitted by sales",
-              detail: "Sales uploaded the signed proposal back to the client profile.",
+              detail: "Sales uploaded the signed formal proposal. The client must now send bank KYC directly to info@UFMS.net; Foundation-1 must not receive the KYC files.",
               createdAt: timelineLabel(),
               tone: "agent",
             },

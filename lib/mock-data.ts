@@ -90,8 +90,8 @@ export const RESOURCE_LIBRARY: ResourceItem[] = [
     audience: "Shared",
   },
   {
-    id: "resource-generocity",
-    title: "Generocity Overview",
+    id: "resource-eden",
+    title: "Eden Overview",
     category: "Product",
     summary:
       "Zero-capex solar pathway with free panels, installation, maintenance, and insurance.",
@@ -124,11 +124,11 @@ export const RESOURCE_LIBRARY: ResourceItem[] = [
   },
   {
     id: "resource-eoi-template",
-    title: "Expression of Interest Template",
+    title: "Digital Expression of Interest Guide",
     category: "Registration",
     summary:
-      "Starter template for first-time migration registration before qualification begins.",
-    fileType: "DOCX",
+      "Secure review-and-sign guide for the non-binding EOI required before proposal generation.",
+    fileType: "PDF",
     size: "0.4 MB",
     updatedAt: TODAY,
     audience: "Shared",
@@ -168,9 +168,9 @@ const INITIAL_CASES: MigrationCase[] = [
     nextAction: "Upload your latest three utility bills and roof photographs.",
     lastUpdated: "8 minutes ago",
     priority: "Priority",
-    productRecommendation: "Generocity",
+    productRecommendation: "Eden",
     qualificationSummary: {
-      recommendedProduct: "Generocity",
+      recommendedProduct: "Eden",
       confidence: "Medium",
       tariffProfile: "Municipal commercial tariff",
       loadProfile: "Day-heavy weekday load with roof availability",
@@ -307,9 +307,9 @@ const INITIAL_CASES: MigrationCase[] = [
     nextAction: "Review and sign the proposal so 1OS can prepare your term sheet.",
     lastUpdated: "31 minutes ago",
     priority: "Standard",
-    productRecommendation: "Generocity",
+    productRecommendation: "Eden",
     qualificationSummary: {
-      recommendedProduct: "Generocity",
+      recommendedProduct: "Eden",
       confidence: "High",
       tariffProfile: "Time-of-use commercial",
       loadProfile: "Strong weekday daytime demand, clean roof availability",
@@ -378,7 +378,7 @@ const INITIAL_CASES: MigrationCase[] = [
     proposal: {
       id: "foundation-proposal",
       status: "issued",
-      title: "Generocity Commercial Proposal",
+      title: "Eden Commercial Proposal",
       summary:
         "Zero-capex solar structure with no upfront payment, full installation, maintenance, and insurance included.",
       savingsRange: "18% to 24% forecast reduction on daytime grid spend",
@@ -390,7 +390,7 @@ const INITIAL_CASES: MigrationCase[] = [
       {
         id: "fcrm-activity-1",
         title: "Qualification complete",
-        detail: "Generocity confirmed as the recommended pathway.",
+        detail: "Eden confirmed as the recommended pathway.",
         timestamp: "Yesterday, 17:20",
         tone: "system",
       },
@@ -608,7 +608,7 @@ const INITIAL_CASES: MigrationCase[] = [
     },
     stage: "New",
     owner: "Sipho T.",
-    nextAction: "Copy the Expression of Interest (EOI), place it on letterhead, sign it, and send it back.",
+    nextAction: "Open the secure Expression of Interest link, review the terms, and sign digitally.",
     lastUpdated: "2 hours ago",
     priority: "Priority",
     productRecommendation: null,
@@ -620,7 +620,7 @@ const INITIAL_CASES: MigrationCase[] = [
       rationale: [
         "Load shape suggests a more complex migration decision.",
         "The team still needs interval usage detail and the municipal account schedule.",
-        "1OS will confirm whether Generocity or Lumen-1 produces the stronger commercial fit.",
+        "1OS will confirm whether Eden or Lumen-1 produces the stronger commercial fit.",
       ],
     },
     missingItems: [
@@ -634,7 +634,7 @@ const INITIAL_CASES: MigrationCase[] = [
         type: "assistant",
         timestamp: "08:34",
         content:
-          "Welcome to 1OS migration. First step is copying your Expression of Interest (EOI), placing it on letterhead, signing it, and sending it back.",
+          "Welcome to 1OS migration. First review and digitally sign your non-binding Expression of Interest (EOI) through the secure link.",
       },
       {
         id: "clover-message-2",
@@ -642,7 +642,7 @@ const INITIAL_CASES: MigrationCase[] = [
         mode: "Onboarding",
         timestamp: "08:39",
         content:
-          "Please guide me through creating the EOI for our letterhead first.",
+          "Please guide me through reviewing and digitally signing the EOI first.",
       },
     ],
     documents: [
@@ -658,9 +658,9 @@ const INITIAL_CASES: MigrationCase[] = [
       },
       {
         id: "clover-doc-2",
-        title: "Expression of Interest Template",
+        title: "Digital Expression of Interest Guide",
         category: "Registration",
-        fileType: "DOCX",
+        fileType: "PDF",
         status: "available",
         updatedAt: TODAY,
         size: "0.4 MB",
@@ -681,7 +681,7 @@ const INITIAL_CASES: MigrationCase[] = [
     tasks: [
       {
         id: "clover-task-1",
-        title: "Copy Expression of Interest onto letterhead",
+        title: "Review the non-binding Expression of Interest",
         owner: "Client",
         dueLabel: "Today",
         status: "open",
@@ -726,14 +726,14 @@ const INITIAL_CASES: MigrationCase[] = [
     nextAction: "Your migration is complete and ready for delivery handover.",
     lastUpdated: "Yesterday",
     priority: "Standard",
-    productRecommendation: "Generocity",
+    productRecommendation: "Eden",
     qualificationSummary: {
-      recommendedProduct: "Generocity",
+      recommendedProduct: "Eden",
       confidence: "High",
       tariffProfile: "Industrial day-heavy tariff",
       loadProfile: "Stable site load with consistent daytime demand",
       rationale: [
-        "The business qualified cleanly for the Generocity pathway.",
+        "The business qualified cleanly for the Eden pathway.",
         "Proposal, term sheet, and final 1OS checks were all completed.",
         "Case is now closed and handed over.",
       ],
@@ -773,7 +773,7 @@ const INITIAL_CASES: MigrationCase[] = [
     proposal: {
       id: "apex-proposal",
       status: "signed",
-      title: "Generocity Commercial Proposal",
+      title: "Eden Commercial Proposal",
       summary: "Closed proposal.",
       savingsRange: "16% to 20%",
       termYears: 10,
@@ -782,7 +782,7 @@ const INITIAL_CASES: MigrationCase[] = [
     termSheet: {
       id: "apex-term-sheet",
       status: "signed",
-      title: "Generocity Term Sheet",
+      title: "Eden Term Sheet",
       summary: "Closed term sheet.",
       updatedAt: YESTERDAY,
     },

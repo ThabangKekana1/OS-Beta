@@ -16,11 +16,15 @@ function exists(path) {
 test("approved public and admin routes exist", () => {
   const routeFiles = [
     "app/page.tsx",
-    "app/register/page.tsx",
     "app/register/[linkId]/page.tsx",
     "app/upload/[token]/page.tsx",
     "app/eoi/[token]/page.tsx",
     "app/estimate/[linkId]/page.tsx",
+    "app/migration/dashboard/page.tsx",
+    "app/migration/proposal-status/page.tsx",
+    "app/dealroom/[token]/page.tsx",
+    "app/partners/[code]/page.tsx",
+    "app/estimate/a/[code]/page.tsx",
     "app/admin/layout.tsx",
     "app/admin/page.tsx",
     "app/admin/leads/page.tsx",
@@ -57,7 +61,6 @@ test("approved public and admin routes exist", () => {
 test("deleted legacy systems stay deleted", () => {
   const deletedPaths = [
     "app/(workspace)",
-    "app/partner",
     "app/signup/page.tsx",
     "app/utility-bills/[token]/page.tsx",
     "app/api/chat/route.ts",
@@ -67,7 +70,6 @@ test("deleted legacy systems stay deleted", () => {
     "app/migration/upload/page.tsx",
     "app/api/migration/documents/route.ts",
     "components/workspace",
-    "components/partner",
     "components/sales",
     "components/utility-bills",
     "components/migration/UtilityUpload.tsx",
@@ -116,15 +118,11 @@ test("admin leads track registration and manual-add timestamps", () => {
   assert.match(supabaseStore, /row\.created_at = createdAt/);
 });
 
-test("migration creates a lightweight client profile before dashboard access", () => {
-  const migrationRegister = read("components/migration/MigrationRegister.tsx");
+test("migration dashboard runs website-first (funnel removed from 1OS)", () => {
   const migrationDashboard = read("components/migration/MigrationDashboard.tsx");
-  const migrationReport = read("components/migration/MigrationReport.tsx");
-  const migrationSuccess = read("components/migration/MigrationSuccess.tsx");
   const migrationShell = read("components/migration/MigrationShell.tsx");
   const migrationCalculator = read("lib/calculateMigrationAssessment.ts");
   const calculationConfig = read("lib/calculation-config.ts");
-  const energySavingsChart = read("components/migration/EnergySavingsChart.tsx");
   const clientRegistration = read("lib/client-registration.ts");
   const registrationLinks = read("lib/registration-links.ts");
   const supabaseStore = read("lib/supabase-db-store.ts");
@@ -133,50 +131,38 @@ test("migration creates a lightweight client profile before dashboard access", (
   const migrationIntakeApi = read("app/api/migration/intake/route.ts");
   const migrationDashboardStatusApi = read("app/api/migration/profiles/status/route.ts");
 
-  assert.match(migrationRegister, /ClientRegistrationForm/);
-  assert.match(migrationRegister, /\/api\/register/);
-  assert.match(migrationRegister, /\/api\/migration\/assessments/);
-  assert.match(migrationRegister, /profileId: credentials\.profileId/);
-  assert.match(migrationRegister, /leadId: persistedAdminLink/);
-  assert.match(migrationRegister, /unlockMigrationDashboard\(credentials\.profileId\)/);
-  assert.match(migrationRegister, /\/migration\/dashboard\?p=\$\{credentials\.profileId\}/);
+  // The assessment funnel lives on foundation-1.co.za; 1OS keeps the dashboard.
+  for (const deleted of [
+    "app/migration/start",
+    "app/migration/report",
+    "app/migration/register",
+    "app/migration/success",
+    "app/migration/unsuccessful",
+    "components/migration/MigrationReport.tsx",
+    "components/migration/MigrationRegister.tsx",
+    "components/migration/MigrationStart.tsx",
+    "components/migration/MigrationSuccess.tsx",
+  ]) {
+    assert.equal(exists(deleted), false, `${deleted} should be deleted`);
+  }
+
   assert.match(migrationDashboard, /if \(!activeStored\.registration\)/);
   assert.match(migrationDashboard, /Open Client Profile/);
-  assert.match(migrationDashboard, /Open Profile From Report/);
+  assert.match(migrationDashboard, /foundation-1\.co\.za/);
   assert.match(migrationDashboard, /\/api\/migration\/profiles\/status/);
   assert.match(migrationDashboard, /adminStatus\?\.migrationStatus/);
   assert.match(migrationDashboard, /support@foundation-1\.co\.za/);
   assert.match(migrationDashboard, /https:\/\/wa\.me\/27690368243/);
-  assert.match(migrationReport, /\/api\/migration\/intake/);
-  assert.match(migrationReport, /Preferred mode of contact/);
-  assert.match(migrationReport, /Choose email, WhatsApp, or phone/);
-  assert.match(migrationReport, /Submit Registration/);
-  assert.match(migrationReport, /\/migration\/success\?p=/);
-  assert.match(migrationReport, /Entered monthly electricity spend/);
-  assert.match(migrationReport, /Monthly electricity spend used/);
-  assert.match(migrationReport, /EnergySavingsChart/);
-  assert.match(migrationReport, /10-Year Cumulative Cost Comparison/);
+  assert.match(migrationShell, /NEXT_PUBLIC_WEBSITE_ORIGIN/);
+  assert.match(migrationShell, /WEBSITE_ASSESSMENT_URL/);
+  assert.match(migrationShell, /\/migration\/proposal-status/);
+  assert.doesNotMatch(migrationShell, /\/migration\/(?:start|report)/);
+  assert.match(estimateRoute, /redirect\(/);
+  assert.match(estimateRoute, /foundation-1\.co\.za/);
   assert.match(calculationConfig, /eskom_annual_tariff_escalation_percent: 12\.5/);
   assert.match(calculationConfig, /foundation_one_ten_year_factor: 13\.1808/);
-  assert.match(energySavingsChart, /const ESKOM_ESCALATION_RATE = 0\.125/);
-  assert.match(energySavingsChart, /const FOUNDATION_ONE_ESCALATION_RATE = 0\.06/);
-  assert.match(migrationSuccess, /Registration successful/);
-  assert.match(migrationSuccess, /Download Report/);
-  assert.match(migrationSuccess, /Share Report/);
-  assert.match(migrationReport, /businessName/);
-  assert.match(migrationReport, /contactName/);
-  assert.match(migrationReport, /Generocity Utility Full Maintenance System \(UFMS\)/);
-  assert.match(migrationReport, /Lumen Wheeling Estimates/);
-  assert.match(migrationReport, /Generocity UFMS Solar \(base estimate\)/);
-  assert.match(migrationReport, /Lumen Wheeling \(conservative\)/);
-  assert.match(migrationReport, /tariffs increase by/);
-  assert.match(migrationReport, /annual tariff increase/);
   assert.match(migrationCalculator, /eskom_annual_tariff_escalation_percent/);
   assert.match(migrationCalculator, /compoundedAnnualSpendFactor/);
-  assert.match(migrationShell, /stored\.registration && unlockedProfile === stored\.profileId/);
-  assert.doesNotMatch(migrationShell, /\/migration\/upload|Utility Profile/);
-  assert.doesNotMatch(migrationRegister, /\/migration\/upload|Utility Profile/);
-  assert.doesNotMatch(migrationDashboard, /\/migration\/upload|Utility Profile/);
   assert.match(clientRegistration, /buildAdminLeadFromMigrationIntake/);
   assert.match(clientRegistration, /updateExistingLeadFromMigrationIntake/);
   assert.match(clientRegistration, /Complete company registration details/);
@@ -223,22 +209,55 @@ test("migration production hardening covers schema, auth, and throttling", () =>
   assert.match(uploadApi, /scope: "public-document-upload"/);
 });
 
-test("secure upload portal is a staged designer-grade flow", () => {
+test("secure upload portal excludes bank KYC and enforces the direct-to-UFMS POPIA boundary", () => {
   const uploadPortal = read("components/upload/ClientDocumentUploadPortal.tsx");
   const uploadApi = read("app/api/upload/[token]/route.ts");
+  const taxonomy = read("lib/document-taxonomy.ts");
+  const directHandoff = read("components/migration/DirectUfmsKycHandoff.tsx");
+  const directConfirmation = read("app/api/migration/kyc-direct/route.ts");
+  const directKycContract = read("lib/ufms-direct-kyc.ts");
 
   assert.match(uploadPortal, /Start upload/);
   assert.match(uploadPortal, /What are you sending us\?/);
   assert.match(uploadPortal, /Drop your \{activeOption\.label\.toLowerCase\(\)\} files/);
   assert.match(uploadPortal, /Clean\. Saved\. Connected\./);
-  assert.match(uploadApi, /expression_of_interest/);
-  assert.match(uploadApi, /signed_eoi/);
-  assert.match(uploadApi, /utility_bills/);
-  assert.match(uploadApi, /signed_proposal/);
+
+  // The route consumes the shared taxonomy (single source of truth).
+  assert.match(uploadApi, /from "@\/lib\/document-taxonomy"/);
+  assert.match(uploadApi, /countDocumentsByType/);
+  assert.match(uploadApi, /isClientUploadDocumentType/);
+  assert.match(uploadApi, /Bank KYC documents cannot be uploaded to Foundation-1/);
+  assert.doesNotMatch(uploadPortal, /id: "company_registration"/);
+  assert.doesNotMatch(uploadPortal, /id: "fica_director_id"/);
+  assert.doesNotMatch(uploadPortal, /id: "bank_statements"/);
   assert.match(uploadApi, /link: `\/admin\/leads\/\$\{savedLead\.clientProfileId\}`/);
+
+  // Historical taxonomy remains classifiable, but the upload allowlist is the
+  // non-KYC migration record only.
+  for (const type of [
+    "expression_of_interest",
+    "signed_eoi",
+    "utility_bills",
+    "signed_proposal",
+    "signed_mandate",
+    "company_registration",
+    "fica_director_id",
+    "fica_proof_of_residence",
+    "audited_financials",
+    "management_accounts",
+    "bank_statements",
+    "tax_clearance",
+  ]) {
+    assert.match(taxonomy, new RegExp(`"${type}"`));
+  }
+  assert.match(taxonomy, /CLIENT_UPLOAD_DOCUMENT_TYPES/);
+  assert.match(directKycContract, /info@ufms\.net/);
+  assert.match(directHandoff, /does not receive, proxy, inspect, store, hash, or list these files/);
+  assert.match(directConfirmation, /allItemsAttachedConfirmed/);
+  assert.match(directConfirmation, /No KYC files were received by Foundation-1/);
 });
 
-test("auth and EOI no longer point to deleted workspace, partner, or signup routes", () => {
+test("auth and EOI use approved role-scoped routes and no deleted workspace or signup routes", () => {
   const auth = read("lib/auth.ts");
   const proxy = read("proxy.ts");
   const loginForm = read("components/auth/LoginForm.tsx");
@@ -247,14 +266,31 @@ test("auth and EOI no longer point to deleted workspace, partner, or signup rout
 
   assert.match(auth, /if \(role === "admin"\) return "\/admin"/);
   assert.match(auth, /if \(role === "sales"\) return "\/sales"/);
+  assert.match(auth, /if \(role === "partner"\) return "\/partner"/);
   assert.match(auth, /return "\/"/);
-  assert.match(proxy, /pathname\.startsWith\("\/admin"\) \|\| pathname\.startsWith\("\/sales"\)/);
+  assert.match(proxy, /pathname\.startsWith\("\/admin"\)/);
+  assert.match(proxy, /pathname\.startsWith\("\/sales"\)/);
+  assert.match(proxy, /pathname === "\/partner"/);
   assert.match(loginForm, /sales portal/);
   assert.doesNotMatch(loginForm, /Create an account|\/signup|sales workspace|partner portal|private workspace/);
   assert.doesNotMatch(eoiForm, /\/workspace/);
-  assert.match(eoiForm, /Copy Template/);
-  assert.match(eoiForm, /company letterhead/);
+  assert.match(eoiForm, /Sign non-binding EOI/);
+  assert.match(eoiForm, /Download signed EOI/);
+  assert.match(eoiForm, /Terms of Service/);
   assert.match(inbound, /\/admin\/inbox\?thread=/);
+});
+
+test("legacy EOI is backend-gated until the bill-audited assessment is complete", () => {
+  const eoiRoute = read("app/api/eoi/[token]/route.ts");
+  const eoiPage = read("app/eoi/[token]/page.tsx");
+  const proposalRoute = read("app/api/migration/proposal/route.ts");
+  const proposalPdfRoute = read("app/api/migration/proposal/pdf/route.ts");
+  assert.match(eoiRoute, /hasCompletedFoundationAssessment/);
+  assert.match(eoiRoute, /becomes available only after the bill-audited Foundation-1 assessment is completed/i);
+  assert.match(eoiPage, /hasCompletedFoundationAssessment/);
+  assert.match(proposalRoute, /requireSignedEoi:\s*false/);
+  assert.match(proposalRoute, /FOUNDATION_ASSESSMENT_COMPLETED_EVENT/);
+  assert.match(proposalPdfRoute, /requireSignedEoi:\s*false/);
 });
 
 test("automatic email signature remains while editable signature API is gone", () => {
@@ -331,10 +367,14 @@ test("sales surveillance is backed by login audit and email activity", () => {
   assert.match(surveillance, /recentAuditEvents/);
 });
 
-test("obsolete animation and PDF parsing dependencies are removed", () => {
+test("obsolete animation/PDF generation dependencies stay removed while bill extraction is enabled", () => {
   const pkg = read("package.json");
+  const billPdf = read("lib/utility-bill-pdf.ts");
   assert.doesNotMatch(pkg, /framer-motion/);
-  assert.doesNotMatch(pkg, /pdf-parse/);
+  assert.match(pkg, /"pdf-parse": "\^2\.4\.5"/);
   assert.doesNotMatch(pkg, /pdf-lib/);
   assert.match(pkg, /"fflate"/);
+  assert.match(billPdf, /createPdfParser/);
+  assert.doesNotMatch(billPdf, /import \{ PDFParse \} from "pdf-parse"/);
+  assert.match(billPdf, /await parser\.destroy\(\)/);
 });

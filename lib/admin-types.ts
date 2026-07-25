@@ -3,6 +3,9 @@ export const adminLeadStages = [
   "EOI Generated",
   "EOI Signed",
   "Utility Bills Uploaded",
+  "Proposal Accepted",
+  "Mandate Signed",
+  "Direct KYC Submitted",
   "Compliance Pack Uploaded",
   "Term Sheet Uploaded",
   "Onboarding Complete",
@@ -126,6 +129,10 @@ export interface AdminLeadDocument {
   storagePath?: string | null;
   fileName?: string | null;
   contentType?: string | null;
+  /** Server-side utility-bill extraction result. Kept as `unknown` here to
+   * avoid coupling the generic admin model to bill-analysis implementation
+   * details; proposal code validates it before use. */
+  utilityBillAnalysis?: unknown;
   actorUserId?: string | null;
   actorEmail?: string | null;
   actorName?: string | null;
@@ -162,6 +169,9 @@ export interface MigrationAssessmentLeadSummary {
   qualificationStatus?: string | null;
   recommendedPathway?: string | null;
   monthlySpend?: number | null;
+  monthlyKwh?: number | null;
+  monthlyKwhSource?: "bills" | "assumed" | null;
+  calculationBasis?: "highest-recent-electricity-charge-ex-vat" | "monthly-spend-entered" | null;
   annualSpend?: number | null;
   tenYearSpend?: number | null;
   bestTenYearSaving?: number | null;
@@ -169,6 +179,8 @@ export interface MigrationAssessmentLeadSummary {
   sourceCampaign?: string | null;
   referrer?: string | null;
   generatedAt?: string | null;
+  utilityProvider?: string | null;
+  billPortfolio?: unknown;
 }
 
 export interface SalesLead {
@@ -233,6 +245,15 @@ export interface AdminLead {
   eoiSignedBy: string | null;
   eoiSignedAt: string | null;
   eoiAcceptedTermsAt: string | null;
+  proposalAcceptedAt?: string | null;
+  proposalAcceptedBy?: string | null;
+  mandateSigningToken?: string | null;
+  mandateSignedAt?: string | null;
+  mandateSignedBy?: string | null;
+  directKycSubmittedAt?: string | null;
+  directKycSubmittedBy?: string | null;
+  directKycRecipient?: string | null;
+  directKycAttestationVersion?: string | null;
   onboardingCompletedAt: string | null;
   disqualification: AdminLeadDisqualification | null;
   tasks: AdminLeadTask[];

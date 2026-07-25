@@ -1,10 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readAdminStateSnapshot, writeAdminStateSnapshot } from "@/lib/admin-state-store";
+import { readAdminStateSnapshot, writeAdminLeadMutationSnapshot } from "@/lib/admin-state-store";
 import { createNotification } from "@/lib/notifications";
 import { makeId, timelineLabel } from "@/lib/formatting";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { documentUploadLinkIdForLead } from "@/lib/registration-links";
+import { promoteLeadStage as promoteStage } from "@/lib/lead-stage";
 import { uploadPrivateObject } from "@/lib/server-json-store";
+import { analyseUtilityBillFile } from "@/lib/utility-bill-pdf";
+import { aggregateUtilityBills, isUtilityBillDocumentAnalysis, type UtilityBillDocumentAnalysis } from "@/lib/utility-bill-analysis";
+import { currentiseEskomBill } from "@/lib/eskom-tariff-currentisation";
+import {
+  DOCUMENT_TYPE_META,
+  KYC_DOCUMENT_TYPES,
+  countDocumentsByType,
+  isClientUploadDocumentType,
+  type ClientDocumentType,
+} from "@/lib/document-taxonomy";
 import type { AdminLead, AdminLeadDocument } from "@/lib/admin-types";
 
 export const runtime = "nodejs";
@@ -12,10 +23,19 @@ export const runtime = "nodejs";
 const DOCUMENT_BUCKET = "oneos-client-documents";
 const MAX_FILES = 12;
 const MAX_FILE_BYTES = 15 * 1024 * 1024;
-const ALLOWED_EXTENSIONS = new Set(["pdf", "png", "jpg", "jpeg", "docx", "xlsx", "txt"]);
-const DOCUMENT_TYPES = ["expression_of_interest", "signed_eoi", "utility_bills", "signed_proposal"] as const;
-type PublicDocumentType = (typeof DOCUMENT_TYPES)[number];
-
+const ALLOWED_EXTENSIONS = new Set([
+  "pdf",
+  "png",
+  "jpg",
+  "jpeg",
+  "heic",
+  "heif",
+  "webp",
+  "docx",
+  "xlsx",
+  "txt",
+]);
+type PublicDocumentType = ClientDocumentType;
 type PublicUploadLead = {
   clientProfileId: string;
   company: string;
@@ -23,6 +43,17 @@ type PublicUploadLead = {
   email: string;
   stage: string;
   documentCounts: Record<PublicDocumentType, number>;
+};
+
+type PublicBillAnalysisSummary = {
+  fileName: string;
+  status: UtilityBillDocumentAnalysis["status"];
+  accountMonth: string | null;
+  tariffName: string | null;
+  monthlyKwh: number | null;
+  currentPeriodChargesExVat: number | null;
+  confidence: UtilityBillDocumentAnalysis["confidence"];
+  warnings: string[];
 };
 
 function findLeadByUploadToken(leads: AdminLead[], token: string): AdminLead | null {
@@ -59,7 +90,7 @@ function toFileType(file: File): AdminLeadDocument["fileType"] {
   const extension = fileExtension(file);
   if (extension === "docx") return "DOCX";
   if (extension === "xlsx") return "XLSX";
-  if (extension === "png" || extension === "jpg" || extension === "jpeg") return "PNG";
+  if (["png", "jpg", "jpeg", "heic", "heif", "webp"].includes(extension)) return "PNG";
   if (extension === "txt") return "TXT";
   return "PDF";
 }
@@ -75,7 +106,7 @@ function baseFileTitle(fileName: string) {
 function validateFile(file: File) {
   const extension = fileExtension(file);
   if (!ALLOWED_EXTENSIONS.has(extension)) {
-    return `${file.name} is not supported. Upload PDF, PNG, JPG, DOCX, XLSX, or TXT files.`;
+    return `${file.name} is not supported. Upload PDF, photos (JPG, PNG, HEIC), DOCX, XLSX, or TXT files.`;
   }
   if (file.size <= 0) return `${file.name} is empty.`;
   if (file.size > MAX_FILE_BYTES) return `${file.name} is larger than 15MB.`;
@@ -83,7 +114,7 @@ function validateFile(file: File) {
 }
 
 function isDocumentType(value: FormDataEntryValue | null): value is PublicDocumentType {
-  return typeof value === "string" && DOCUMENT_TYPES.includes(value as PublicDocumentType);
+  return isClientUploadDocumentType(value);
 }
 
 function setTaskStatus(lead: AdminLead, title: string, done: boolean): AdminLead["tasks"] {
@@ -97,57 +128,46 @@ function setTaskStatus(lead: AdminLead, title: string, done: boolean): AdminLead
   );
 }
 
-function stageRank(stage: AdminLead["stage"]) {
-  const rank: Record<AdminLead["stage"], number> = {
-    "Client Registered": 1,
-    "EOI Generated": 2,
-    "EOI Signed": 3,
-    "Utility Bills Uploaded": 4,
-    "Compliance Pack Uploaded": 5,
-    "Term Sheet Uploaded": 6,
-    "Onboarding Complete": 7,
-    Disqualified: 99,
-  };
-  return rank[stage] ?? 0;
-}
-
-function promoteStage(lead: AdminLead, target: AdminLead["stage"]): AdminLead["stage"] {
-  if (lead.stage === "Disqualified" || lead.stage === "Onboarding Complete") return lead.stage;
-  return stageRank(lead.stage) < stageRank(target) ? target : lead.stage;
-}
-
 function titleForUpload(type: PublicDocumentType, file: File, index: number) {
   const base = baseFileTitle(file.name);
-  if (type === "expression_of_interest") return base ? `Expression of Interest - ${base}` : "Expression of Interest";
-  if (type === "signed_eoi") return base ? `Signed Expression of Interest - ${base}` : "Signed Expression of Interest";
-  if (type === "signed_proposal") return base ? `Signed Proposal - ${base}` : "Signed Proposal";
-  return base ? `Utility Bill - ${base}` : `Utility Bill - Month ${index + 1}`;
+  const meta = DOCUMENT_TYPE_META[type];
+  if (type === "utility_bills") {
+    return base ? `Utility Bill - ${base}` : `Utility Bill - Month ${index + 1}`;
+  }
+  return base ? `${meta.title} - ${base}` : meta.title;
 }
 
 function documentCategory(type: PublicDocumentType) {
-  if (type === "utility_bills") return "Qualification";
-  if (type === "signed_proposal") return "Commercial";
-  return "Onboarding";
+  return DOCUMENT_TYPE_META[type].category;
 }
 
 function documentStatus(type: PublicDocumentType): AdminLeadDocument["status"] {
-  return type === "signed_eoi" || type === "signed_proposal" ? "signed" : "received";
+  return type === "signed_eoi" || type === "signed_proposal" || type === "signed_mandate"
+    ? "signed"
+    : "received";
 }
 
 function publicLead(lead: AdminLead): PublicUploadLead {
-  const joinedDocuments = lead.documents.map((document) => `${document.title} ${document.category}`.toLowerCase());
   return {
     clientProfileId: lead.clientProfileId,
     company: lead.company,
     contactName: lead.contactName,
     email: lead.userProfile.email,
     stage: lead.stage,
-    documentCounts: {
-      expression_of_interest: joinedDocuments.filter((value) => value.includes("expression of interest") && !value.includes("signed")).length,
-      signed_eoi: joinedDocuments.filter((value) => value.includes("signed expression of interest") || value.includes("signed eoi")).length,
-      utility_bills: joinedDocuments.filter((value) => value.includes("utility") || value.includes("electricity")).length,
-      signed_proposal: joinedDocuments.filter((value) => value.includes("signed proposal")).length,
-    },
+    documentCounts: countDocumentsByType(lead.documents),
+  };
+}
+
+function publicBillAnalysis(analysis: UtilityBillDocumentAnalysis): PublicBillAnalysisSummary {
+  return {
+    fileName: analysis.sourceFileName,
+    status: analysis.status,
+    accountMonth: analysis.accountMonth,
+    tariffName: analysis.tariffName,
+    monthlyKwh: analysis.monthlyKwh,
+    currentPeriodChargesExVat: analysis.totalChargesExVat,
+    confidence: analysis.confidence,
+    warnings: analysis.warnings,
   };
 }
 
@@ -182,12 +202,41 @@ export async function POST(
     );
   }
 
-  const formData = await request.formData();
+  // Reject oversized bodies before parsing — a multi-file upload can be at
+  // most MAX_FILES × MAX_FILE_BYTES (plus multipart overhead). Without this,
+  // huge bodies blow up inside formData() as an unhandled 500.
+  const contentLength = Number(request.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > MAX_FILES * MAX_FILE_BYTES + 1024 * 1024) {
+    return NextResponse.json(
+      { ok: false, error: `Upload too large. Each file must be under 15MB (maximum ${MAX_FILES} files).` },
+      { status: 413 },
+    );
+  }
+
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch {
+    return NextResponse.json(
+      { ok: false, error: "Could not read the upload. Send files as multipart form data." },
+      { status: 400 },
+    );
+  }
   const documentTypeEntry = formData.get("documentType");
   const files = formData.getAll("files").filter((entry): entry is File => entry instanceof File);
 
   if (!isDocumentType(documentTypeEntry)) {
-    return NextResponse.json({ ok: false, error: "Choose a document type." }, { status: 400 });
+    const isKycAttempt = typeof documentTypeEntry === "string"
+      && KYC_DOCUMENT_TYPES.includes(documentTypeEntry as ClientDocumentType);
+    return NextResponse.json(
+      {
+        ok: false,
+        error: isKycAttempt
+          ? "Bank KYC documents cannot be uploaded to Foundation-1. After the signed formal UFMS proposal, send them directly to info@UFMS.net only."
+          : "Choose an allowed document type.",
+      },
+      { status: isKycAttempt ? 403 : 400 },
+    );
   }
   const documentType = documentTypeEntry;
 
@@ -196,6 +245,12 @@ export async function POST(
   }
   if (files.length > MAX_FILES) {
     return NextResponse.json({ ok: false, error: `Upload a maximum of ${MAX_FILES} files at a time.` }, { status: 400 });
+  }
+  if (files.reduce((total, file) => total + file.size, 0) > MAX_FILES * MAX_FILE_BYTES) {
+    return NextResponse.json(
+      { ok: false, error: "Upload too large. Each file must be under 15MB." },
+      { status: 413 },
+    );
   }
 
   const invalidFileMessage = files.map(validateFile).find((message): message is string => Boolean(message));
@@ -207,6 +262,22 @@ export async function POST(
   const currentLead = findLeadByUploadToken(snapshot.leads, token);
   if (!currentLead) {
     return NextResponse.json({ ok: false, error: "Document upload link not found." }, { status: 404 });
+  }
+
+  // Extraction is deliberately non-fatal. The original private document is
+  // always retained; image-only/complex statements are flagged for human
+  // review instead of turning a valid upload into an error.
+  const billAnalyses = new Map<number, UtilityBillDocumentAnalysis>();
+  if (documentType === "utility_bills") {
+    await Promise.all(
+      files.map(async (file, index) => {
+        try {
+          billAnalyses.set(index, await analyseUtilityBillFile(file));
+        } catch {
+          // Storage still proceeds. Lazy proposal analysis can retry later.
+        }
+      }),
+    );
   }
 
   let updatedLead: AdminLead | null = null;
@@ -237,6 +308,7 @@ export async function POST(
         storagePath,
         fileName: file.name,
         contentType: file.type || null,
+        utilityBillAnalysis: billAnalyses.get(index) ?? null,
       });
     }
 
@@ -246,11 +318,11 @@ export async function POST(
       : documentType === "utility_bills"
         ? promoteStage(lead, "Utility Bills Uploaded")
         : lead.stage;
-    const nextReadiness = documentType === "signed_eoi"
+    let nextReadiness = documentType === "signed_eoi"
       ? Math.max(lead.readinessScore, 58)
       : documentType === "utility_bills"
-        ? Math.max(lead.readinessScore, 72)
-        : documentType === "signed_proposal"
+        ? Math.max(lead.readinessScore, 60)
+        : documentType === "signed_proposal" || documentType === "signed_mandate"
           ? Math.max(lead.readinessScore, 84)
           : lead.readinessScore;
     const nextAction = documentType === "signed_eoi"
@@ -258,13 +330,40 @@ export async function POST(
       : documentType === "utility_bills"
         ? "Review uploaded utility bills and prepare the proposal."
         : documentType === "signed_proposal"
-          ? "Review signed proposal and prepare the compliance pack."
-          : lead.nextAction;
+          ? "Review the signed proposal and issue the direct UFMS KYC instructions."
+          : documentType === "signed_mandate"
+            ? "Countersign the Foundation-1 mandate and coordinate the formal proposal."
+            : lead.nextAction;
 
     let nextTasks = lead.tasks;
     if (documentType === "signed_eoi") nextTasks = setTaskStatus(lead, "Submit signed EOI", true);
-    if (documentType === "utility_bills") nextTasks = setTaskStatus(lead, "Upload 6-month utility bill pack", true);
     if (documentType === "signed_proposal") nextTasks = setTaskStatus(lead, "Submit signed proposal", true);
+
+    const existingBillAnalyses = lead.documents
+      .map((document) => document.utilityBillAnalysis)
+      .filter(isUtilityBillDocumentAnalysis);
+    const uploadedBillAnalyses = uploadedDocuments
+      .map((document) => document.utilityBillAnalysis)
+      .filter(isUtilityBillDocumentAnalysis);
+    const allBillAnalyses = [...existingBillAnalyses, ...uploadedBillAnalyses];
+    const billPortfolio = documentType === "utility_bills"
+      ? aggregateUtilityBills(allBillAnalyses, undefined, {
+          currentisedBills: allBillAnalyses.map((analysis) => ({
+            sourceHash: analysis.sourceHash,
+            ...currentiseEskomBill(analysis),
+          })),
+        })
+      : null;
+    if (billPortfolio) {
+      nextTasks = setTaskStatus(
+        { ...lead, tasks: nextTasks },
+        "Upload 6-month utility bill pack",
+        billPortfolio.uniquePeriodCount >= 6,
+      );
+      if (billPortfolio.uniquePeriodCount >= 6) {
+        nextReadiness = Math.max(nextReadiness, 72);
+      }
+    }
 
     updatedLead = {
       ...lead,
@@ -276,6 +375,18 @@ export async function POST(
       eoiAcceptedTermsAt: documentType === "signed_eoi" ? lead.eoiAcceptedTermsAt ?? signedEoiAt : lead.eoiAcceptedTermsAt,
       eoiSignedBy: documentType === "signed_eoi" ? lead.eoiSignedBy ?? lead.contactName : lead.eoiSignedBy,
       eoiSignatureId: documentType === "signed_eoi" ? lead.eoiSignatureId ?? makeId("signature") : lead.eoiSignatureId,
+      migrationAssessment: billPortfolio
+        ? {
+            ...(lead.migrationAssessment ?? {}),
+            monthlySpend: billPortfolio.averageMonthlySpendExVat,
+            annualSpend: billPortfolio.averageMonthlySpendExVat === null
+              ? lead.migrationAssessment?.annualSpend ?? null
+              : billPortfolio.averageMonthlySpendExVat * 12,
+            monthlyKwh: billPortfolio.averageMonthlyKwh,
+            billPortfolio,
+            generatedAt: billPortfolio.generatedAt,
+          }
+        : lead.migrationAssessment,
       documents: [...uploadedDocuments, ...lead.documents],
       tasks: nextTasks,
       events: [
@@ -303,7 +414,12 @@ export async function POST(
     leads: nextLeads,
     activeLeadId: savedLead.id,
   };
-  const backend = await writeAdminStateSnapshot(nextSnapshot, "public-document-upload");
+  // Delta write: upsert ONLY the changed lead. A full-snapshot write rewrites
+  // every lead row (5k+) and was the cause of >90s upload responses.
+  const backend = await writeAdminLeadMutationSnapshot(nextSnapshot, "public-document-upload", {
+    leadUpserts: [savedLead],
+    leadDeletes: [],
+  });
 
   void createNotification({
     audience: "admin",
@@ -340,5 +456,6 @@ export async function POST(
     backend,
     lead: publicLead(savedLead),
     uploadedCount: files.length,
+    billAnalyses: [...billAnalyses.values()].map(publicBillAnalysis),
   });
 }

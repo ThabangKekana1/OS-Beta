@@ -1,4 +1,14 @@
 import { CALCULATION_CONFIG, MIGRATION_DISCLAIMER } from "@/lib/calculation-config";
+import {
+  runPricingEngine,
+  round2,
+  type BillChargeBreakdown,
+  type BusinessLoadProfile,
+  type EngineResult,
+  type IntervalLoadPoint,
+  type TariffStructure,
+  type WheelingQuote,
+} from "@/lib/pricing-engine";
 
 export type MigrationBusinessType =
   | "Factory"
@@ -41,12 +51,30 @@ export type MigrationPainPoint =
 
 export type MigrationAssessmentInput = {
   monthlyElectricitySpend: number;
-  /** Legacy localStorage/API alias. New public flow uses monthlyElectricitySpend only. */
   monthlySpend?: number;
+  monthlyKwh?: number;
+  sizingMonthlyKwh?: number;
+  monthlyKwhSource?: "bills" | "assumed";
+  blendedTariff?: number;
+  minimumPvKwp?: number;
+  annualSolarYieldKwhPerKwp?: number;
+  solarYieldSource?: "site-pvgis" | "partner-template" | "engineering";
+  targetOnsiteEnergyShare?: number;
+  businessLoadProfile?: BusinessLoadProfile;
+  operatingHoursPerDay?: number;
+  tariffStructure?: TariffStructure;
+  peakShiftHours?: number;
+  requestedBessKwh?: number;
+  billBreakdown?: Partial<BillChargeBreakdown>;
+  intervalProfile?: IntervalLoadPoint[];
+  allowIntervalDemandSavings?: boolean;
+  wheelingEligibleShare?: number;
+  wheelingLossFactor?: number;
 };
 
 export type UfmsScenarioResult = {
   label: string;
+  confidence?: "P10" | "P50" | "P90";
   currentTariff: number;
   solutionTariff: number;
   savingPercentage: number;
@@ -81,9 +109,7 @@ export type CombinedScenario = {
 };
 
 export type MigrationAssessmentResult = {
-  input: {
-    monthlyElectricitySpend: number;
-  };
+  input: { monthlyElectricitySpend: number };
   currentUtilityProjection: {
     currentMonthlySpend: number;
     currentAnnualSpend: number;
@@ -109,11 +135,8 @@ export type MigrationAssessmentResult = {
   qualificationStatus: string;
   recommendedPathway: string;
   disclaimer: string;
+  proposal: EngineResult;
 };
-
-function r(value: number) {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
-}
 
 function compoundedAnnualSpendFactor(years: number, annualEscalationRate: number) {
   return Array.from({ length: years }).reduce<number>(
@@ -122,134 +145,114 @@ function compoundedAnnualSpendFactor(years: number, annualEscalationRate: number
   );
 }
 
+function wheelingResult(quote: WheelingQuote): WheelingResult {
+  return {
+    tariff: round2(quote.firmTariff),
+    monthlyCost: quote.monthlyCostAtFirmTariff,
+    monthlySaving: quote.monthlySaving,
+    savingPercentage: round2(quote.savingPctOfBill * 100),
+    annualSaving: quote.annualSaving,
+    tenYearCost: quote.tenYearCost,
+    tenYearSavingAgainstEskom: quote.tenYearSaving,
+  };
+}
+
+/**
+ * Business migration assessment built only from the canonical energy and
+ * charge waterfall in pricing-engine.ts. No savings percentage is hardcoded.
+ */
 export function calculateMigrationAssessment(
   input: MigrationAssessmentInput,
 ): MigrationAssessmentResult {
-  const MONTHS_PER_YEAR = 12;
-  const PROJECTION_YEARS = CALCULATION_CONFIG.minimum_term_years;
-  const ESKOM_ANNUAL_TARIFF_ESCALATION_PERCENTAGE =
-    CALCULATION_CONFIG.eskom_annual_tariff_escalation_percent;
-  const ESKOM_ANNUAL_TARIFF_ESCALATION_RATE =
-    ESKOM_ANNUAL_TARIFF_ESCALATION_PERCENTAGE / 100;
-  const ESKOM_TEN_YEAR_FACTOR = compoundedAnnualSpendFactor(
-    PROJECTION_YEARS,
-    ESKOM_ANNUAL_TARIFF_ESCALATION_RATE,
-  );
-  const FOUNDATION_ONE_TEN_YEAR_FACTOR = CALCULATION_CONFIG.foundation_one_ten_year_factor;
-  const WHEELING_CURRENT_BENCHMARK_TARIFF = 2.38;
-  const GREENSHARE_CONSERVATIVE_WHEELING_TARIFF = 1.85;
-  const GREENSHARE_PV_ONLY_REFERENCE_TARIFF = 0.98;
   const monthlyElectricitySpend = Number(
     input.monthlyElectricitySpend ?? input.monthlySpend,
   );
-
   if (!Number.isFinite(monthlyElectricitySpend) || monthlyElectricitySpend <= 0) {
     throw new Error("Enter a valid monthly electricity spend greater than zero.");
   }
 
-  const currentAnnualSpend = monthlyElectricitySpend * MONTHS_PER_YEAR;
-  const currentUtilityTenYearSpend = currentAnnualSpend * ESKOM_TEN_YEAR_FACTOR;
-
-  const ufmsScenarioInputs = [
-    { label: "Low UFMS estimate", currentTariff: 2.69, savingPercentage: 0.74 },
-    { label: "Base UFMS estimate", currentTariff: 2.46, savingPercentage: 11 },
-    { label: "High UFMS estimate", currentTariff: 3.33, savingPercentage: 35 },
-  ];
-
-  const ufmsScenarios = ufmsScenarioInputs.map((scenario) => {
-    const savingPercentage = scenario.savingPercentage;
-    const solutionTariff = scenario.currentTariff * (1 - savingPercentage / 100);
-    const monthlySaving = monthlyElectricitySpend * (savingPercentage / 100);
-    const annualSaving = monthlySaving * MONTHS_PER_YEAR;
-    const estimatedMonthlySolutionCost = monthlyElectricitySpend - monthlySaving;
-    const tenYearSolutionCost =
-      estimatedMonthlySolutionCost * MONTHS_PER_YEAR * FOUNDATION_ONE_TEN_YEAR_FACTOR;
-    const tenYearSavingAgainstEskom = currentUtilityTenYearSpend - tenYearSolutionCost;
-
-    return {
-      label: scenario.label,
-      currentTariff: scenario.currentTariff,
-      solutionTariff: r(solutionTariff),
-      savingPercentage: r(savingPercentage),
-      monthlySaving: r(monthlySaving),
-      annualSaving: r(annualSaving),
-      estimatedMonthlySolutionCost: r(estimatedMonthlySolutionCost),
-      tenYearSolutionCost: r(tenYearSolutionCost),
-      tenYearSavingAgainstEskom: r(tenYearSavingAgainstEskom),
-    };
+  const utilityEscalation = CALCULATION_CONFIG.eskom_annual_tariff_escalation_percent / 100;
+  const engine = runPricingEngine({
+    monthlySpend: monthlyElectricitySpend,
+    monthlyKwh: input.monthlyKwh,
+    sizingMonthlyKwh: input.sizingMonthlyKwh,
+    monthlyKwhSource: input.monthlyKwhSource,
+    blendedTariff: input.blendedTariff,
+    utilityEscalation,
+    minimumPvKwp: input.minimumPvKwp,
+    annualSolarYieldKwhPerKwp: input.annualSolarYieldKwhPerKwp,
+    solarYieldSource: input.solarYieldSource,
+    targetOnsiteEnergyShare: input.targetOnsiteEnergyShare,
+    businessLoadProfile: input.businessLoadProfile,
+    operatingHoursPerDay: input.operatingHoursPerDay,
+    tariffStructure: input.tariffStructure,
+    peakShiftHours: input.peakShiftHours,
+    requestedBessKwh: input.requestedBessKwh,
+    billBreakdown: input.billBreakdown,
+    intervalProfile: input.intervalProfile,
+    allowIntervalDemandSavings: input.allowIntervalDemandSavings,
+    wheelingEligibleShare: input.wheelingEligibleShare,
+    wheelingLossFactor: input.wheelingLossFactor,
   });
 
-  const estimatedMonthlyKilowattHours =
-    monthlyElectricitySpend / WHEELING_CURRENT_BENCHMARK_TARIFF;
-
-  function buildWheelingResult(tariff: number): WheelingResult {
-    const monthlyCost = estimatedMonthlyKilowattHours * tariff;
-    const monthlySaving = monthlyElectricitySpend - monthlyCost;
-    const savingPercentage = (monthlySaving / monthlyElectricitySpend) * 100;
-    const annualSaving = monthlySaving * MONTHS_PER_YEAR;
-    const tenYearCost = monthlyCost * MONTHS_PER_YEAR * FOUNDATION_ONE_TEN_YEAR_FACTOR;
-    const tenYearSavingAgainstEskom = currentUtilityTenYearSpend - tenYearCost;
-
-    return {
-      tariff: r(tariff),
-      monthlyCost: r(monthlyCost),
-      monthlySaving: r(monthlySaving),
-      savingPercentage: r(savingPercentage),
-      annualSaving: r(annualSaving),
-      tenYearCost: r(tenYearCost),
-      tenYearSavingAgainstEskom: r(tenYearSavingAgainstEskom),
-    };
-  }
-
-  const conservative = buildWheelingResult(GREENSHARE_CONSERVATIVE_WHEELING_TARIFF);
-  const photovoltaicOnlyReference = buildWheelingResult(GREENSHARE_PV_ONLY_REFERENCE_TARIFF);
-
-  // Both products are independent: UFMS saves X on the full bill, wheeling saves Y on the
-  // full bill. Combined saving = X + Y (additive, capped at full spend).
-  const combinedScenarioInputs = [
-    { ufms: ufmsScenarios[1], wheeling: conservative, label: "Base UFMS + Wheeling" },
-    { ufms: ufmsScenarios[2], wheeling: conservative, label: "High UFMS + Wheeling" },
-  ];
-
-  const combinedScenarios: CombinedScenario[] = combinedScenarioInputs.map(
-    ({ ufms, wheeling: wh, label }) => {
-      const combinedMonthlySaving = Math.min(
-        ufms.monthlySaving + wh.monthlySaving,
-        monthlyElectricitySpend,
-      );
-      const combinedMonthlyCost = monthlyElectricitySpend - combinedMonthlySaving;
-      const combinedSavingPercentage = (combinedMonthlySaving / monthlyElectricitySpend) * 100;
-      const combinedAnnualSaving = combinedMonthlySaving * MONTHS_PER_YEAR;
-      const combinedTenYearCost =
-        combinedMonthlyCost * MONTHS_PER_YEAR * FOUNDATION_ONE_TEN_YEAR_FACTOR;
-      const combinedTenYearSavingAgainstEskom = currentUtilityTenYearSpend - combinedTenYearCost;
-
-      return {
-        label,
-        ufmsSavingPercentage: ufms.savingPercentage,
-        wheelingSavingPercentage: wh.savingPercentage,
-        combinedMonthlyCost: r(combinedMonthlyCost),
-        combinedMonthlySaving: r(combinedMonthlySaving),
-        combinedSavingPercentage: r(combinedSavingPercentage),
-        combinedAnnualSaving: r(combinedAnnualSaving),
-        combinedTenYearCost: r(combinedTenYearCost),
-        combinedTenYearSavingAgainstEskom: r(combinedTenYearSavingAgainstEskom),
-        warning:
-          "Illustrative scenario only. Final combined savings require utility-bill review, site assessment, network assessment, and formal partner proposal.",
-      };
-    },
+  const currentAnnualSpend = monthlyElectricitySpend * 12;
+  const tenYearFactor = compoundedAnnualSpendFactor(
+    CALCULATION_CONFIG.minimum_term_years,
+    utilityEscalation,
   );
+  const currentUtilityTenYearSpend = currentAnnualSpend * tenYearFactor;
+  const ufmsScenarios: UfmsScenarioResult[] = engine.bands.map((band) => {
+    const monthlySolutionCost = monthlyElectricitySpend - band.monthlySaving;
+    return {
+      label: band.label,
+      confidence: band.confidence,
+      currentTariff: engine.input.blendedTariff,
+      solutionTariff: round2(monthlySolutionCost / engine.input.monthlyKwh),
+      savingPercentage: round2(band.yearOneSavingPct * 100),
+      monthlySaving: band.monthlySaving,
+      annualSaving: round2(band.monthlySaving * 12),
+      estimatedMonthlySolutionCost: round2(monthlySolutionCost),
+      tenYearSolutionCost: band.tenYearSolutionCost,
+      tenYearSavingAgainstEskom: band.tenYearSaving,
+    };
+  });
+  const combined = engine.lumenCombined;
+  const combinedScenarios: CombinedScenario[] = [
+    {
+      label: combined.eligible
+        ? "Combined onsite + residual wheeling"
+        : "Combined waterfall planning view",
+      ufmsSavingPercentage: round2(combined.ufmsSavingPct * 100),
+      wheelingSavingPercentage: round2(combined.wheelingSavingPct * 100),
+      combinedMonthlyCost: combined.monthlyCost,
+      combinedMonthlySaving: combined.monthlySaving,
+      combinedSavingPercentage: round2(combined.combinedSavingPct * 100),
+      combinedAnnualSaving: combined.annualSaving,
+      combinedTenYearCost: combined.tenYearCost,
+      combinedTenYearSavingAgainstEskom: combined.tenYearSaving,
+      warning: combined.note,
+    },
+  ];
+  const qualificationStatus =
+    engine.qualification.band === "below-minimum"
+      ? "Below programme minimum"
+      : engine.qualification.band === "unlikely"
+        ? "Model completed — current configuration is not economically supported"
+        : engine.input.evidenceLevel === "interval-validated"
+          ? "Interval-validated migration case"
+          : engine.input.evidenceLevel === "bill-audited"
+            ? "Bill-audited pre-engineering case"
+            : "Indicative prequalification generated";
 
   return {
-    input: {
-      monthlyElectricitySpend: r(monthlyElectricitySpend),
-    },
+    input: { monthlyElectricitySpend: round2(monthlyElectricitySpend) },
     currentUtilityProjection: {
-      currentMonthlySpend: r(monthlyElectricitySpend),
-      currentAnnualSpend: r(currentAnnualSpend),
-      tenYearSpend: r(currentUtilityTenYearSpend),
-      tenYearFactorUsed: r(ESKOM_TEN_YEAR_FACTOR),
-      annualTariffEscalationPercentage: ESKOM_ANNUAL_TARIFF_ESCALATION_PERCENTAGE,
+      currentMonthlySpend: round2(monthlyElectricitySpend),
+      currentAnnualSpend: round2(currentAnnualSpend),
+      tenYearSpend: round2(currentUtilityTenYearSpend),
+      tenYearFactorUsed: round2(tenYearFactor),
+      annualTariffEscalationPercentage:
+        CALCULATION_CONFIG.eskom_annual_tariff_escalation_percent,
     },
     ufmsSolar: {
       scenarios: ufmsScenarios,
@@ -261,56 +264,17 @@ export function calculateMigrationAssessment(
       highSavingPercentage: ufmsScenarios[2].savingPercentage,
     },
     wheeling: {
-      estimatedMonthlyKilowattHours: r(estimatedMonthlyKilowattHours),
-      conservative,
-      photovoltaicOnlyReference,
+      estimatedMonthlyKilowattHours: engine.input.monthlyKwh,
+      conservative: wheelingResult(engine.wheeling),
+      photovoltaicOnlyReference: wheelingResult(engine.wheelingPvOnly),
     },
     combinedScenarios,
-    qualificationStatus: "Preliminary estimate generated",
-    recommendedPathway: "Upload utility bills and signed Expression of Interest",
+    qualificationStatus,
+    recommendedPathway:
+      engine.input.evidenceLevel === "interval-validated"
+        ? "Engineering review and formal partner pricing"
+        : "Upload utility bills and interval data where available",
     disclaimer: MIGRATION_DISCLAIMER,
+    proposal: engine,
   };
 }
-
-export const migrationBusinessTypes: MigrationBusinessType[] = [
-  "Factory",
-  "Warehouse",
-  "Retail",
-  "Agriculture",
-  "Hospitality",
-  "Mining",
-  "School",
-  "Clinic",
-  "Other",
-];
-
-export const southAfricanProvinces: SouthAfricanProvince[] = [
-  "Eastern Cape",
-  "Free State",
-  "Gauteng",
-  "KwaZulu-Natal",
-  "Limpopo",
-  "Mpumalanga",
-  "Northern Cape",
-  "North West",
-  "Western Cape",
-];
-
-export const utilityProviders: UtilityProvider[] = [
-  "Eskom",
-  "City Power",
-  "Tshwane",
-  "eThekwini",
-  "Cape Town",
-  "Other",
-];
-
-export const migrationPainPoints: MigrationPainPoint[] = [
-  "High electricity cost",
-  "Loadshedding",
-  "Grid instability",
-  "Eskom tariff increases",
-  "Need solar",
-  "Need wheeling",
-  "Need both solar and wheeling",
-];

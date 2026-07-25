@@ -15,7 +15,7 @@ export type CaseStage =
 
 export type ConversationMode = "Onboarding";
 export type MessageType = "user" | "assistant" | "system" | "internal";
-export type ProductLine = "Generocity" | "Lumen-1";
+export type ProductLine = "Eden" | "Lumen-1";
 export type DocumentStatus =
   | "available"
   | "pending"

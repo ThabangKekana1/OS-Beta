@@ -1,16 +1,16 @@
-import type { Metadata } from "next";
-import { MigrationShell } from "@/components/migration/MigrationShell";
-import { MigrationStart } from "@/components/migration/MigrationStart";
-import type { MigrationLeadAttribution } from "@/components/migration/MigrationState";
+import { redirect } from "next/navigation";
 import { migrationLinkIdFromPathSegment } from "@/lib/registration-links";
 import { findLeadByMigrationLinkFromDatabase } from "@/lib/supabase-db-store";
 
-export const metadata: Metadata = {
-  title: "Start Migration Assessment | Foundation-1",
-};
-
 export const dynamic = "force-dynamic";
 
+const WEBSITE = process.env.NEXT_PUBLIC_WEBSITE_ORIGIN ?? "https://foundation-1.co.za";
+
+/**
+ * Admin-issued lead estimate link. The assessment funnel lives on the
+ * Foundation-1 website — this route resolves the lead and forwards with
+ * attribution so the website intake posts it back into 1OS.
+ */
 export default async function BrandedMigrationEstimatePage({
   params,
 }: {
@@ -18,26 +18,17 @@ export default async function BrandedMigrationEstimatePage({
 }) {
   const { linkId: pathSegment } = await params;
   const leadLinkId = migrationLinkIdFromPathSegment(pathSegment ?? "");
-  let leadAttribution: MigrationLeadAttribution | null = null;
 
   if (leadLinkId) {
     const lead = await findLeadByMigrationLinkFromDatabase(leadLinkId);
     if (lead) {
-      leadAttribution = {
-        linkId: leadLinkId,
-        leadId: lead.id,
-        clientProfileId: lead.clientProfileId,
-        company: lead.company,
-        contactName: lead.contactName,
-        email: lead.userProfile.email,
-        phone: lead.userProfile.phone,
-      };
+      redirect(
+        `${WEBSITE}/pricing?utm_source=lead-link&utm_campaign=lead-${encodeURIComponent(
+          leadLinkId,
+        )}&company=${encodeURIComponent(lead.company)}`,
+      );
     }
   }
 
-  return (
-    <MigrationShell>
-      <MigrationStart leadAttribution={leadAttribution} />
-    </MigrationShell>
-  );
+  redirect(`${WEBSITE}/pricing`);
 }

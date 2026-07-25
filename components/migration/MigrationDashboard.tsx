@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { calculateMigrationAssessment } from "@/lib/calculateMigrationAssessment";
 import {
   unlockMigrationDashboard,
@@ -10,11 +9,16 @@ import {
 } from "@/components/migration/MigrationState";
 import { MigrationProgressTracker } from "@/components/migration/MigrationProgressTracker";
 import { NextActionPanel } from "@/components/migration/NextActionPanel";
+import { DirectUfmsKycHandoff } from "@/components/migration/DirectUfmsKycHandoff";
+import { ProposalExplainer } from "@/components/migration/ProposalExplainer";
+import { countDocumentsByType } from "@/lib/document-taxonomy";
 import styles from "@/components/migration/migration.module.css";
 
 const SUPPORT_EMAIL = "support@foundation-1.co.za";
 const WHATSAPP_PHONE_DISPLAY = "+27 69 036 8243";
 const WHATSAPP_LINK = "https://wa.me/27690368243";
+const WEBSITE_ORIGIN = process.env.NEXT_PUBLIC_WEBSITE_ORIGIN ?? "https://foundation-1.co.za";
+const WEBSITE_ASSESSMENT_URL = `${WEBSITE_ORIGIN}/pricing`;
 
 type AdminProfileStatus = {
   leadId: string;
@@ -31,6 +35,16 @@ type AdminProfileStatus = {
     fileName: string | null;
     createdAt: string | null;
   }>;
+  uploadToken?: string | null;
+  eoiToken?: string | null;
+  proposalAcceptedAt?: string | null;
+  mandateToken?: string | null;
+  mandateSignedAt?: string | null;
+  directKycSubmittedAt?: string | null;
+  directKycSubmittedBy?: string | null;
+  directKycRecipient?: string | null;
+  formalProposalIssued?: boolean;
+  assessmentCompleted?: boolean;
 };
 
 function zar(value: number) {
@@ -46,9 +60,12 @@ const STATUS_LABELS: Record<string, string> = {
   instant_report_generated: "Report Generated",
   registered: "Client Profile Opened",
   utility_profile_uploaded: "Profile Submitted",
-  proposal_pending: "Proposal Pending",
-  proposal_ready: "Proposal Ready",
+  proposal_pending: "Assessment Pending",
+  proposal_ready: "Assessment Ready",
+  proposal_accepted: "Proposal Accepted",
+  mandate_signed: "Formal Authorization Signed",
   term_sheet_pending: "Term Sheet Pending",
+  direct_kyc_submitted: "Direct KYC Submitted",
   approved: "Approved",
   declined: "Declined",
 };
@@ -57,11 +74,22 @@ function formatStatus(status: string) {
   return STATUS_LABELS[status] ?? status.replaceAll("_", " ").replace(/^\w/, (c) => c.toUpperCase());
 }
 
-function progressIndexForStatus(status: string) {
-  if (status === "approved" || status === "declined") return 4;
-  if (status === "term_sheet_pending") return 3;
-  if (status === "proposal_pending" || status === "proposal_ready") return 2;
-  if (status === "utility_profile_uploaded" || status === "registered") return 2;
+function progressIndexForStatus(status: string, adminStage?: string) {
+  // 9-step journey: first report → complete bills → assessment → EOI →
+  // formal proposal → signed proposal → direct KYC → funding → close.
+  const stage = (adminStage ?? "").toLowerCase();
+  if (stage.includes("onboarding complete")) return 8;
+  if (status === "approved" || status === "declined") return 8;
+  if (stage.includes("term sheet")) return 8;
+  if (status === "term_sheet_pending") return 8;
+  if (stage.includes("direct kyc submitted") || status === "direct_kyc_submitted") return 7;
+  if (stage.includes("mandate signed") || stage.includes("signed proposal")) return 6;
+  if (stage.includes("proposal accepted")) return 5;
+  if (stage.includes("eoi signed")) return 4;
+  if (stage.includes("proposal ready") || stage.includes("compliance pack")) return 3;
+  if (status === "proposal_ready" || status === "proposal_pending") return 3;
+  if (status === "utility_profile_uploaded") return 2;
+  if (status === "registered") return 1;
   return 0;
 }
 
@@ -114,6 +142,7 @@ export function MigrationDashboard() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [adminStatus, setAdminStatus] = useState<AdminProfileStatus | null>(null);
   const [adminStatusError, setAdminStatusError] = useState("");
+  const [refreshTick, setRefreshTick] = useState(0);
 
   useEffect(() => {
     setProfileFromUrl(profileIdFromUrl());
@@ -238,6 +267,7 @@ export function MigrationDashboard() {
     activeStored?.registration?.leadId,
     activeStored?.updatedAt,
     unlocked,
+    refreshTick,
   ]);
 
   if (stored === undefined || unlocked === null) return null;
@@ -246,54 +276,76 @@ export function MigrationDashboard() {
     return (
       <section className={styles.section}>
         <div className={styles.shell}>
-          <div className={`${styles.panel} ${styles.form}`} style={{ maxWidth: 420 }}>
+          <div className={`${styles.panel} ${styles.form}`} style={{ maxWidth: 420, margin: "0 auto" }}>
             <h1 className={styles.sectionTitle} style={{ fontSize: "1.1rem" }}>Unlock Migration Dashboard</h1>
             <p className={styles.sectionCopy}>
-              Enter the Profile ID from your unique dashboard link and the 4-digit access code you were issued.
+              Enter the Profile ID from your unique dashboard link and the 4-digit access code shown when you registered.
             </p>
-            <div className={styles.fieldStack} style={{ marginTop: 20 }}>
-              <label className={styles.label}>
-                Profile ID
-                <input
-                  className={styles.input}
-                  type="text"
-                  value={profileIdInput}
-                  placeholder="F1-ABCDEFGH"
-                  onChange={(e) => {
-                    setCodeError("");
-                    setProfileIdInput(cleanProfileId(e.target.value));
-                  }}
-                />
-              </label>
-              <label className={styles.label}>
-                Access Code
-                <input
-                  className={styles.input}
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={4}
-                  value={codeInput}
-                  placeholder="0000"
-                  onChange={(e) => {
-                    setCodeError("");
-                    setCodeInput(e.target.value.replace(/\D/g, ""));
-                  }}
-                  onKeyDown={(e) => { if (e.key === "Enter") void attemptUnlock(); }}
-                />
-              </label>
-              {codeError && <p className={styles.error}>{codeError}</p>}
-              <button
-                className={styles.primaryButton}
-                type="button"
-                disabled={loginLoading}
-                onClick={() => void attemptUnlock()}
-              >
-                {loginLoading ? "Unlocking…" : "Unlock Dashboard"}
-              </button>
-              <Link href="/migration/start" className={styles.ghostButton}>
-                Start New Assessment
-              </Link>
-            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void attemptUnlock();
+              }}
+            >
+              <div className={styles.fieldStack} style={{ marginTop: 20 }}>
+                <label className={styles.label}>
+                  Profile ID
+                  <input
+                    className={styles.input}
+                    type="text"
+                    value={profileIdInput}
+                    placeholder="F1-ABCDEFGH"
+                    autoComplete="username"
+                    onChange={(e) => {
+                      setCodeError("");
+                      setProfileIdInput(cleanProfileId(e.target.value));
+                    }}
+                  />
+                </label>
+                <label className={styles.label}>
+                  Access Code
+                  <input
+                    className={styles.input}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="\d{4}"
+                    autoComplete="one-time-code"
+                    maxLength={4}
+                    value={codeInput}
+                    placeholder="0000"
+                    onChange={(e) => {
+                      setCodeError("");
+                      setCodeInput(e.target.value.replace(/\D/g, ""));
+                    }}
+                  />
+                </label>
+                {codeError && (
+                  <div>
+                    <p className={styles.error} role="alert">{codeError}</p>
+                    <a
+                      className={styles.supportLink}
+                      href={`https://wa.me/27690368243?text=${encodeURIComponent(
+                        `Hi Foundation-1, I can't unlock my migration dashboard. My Profile ID is ${profileIdInput || "(not sure)"} .`,
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Stuck? WhatsApp us and we&apos;ll get you in.
+                    </a>
+                  </div>
+                )}
+                <button
+                  className={styles.primaryButton}
+                  type="submit"
+                  disabled={loginLoading}
+                >
+                  {loginLoading ? "Unlocking…" : "Unlock Dashboard"}
+                </button>
+                <a href={WEBSITE_ASSESSMENT_URL} className={styles.ghostButton}>
+                  Start a new assessment
+                </a>
+              </div>
+            </form>
           </div>
         </div>
       </section>
@@ -307,15 +359,21 @@ export function MigrationDashboard() {
           <div className={`${styles.panel} ${styles.form}`} style={{ maxWidth: 560 }}>
             <h1 className={styles.sectionTitle} style={{ fontSize: "1.4rem" }}>Open Client Profile</h1>
             <p className={styles.sectionCopy}>
-              This dashboard opens once Foundation-1 has opened your client file from the report. Add the short contact details first to activate live proposal and approval status.
+              Your dashboard activates once you complete the assessment and registration on the
+              Foundation-1 website. It takes one number and a minute.
             </p>
             <div className={styles.buttonRow}>
-              <Link href="/migration/report" className={styles.primaryButton}>
-                Open Profile From Report
-              </Link>
-              <Link href="/migration/report" className={styles.ghostButton}>
-                View Report
-              </Link>
+              <a href={WEBSITE_ASSESSMENT_URL} className={styles.primaryButton}>
+                Complete Registration
+              </a>
+              <a
+                href={`${WHATSAPP_LINK}?text=${encodeURIComponent("Hi Foundation-1, I need help activating my dashboard.")}`}
+                className={styles.ghostButton}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                WhatsApp Support
+              </a>
             </div>
           </div>
         </div>
@@ -323,32 +381,160 @@ export function MigrationDashboard() {
     );
   }
 
-  const result = hasCompleteDashboardResult(activeStored.result)
-    ? activeStored.result
-    : calculateMigrationAssessment(activeStored.input);
+  let result: ReturnType<typeof calculateMigrationAssessment> | null = null;
+  try {
+    // Recompute when the stored result predates the engine (`proposal` missing)
+    // so the explainer and honest numbers always render.
+    result =
+      hasCompleteDashboardResult(activeStored.result) &&
+      activeStored.result &&
+      typeof activeStored.result === "object" &&
+      "proposal" in activeStored.result
+        ? activeStored.result
+        : calculateMigrationAssessment(activeStored.input);
+  } catch {
+    result = null;
+  }
+
+  if (!result) {
+    return (
+      <section className={styles.section}>
+        <div className={styles.shell}>
+          <div className={`${styles.panel} ${styles.form}`} style={{ maxWidth: 560 }}>
+            <h1 className={styles.sectionTitle} style={{ fontSize: "1.4rem" }}>We need fresh numbers</h1>
+            <p className={styles.sectionCopy}>
+              Your saved assessment could not be loaded. Run a quick new assessment — it takes one number and a minute.
+            </p>
+            <div className={styles.buttonRow}>
+              <a href={WEBSITE_ASSESSMENT_URL} className={styles.primaryButton}>
+                Start New Assessment
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  const documentCounts = countDocumentsByType(adminStatus?.documents ?? []);
   const displayStatus = adminStatus?.migrationStatus ?? activeStored.status;
-  const progressIndex = progressIndexForStatus(displayStatus);
-  const nextAction = {
-    title: "Proposal Review Pending",
-    copy: adminStatus?.nextAction ?? "Foundation-1 can now review your client profile and prepare the Migration Proposal.",
-    primaryHref: "/migration/proposal-status",
-    primaryLabel: "View Proposal Status",
-  };
+  const adminStage = adminStatus?.adminStage ?? "";
+  const billsUploaded = (documentCounts.utility_bills ?? 0) > 0;
+  const signedEoi = (documentCounts.signed_eoi ?? 0) > 0;
+  const assessmentCompleted = displayStatus === "proposal_ready"
+    || Boolean(adminStatus?.assessmentCompleted)
+    || /proposal ready|assessment complete|compliance pack/i.test(adminStage);
+  const formalProposalIssued = Boolean(adminStatus?.formalProposalIssued);
+  const signedFormalProposal = formalProposalIssued && (documentCounts.signed_proposal ?? 0) > 0;
+  const directKycSubmitted = Boolean(adminStatus?.directKycSubmittedAt);
+  const caseStageLabel = directKycSubmitted
+    ? "Funding review"
+    : signedFormalProposal
+      ? "Direct bank KYC"
+      : formalProposalIssued
+        ? "Formal UFMS proposal"
+        : signedEoi
+          ? "Formal proposal preparation"
+          : assessmentCompleted
+            ? "Post-assessment EOI"
+            : billsUploaded
+              ? "Foundation-1 assessment"
+              : formatStatus(displayStatus);
+  const progressIndex = Math.max(
+    progressIndexForStatus(displayStatus, adminStage),
+    billsUploaded ? 2 : 0,
+    assessmentCompleted ? 3 : 0,
+    signedEoi ? 4 : 0,
+    formalProposalIssued ? 5 : 0,
+    signedFormalProposal ? 6 : 0,
+    directKycSubmitted ? 7 : 0,
+  );
+  const proposalEngine =
+    result && typeof result === "object" && "proposal" in result
+      ? (result as { proposal?: import("@/lib/pricing-engine").EngineResult }).proposal ?? null
+      : null;
+  const nextAction = (() => {
+    const eoiToken = adminStatus?.eoiToken ?? null;
+    if (signedFormalProposal && !directKycSubmitted) {
+      return {
+        title: "Send the bank KYC pack directly to UFMS",
+        copy: "For POPIA compliance, the six bank documents must go from your email directly to info@UFMS.net. Foundation-1 does not receive or store them.",
+        primaryHref: "#ufms-direct-kyc",
+        primaryLabel: "Open direct handoff",
+      };
+    }
+    if (eoiToken && !signedEoi && assessmentCompleted) {
+      return {
+        title: "Sign your non-binding Expression of Interest",
+        copy: "Your Foundation-1 assessment is complete. The non-binding EOI records authority to continue from that completed decision asset; it is not proposal acceptance and carries no purchase obligation.",
+        primaryHref: `/eoi/${eoiToken}`,
+        primaryLabel: "Review & Sign EOI",
+      };
+    }
+    if (formalProposalIssued && !signedFormalProposal) {
+      return {
+        title: "Review and return the formal UFMS proposal",
+        copy: "The formal funding proposal is available for independent review. Bank KYC remains locked until the complete formal proposal has been signed and returned.",
+        primaryHref: "/migration/proposal-status",
+        primaryLabel: "Open formal proposal",
+      };
+    }
+    if (signedEoi && !formalProposalIssued) {
+      return {
+        title: "Formal UFMS proposal preparation",
+        copy: "Your assessment and non-binding EOI are complete. Foundation-1 is coordinating the formal proposal; no bank KYC is requested at this stage.",
+        primaryHref: "/migration/proposal-status",
+        primaryLabel: "View formal-proposal status",
+      };
+    }
+    if (billsUploaded && !assessmentCompleted) {
+      return {
+        title: "Your complete bill pack is under assessment",
+        copy: "Foundation-1 is reconciling the supplied billing periods and preparing the decision-grade assessment. No EOI is requested until that assessment is complete.",
+        primaryHref: "/migration/proposal-status",
+        primaryLabel: "View assessment status",
+      };
+    }
+    if (assessmentCompleted && !signedEoi) {
+      return {
+        title: "Post-assessment EOI preparation",
+        copy: "The Foundation-1 assessment is complete. The non-binding EOI will become available here for review before any formal UFMS proposal is issued.",
+        primaryHref: "/migration/proposal-status",
+        primaryLabel: "View completed assessment",
+      };
+    }
+    if (!billsUploaded) {
+      return {
+        title: "Submit the complete six-period bill pack",
+        copy: "Provide all six recent billing periods together. Foundation-1 will reconcile the evidence and complete the assessment before requesting an EOI.",
+        primaryHref: adminStatus?.uploadToken ? `/upload/${adminStatus.uploadToken}` : "/migration/proposal-status",
+        primaryLabel: "Open complete bill-pack gate",
+      };
+    }
+    return {
+      title: "Assessment status",
+      copy:
+        adminStatus?.nextAction ??
+        "Foundation-1 is progressing the migration case from the complete evidence pack.",
+      primaryHref: "/migration/proposal-status",
+      primaryLabel: "View assessment status",
+    };
+  })();
 
   return (
     <section className={styles.section}>
       <div className={styles.shell}>
         <div className={styles.sectionHeader}>
           <div>
-            <h1 className={styles.sectionTitle}>Migration Dashboard</h1>
+            <h1 className={styles.sectionTitle}>Your migration case.</h1>
             <p className={styles.sectionCopy}>
-              Track your profile intake, proposal preparation, and deployment status.
+              One operating record for assessment, post-assessment EOI, formal proposal, direct bank handoff, and funding progression.
             </p>
           </div>
           <div className={styles.dashboardHeaderActions}>
             <span className={styles.statusChip}>
               <span className={styles.statusDot} />
-              {formatStatus(displayStatus)}
+              {caseStageLabel}
             </span>
             <div className={styles.supportLinks} aria-label="Foundation-1 support contacts">
               <a href={`mailto:${SUPPORT_EMAIL}`} className={styles.supportLink}>
@@ -368,6 +554,7 @@ export function MigrationDashboard() {
           </div>
         </div>
 
+        <p className={styles.caseTelemetryLabel}>Initial model snapshot · retained for comparison</p>
         <div className={styles.metricStrip}>
           <div className={styles.metric}>
             <span className={styles.metricLabel}>Monthly spend</span>
@@ -378,11 +565,11 @@ export function MigrationDashboard() {
             <span className={styles.metricValue}>{zar(result.currentUtilityProjection.currentAnnualSpend)}</span>
           </div>
           <div className={styles.metric}>
-            <span className={styles.metricLabel}>Base UFMS annual saving</span>
+            <span className={styles.metricLabel}>Base model annual difference</span>
             <span className={styles.metricValue}>{zar(result.ufmsSolar.scenarios[1].annualSaving)}</span>
           </div>
           <div className={styles.metric}>
-            <span className={styles.metricLabel}>PV-only reference annual saving</span>
+            <span className={styles.metricLabel}>PV-only reference annual difference</span>
             <span className={styles.metricValue}>{zar(result.wheeling.photovoltaicOnlyReference.annualSaving)}</span>
           </div>
         </div>
@@ -393,18 +580,18 @@ export function MigrationDashboard() {
             <div className={styles.documentList}>
               {adminStatus ? (
                 <div className={styles.documentRow}>
-                  <span>Admin profile stage</span>
-                  <strong>{adminStatus.adminStage}</strong>
+                  <span>Where your file is</span>
+                  <strong>{caseStageLabel}</strong>
                 </div>
               ) : null}
               {adminStatus?.documents[0] ? (
                 <div className={styles.documentRow}>
-                  <span>Latest admin document</span>
+                  <span>Latest document on file</span>
                   <strong>{adminStatus.documents[0].title}</strong>
                 </div>
               ) : null}
             </div>
-            {adminStatusError ? <p className={styles.error}>{adminStatusError}</p> : null}
+            {adminStatusError ? <p className={styles.error} role="alert">{adminStatusError}</p> : null}
           </section>
           <section className={styles.reportPreview}>
             <span className={styles.cardLabel}>Progress</span>
@@ -418,8 +605,30 @@ export function MigrationDashboard() {
             copy={nextAction.copy}
             primaryHref={nextAction.primaryHref}
             primaryLabel={nextAction.primaryLabel}
-            secondaryHref="/migration/report"
-            secondaryLabel="View Report"
+            secondaryHref={WEBSITE_ASSESSMENT_URL}
+            secondaryLabel="New Assessment"
+          />
+        </div>
+
+        {proposalEngine ? (
+          <div style={{ marginTop: 20 }}>
+            <ProposalExplainer
+              result={proposalEngine}
+              businessName={activeStored.registration?.businessName}
+              preliminarySnapshot={proposalEngine.input.tariffSource === "assumed"}
+            />
+          </div>
+        ) : null}
+
+        <div style={{ marginTop: 20 }}>
+          <DirectUfmsKycHandoff
+            profileId={activeStored.profileId ?? ""}
+            accessCode={activeStored.accessCode ?? ""}
+            businessName={activeStored.registration.businessName}
+            signedProposalReceived={Boolean(adminStatus?.formalProposalIssued) && (documentCounts.signed_proposal ?? 0) > 0}
+            confirmedAt={adminStatus?.directKycSubmittedAt}
+            confirmedBy={adminStatus?.directKycSubmittedBy}
+            onConfirmed={() => setRefreshTick((tick) => tick + 1)}
           />
         </div>
       </div>

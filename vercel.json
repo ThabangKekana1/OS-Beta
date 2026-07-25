@@ -1,5 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "outputDirectory": ".next"
+  "buildCommand": "next build --webpack",
+  "outputDirectory": ".next",
+  "crons": [
+    {
+      "path": "/api/internal/intelligence/refresh",
+      "schedule": "0 3 * * *"
+    }
+  ]
 }

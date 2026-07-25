@@ -5,10 +5,14 @@ import { resolveDefaultRouteForRole, type UserRole } from "@/lib/auth";
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 // Public mutating endpoints intentionally allowed cross-origin. These routes
 // must perform their own authentication/signature validation.
-const PUBLIC_MUTATING_PATHS = new Set<string>(["/api/email/inbound", "/api/whatsapp"]);
+const PUBLIC_MUTATING_PATHS = new Set<string>([
+  "/api/email/inbound",
+  "/api/telemetry",
+  "/api/whatsapp",
+]);
 
-function withNextParam(request: NextRequest) {
-  const loginUrl = new URL("/login", request.url);
+function withNextParam(request: NextRequest, loginPath = "/login") {
+  const loginUrl = new URL(loginPath, request.url);
   const nextPath = `${request.nextUrl.pathname}${request.nextUrl.search}`;
 
   if (nextPath && nextPath !== "/") {
@@ -114,16 +118,27 @@ export async function proxy(request: NextRequest) {
 
   // Keep /login reachable even with an existing session so operators can
   // switch accounts or recover from stale cookies.
-  if (pathname === "/login") {
+  if (
+    pathname === "/login"
+    || pathname === "/partner/login"
+    || pathname === "/partner/onboarding"
+  ) {
     return applySecurityHeaders(response);
   }
 
   // Authenticated-only sections: redirect anonymous visitors to /login. Role
   // mismatches are handled by the route layouts via `requireServerAuthSession`.
-  const requiresAuth = pathname.startsWith("/admin") || pathname.startsWith("/sales");
+  const requiresAuth =
+    pathname.startsWith("/admin")
+    || pathname.startsWith("/sales")
+    || pathname === "/partner"
+    || pathname.startsWith("/partner/");
 
   if (requiresAuth && !isSignedIn) {
-    const target = NextResponse.redirect(withNextParam(request));
+    const loginPath = pathname.startsWith("/partner")
+      ? "/partner/login"
+      : "/login";
+    const target = NextResponse.redirect(withNextParam(request, loginPath));
     response.cookies.getAll().forEach((c) => target.cookies.set(c));
     return applySecurityHeaders(target);
   }

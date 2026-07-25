@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ClientDocumentUploadPortal } from "@/components/upload/ClientDocumentUploadPortal";
 import { readAdminStateSnapshot } from "@/lib/admin-state-store";
 import { documentUploadLinkIdForLead } from "@/lib/registration-links";
+import { countDocumentsByType } from "@/lib/document-taxonomy";
 import type { AdminLead } from "@/lib/admin-types";
 
 export const metadata: Metadata = {
@@ -24,13 +25,7 @@ function findLeadByUploadToken(leads: AdminLead[], token: string): AdminLead | n
 }
 
 function documentCounts(lead: AdminLead) {
-  const joinedDocuments = lead.documents.map((document) => `${document.title} ${document.category}`.toLowerCase());
-  return {
-    expression_of_interest: joinedDocuments.filter((value) => value.includes("expression of interest") && !value.includes("signed")).length,
-    signed_eoi: joinedDocuments.filter((value) => value.includes("signed expression of interest") || value.includes("signed eoi")).length,
-    utility_bills: joinedDocuments.filter((value) => value.includes("utility") || value.includes("electricity")).length,
-    signed_proposal: joinedDocuments.filter((value) => value.includes("signed proposal")).length,
-  };
+  return countDocumentsByType(lead.documents);
 }
 
 export default async function PublicDocumentUploadPage({

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import {
+  buildDevMigrationPreviewAssessment,
+  isDevMigrationPreviewCredentials,
+} from "@/lib/dev-migration-preview";
+import {
   cleanMigrationAccessCode,
   cleanMigrationProfileId,
   hashMigrationAccessCode,
@@ -52,6 +56,13 @@ export async function POST(request: NextRequest) {
       { ok: false, error: "Too many unlock attempts. Try again later." },
       { status: 429 },
     );
+  }
+
+  if (isDevMigrationPreviewCredentials(profileId, accessCode)) {
+    return NextResponse.json({
+      ok: true,
+      assessment: buildDevMigrationPreviewAssessment(),
+    });
   }
 
   const supabase = getSupabaseAdminClient();

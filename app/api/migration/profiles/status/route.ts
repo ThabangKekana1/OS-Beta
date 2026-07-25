@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import {
+  buildDevMigrationPreviewStatus,
+  isDevMigrationPreviewCredentials,
+} from "@/lib/dev-migration-preview";
+import {
   cleanMigrationAccessCode,
   cleanMigrationProfileId,
   hashMigrationAccessCode,
@@ -9,6 +13,8 @@ import {
   isValidMigrationProfileId,
 } from "@/lib/migration-profile-auth";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
+import { documentUploadLinkIdForLead } from "@/lib/registration-links";
+import { FOUNDATION_ASSESSMENT_COMPLETED_EVENT } from "@/lib/post-assessment-eoi";
 
 export const runtime = "nodejs";
 
@@ -40,7 +46,10 @@ function migrationStatusFromAdminStage(stage: string, documents: AdminDocumentSu
   if (stage === "Disqualified") return "declined";
   if (stage === "Onboarding Complete") return "approved";
   if (stage === "Term Sheet Uploaded") return "term_sheet_pending";
+  if (stage === "Direct KYC Submitted") return "direct_kyc_submitted";
   if (stage === "Compliance Pack Uploaded") return "proposal_ready";
+  if (stage === "Mandate Signed") return "mandate_signed";
+  if (stage === "Proposal Accepted") return "proposal_accepted";
   if (stage === "Utility Bills Uploaded") return "utility_profile_uploaded";
 
   const searchableDocs = documents.map((doc) => `${doc.title} ${doc.fileName ?? ""}`.toLowerCase());
@@ -83,6 +92,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  if (isDevMigrationPreviewCredentials(profileId, accessCode)) {
+    return NextResponse.json({
+      ok: true,
+      linked: true,
+      status: buildDevMigrationPreviewStatus(),
+    });
+  }
+
   const supabase = getSupabaseAdminClient();
   if (!supabase) {
     return NextResponse.json(
@@ -116,6 +133,20 @@ export async function POST(request: NextRequest) {
   }
 
   if (profile.access_code_hash !== hashMigrationAccessCode(profileId, accessCode)) {
+    // A 4-digit code has 10,000 combinations — failed attempts get a much
+    // stricter budget than the general polling limiter above.
+    const failLimit = await consumeRateLimit({
+      scope: "migration-profile-code-fail",
+      key: `${requestIp(request)}:${profileId}`,
+      limit: 8,
+      windowSeconds: 15 * 60,
+    });
+    if (!failLimit.allowed) {
+      return NextResponse.json(
+        { ok: false, error: "Too many incorrect codes. Try again in 15 minutes." },
+        { status: 429 },
+      );
+    }
     return NextResponse.json({ ok: false, error: "Incorrect access code." }, { status: 403 });
   }
 
@@ -165,7 +196,7 @@ export async function POST(request: NextRequest) {
     .select("id, title, status, uploaded_by_type, file_name, created_at")
     .eq("lead_id", lead.id)
     .order("created_at", { ascending: false })
-    .limit(50);
+    .limit(200);
 
   if (documentError) {
     return NextResponse.json(
@@ -186,9 +217,52 @@ export async function POST(request: NextRequest) {
     lead.payload && typeof lead.payload === "object" && !Array.isArray(lead.payload)
       ? (lead.payload as Record<string, unknown>)
       : null;
-  const nextAction = adminPayload ? stringFromRecord(adminPayload, "nextAction") : null;
+  const nextActionRaw = adminPayload ? stringFromRecord(adminPayload, "nextAction") : null;
+  // Internal ops language ("Contact client via…") must never surface on the
+  // client dashboard — the dashboard supplies its own client-facing default.
+  const nextAction =
+    nextActionRaw && /\b(contact|call|chase|follow up with)\s+(the\s+)?client\b/i.test(nextActionRaw)
+      ? null
+      : nextActionRaw;
+  const eoiToken = adminPayload ? stringFromRecord(adminPayload, "eoiSigningToken") : null;
+  const proposalAcceptedAt = adminPayload ? stringFromRecord(adminPayload, "proposalAcceptedAt") : null;
+  const mandateToken =
+    proposalAcceptedAt && adminPayload ? stringFromRecord(adminPayload, "mandateSigningToken") : null;
+  const mandateSignedAt = adminPayload ? stringFromRecord(adminPayload, "mandateSignedAt") : null;
+  const directKycSubmittedAt = adminPayload ? stringFromRecord(adminPayload, "directKycSubmittedAt") : null;
+  const directKycSubmittedBy = adminPayload ? stringFromRecord(adminPayload, "directKycSubmittedBy") : null;
+  const directKycRecipient = adminPayload ? stringFromRecord(adminPayload, "directKycRecipient") : null;
+  const formalProposalIssued = documents.some((document) =>
+    /proposal \(admin issued\)|formal ufms proposal.*issued/i.test(document.title),
+  );
+  const assessmentCompleted = Array.isArray(adminPayload?.events)
+    && adminPayload.events.some((event) =>
+      event
+      && typeof event === "object"
+      && !Array.isArray(event)
+      && stringFromRecord(event as Record<string, unknown>, "title") === FOUNDATION_ASSESSMENT_COMPLETED_EVENT,
+    );
+  const signedEoiRecorded = documents.some((document) =>
+    /signed expression of interest|signed eoi/i.test(`${document.title} ${document.fileName ?? ""}`),
+  );
   const stage = String(lead.stage ?? "Client Registered");
   const migrationStatus = migrationStatusFromAdminStage(stage, documents);
+  const registrationEmail = registration ? stringFromRecord(registration, "email") : null;
+  // The upload route hashes with the ADMIN LEAD's email — use it when present
+  // so the dashboard's upload token always matches (admin may edit the email).
+  const leadUserProfile =
+    adminPayload?.userProfile &&
+    typeof adminPayload.userProfile === "object" &&
+    !Array.isArray(adminPayload.userProfile)
+      ? (adminPayload.userProfile as Record<string, unknown>)
+      : null;
+  const leadEmail =
+    (leadUserProfile && stringFromRecord(leadUserProfile, "email")) || registrationEmail;
+  const uploadToken = documentUploadLinkIdForLead({
+    leadId: String(lead.id),
+    clientProfileId: String(lead.client_profile_id ?? ""),
+    email: leadEmail ?? undefined,
+  });
 
   return NextResponse.json({
     ok: true,
@@ -201,6 +275,16 @@ export async function POST(request: NextRequest) {
       readinessScore: Number(lead.readiness_score ?? 0),
       nextAction,
       documents,
+      uploadToken,
+      eoiToken: assessmentCompleted || signedEoiRecorded ? eoiToken : null,
+      proposalAcceptedAt,
+      mandateToken,
+      mandateSignedAt,
+      directKycSubmittedAt,
+      directKycSubmittedBy,
+      directKycRecipient,
+      formalProposalIssued,
+      assessmentCompleted,
     },
   });
 }

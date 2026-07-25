@@ -14,3 +14,4 @@ pnpm-debug.log*
 .vercel
 .vercel-*/
 .env*.local
+.env*

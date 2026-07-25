@@ -60,6 +60,8 @@ export type MigrationIntakeProfileInput = {
   registrationSource: AdminLeadRegistrationSource | null;
   assessmentSummary?: MigrationAssessmentLeadSummary | null;
   preserveRegistrationState?: boolean;
+  siteCity?: string;
+  province?: string;
 };
 
 const SIGNUP_PENDING_BUSINESS_NAME = "Business details pending";
@@ -90,6 +92,32 @@ function buildEoiSigningToken(companyName: string) {
     .replace(/^-+|-+$/g, "")
     .slice(0, 18);
   return `eoi-${slug || "client"}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function hashBase36(value: string) {
+  let hash = 2166136261;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return (hash >>> 0).toString(36);
+}
+
+/**
+ * Deterministic mandate e-sign token, derived from the business name with the
+ * `mandate:` label (mirrors the EOI signing-token shape, but stable so the
+ * proposal-accept route can stamp it idempotently). Stored on the lead payload
+ * as `mandateSigningToken` and served at /mandate/[token].
+ */
+export function buildMandateSigningToken(businessName: string) {
+  const normalized = businessName.trim().toLowerCase();
+  const slug = normalized
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 18);
+  return `mandate-${slug || "client"}-${hashBase36(`mandate:${normalized}`)}`;
 }
 
 function setTaskStatus(
@@ -286,7 +314,7 @@ export function buildAdminLeadFromClientRegistration(
     origin: input.origin ?? "created",
     partner: input.partner ?? null,
     partnerOrgId: input.partnerOrgId ?? null,
-    stage: "EOI Generated",
+    stage: "Client Registered",
     contactStatus: "Not Contacted",
     priority: "Standard",
     ownerId,
@@ -295,7 +323,7 @@ export function buildAdminLeadFromClientRegistration(
     readinessScore: input.hasSixMonthUtilityBill ? 45 : 40,
     estimatedValueZar: DEAL_VALUE_ZAR,
     lastTouched: "Just now",
-    nextAction: "Send the EOI template link and request the signed EOI on company letterhead.",
+    nextAction: "Collect the complete six-period utility-bill pack and complete the Foundation-1 assessment before requesting an EOI.",
     migrateAccountName,
     migrateAccountId,
     userProfile: {
@@ -413,8 +441,8 @@ export function buildAdminLeadFromMigrationIntake(
     isBusinessOperational: true,
     hasSixMonthUtilityBill: false,
     physicalAddress: "",
-    city: "",
-    province: "",
+    city: input.siteCity?.trim() ?? "",
+    province: input.province?.trim() ?? "",
     source: "Migrate Portal",
     origin: "website",
     partner: null,
@@ -512,6 +540,8 @@ export function updateExistingLeadFromMigrationIntake(
     contactPosition: existingLead.contactPosition?.trim() || existingLead.userProfile.role || "Authorised representative",
     contactName,
     monthlyElectricitySpendEstimateZar,
+    city: input.siteCity?.trim() || existingLead.city,
+    province: input.province?.trim() || existingLead.province,
     isBusinessOperational: existingLead.isBusinessOperational,
     source: existingLead.source || "Migrate Portal",
     origin: existingLead.origin || "website",

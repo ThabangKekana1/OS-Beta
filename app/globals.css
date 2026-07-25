@@ -1,5 +1,32 @@
 @import "tailwindcss";
 
+/* Foundation-1 mark: one line, one Sun, one corona (orbital motion language) */
+.brand-analemma { color: #ffffff; }
+.brand-analemma__trace {
+  stroke: currentColor;
+  stroke-width: 3.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.95;
+}
+.brand-analemma__corona {
+  fill: currentColor;
+  opacity: 0.16;
+  transition: opacity 300ms ease;
+}
+.brand-analemma__core { fill: currentColor; }
+a:hover .brand-analemma .brand-analemma__corona,
+.brand-analemma:hover .brand-analemma__corona { opacity: 0.21; }
+
+@keyframes corona-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-analemma__corona { animation: none !important; }
+}
+
 @layer base {
   :root {
     --black: #000000;
