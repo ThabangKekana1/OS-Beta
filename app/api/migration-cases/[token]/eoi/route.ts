@@ -18,6 +18,8 @@ import { ensurePrivateBucket } from "@/lib/server-json-store";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { sendEmail } from "@/lib/email";
+import { lifecycleReplyTo } from "@/lib/case-lifecycle";
+import { recordFunnelEvent } from "@/lib/report-capture";
 import { createNotification } from "@/lib/notifications";
 
 export const runtime = "nodejs";
@@ -175,9 +177,20 @@ export async function POST(
       },
     }).catch(() => undefined);
 
+    void recordFunnelEvent({
+      event: "eoi_signed",
+      email: caseRow.contact_email,
+      monthlySpendExVat: caseRow.monthly_spend_ex_vat,
+      province: caseRow.province,
+      metadata: {
+        reference: caseRow.public_reference,
+        economicallyPositive: proposal.economically_positive,
+      },
+    }).catch(() => undefined);
+
     void sendEmail({
       to: caseRow.contact_email,
-      replyTo: "support@foundation-1.co.za",
+      replyTo: lifecycleReplyTo(),
       subject: `${caseRow.public_reference}: Expression of Interest received`,
       text: [
         `Hi ${caseRow.contact_name},`,

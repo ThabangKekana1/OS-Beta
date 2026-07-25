@@ -7,6 +7,7 @@ import {
 } from "@/lib/migration-case-store";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { sendEmail } from "@/lib/email";
+import { recordFunnelEvent } from "@/lib/report-capture";
 import { createNotification } from "@/lib/notifications";
 import {
   parsePartnerAttribution,
@@ -204,6 +205,20 @@ export async function POST(request: NextRequest) {
         preliminaryFit: result.report.preliminaryFit,
       },
     });
+
+    void recordFunnelEvent({
+      event: "case_opened",
+      email: contactEmail,
+      monthlySpendExVat,
+      province,
+      placeContext,
+      sourceCampaign,
+      partnerCampaignCode: partnerAttribution.campaignCode,
+      metadata: {
+        reference: result.caseRow.public_reference,
+        attributed: Boolean(resolvedAttribution?.referralId),
+      },
+    }).catch(() => undefined);
 
     return NextResponse.json({
       ok: true,

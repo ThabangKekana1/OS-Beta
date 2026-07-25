@@ -21,6 +21,7 @@ import {
 import { analyseUtilityBillFile } from "@/lib/utility-bill-pdf";
 import { ENGINE_CONSTANTS } from "@/lib/pricing-engine";
 import { REQUIRED_FORMAL_BILLING_PERIODS } from "@/lib/indicative-migration-report";
+import { recordFunnelEvent } from "@/lib/report-capture";
 
 export const COMPLETE_BILL_PACK_MIN_FILES = 6;
 export const COMPLETE_BILL_PACK_MAX_FILES = 12;
@@ -391,6 +392,18 @@ async function runBillPackAudit(
     throw new Error(packError?.message ?? "Unable to save the bill audit.");
   }
 
+  void recordFunnelEvent({
+    event: "bill_pack_audited",
+    email: caseRow.contact_email,
+    monthlySpendExVat: caseRow.monthly_spend_ex_vat,
+    province: caseRow.province,
+    metadata: {
+      reference: caseRow.public_reference,
+      recognisedPeriods: portfolio.uniquePeriodCount,
+      outcome: portfolioReady ? "audited" : "needs_review",
+    },
+  }).catch(() => undefined);
+
   if (!portfolioReady) {
     const updatedCase = await updateMigrationCase(caseRow.id, {
       stage: "bill_pack_review",
@@ -492,6 +505,19 @@ async function runBillPackAudit(
     economicallyPositive ? "proposal_ready" : "proposal_gap",
     { monthlySaving: yearOneDifference, tenYearDifference },
   ).catch(() => undefined);
+
+  void recordFunnelEvent({
+    event: "proposal_ready",
+    email: caseRow.contact_email,
+    monthlySpendExVat: caseRow.monthly_spend_ex_vat,
+    province: caseRow.province,
+    metadata: {
+      reference: caseRow.public_reference,
+      economicallyPositive,
+      yearOneDifference,
+      tenYearDifference,
+    },
+  }).catch(() => undefined);
 
   return {
     caseRow: updatedCase,
@@ -688,6 +714,18 @@ export async function addMigrationBillFiles(
       detail: `${storedFiles.length} file${storedFiles.length === 1 ? "" : "s"} added; ${portfolio.uniquePeriodCount} of ${REQUIRED_FORMAL_BILLING_PERIODS} billing periods recognised.`,
       metadata: {
         billPackId,
+        filesHeld: analyses.length,
+        recognisedPeriods: portfolio.uniquePeriodCount,
+      },
+    }).catch(() => undefined);
+
+    void recordFunnelEvent({
+      event: "bills_added",
+      email: caseRow.contact_email,
+      monthlySpendExVat: caseRow.monthly_spend_ex_vat,
+      province: caseRow.province,
+      metadata: {
+        reference: caseRow.public_reference,
         filesHeld: analyses.length,
         recognisedPeriods: portfolio.uniquePeriodCount,
       },

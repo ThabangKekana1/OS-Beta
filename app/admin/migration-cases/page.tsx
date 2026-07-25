@@ -11,6 +11,7 @@ import {
   type MigrationCaseTermSheetRow,
 } from "@/lib/migration-case-store";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
+import { readFunnelSummary } from "@/lib/funnel-summary";
 
 export const metadata: Metadata = {
   title: "Migration Cases | 1OS Admin",
@@ -79,6 +80,7 @@ type WorklistBucket = {
 
 export default async function AdminMigrationCasesPage() {
   const cases = (await listMigrationCasesForAdmin(150)) as MigrationCaseRow[];
+  const funnel = await readFunnelSummary(30).catch(() => null);
   const client = getSupabaseAdminClient();
   const caseIds = cases.map((item) => item.id);
   const billPackIds = cases.map((item) => item.active_bill_pack_id).filter((value): value is string => Boolean(value));
@@ -204,6 +206,43 @@ export default async function AdminMigrationCasesPage() {
           </div>
         </div>
       </header>
+
+      {funnel ? (
+        <section className="rounded-[2rem] border border-white/10 bg-black/30 p-5 md:p-6">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <p className="text-[0.62rem] uppercase tracking-[0.2em] text-white/34">
+              Conversion funnel · last {funnel.days} days
+            </p>
+            <p className="text-[0.6rem] text-white/28">
+              {funnel.capturedEmails} report{funnel.capturedEmails === 1 ? "" : "s"} emailed
+              {funnel.belowThreshold ? ` · ${funnel.belowThreshold} below threshold, kept on register` : ""}
+            </p>
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-3 xl:grid-cols-6">
+            {funnel.steps.map((step) => (
+              <div key={step.key} className="rounded-[1.2rem] border border-white/10 bg-white/[0.02] p-4">
+                <strong className="block text-xl font-medium text-white">{step.count}</strong>
+                <span className="mt-1 block text-[0.58rem] uppercase leading-4 tracking-[0.14em] text-white/34">
+                  {step.label}
+                </span>
+                {step.conversion !== null ? (
+                  <span
+                    className={`mt-2 inline-block text-[0.58rem] ${
+                      step.conversion >= 0.5
+                        ? "text-emerald-200/70"
+                        : step.conversion >= 0.2
+                          ? "text-amber-200/70"
+                          : "text-rose-200/70"
+                    }`}
+                  >
+                    {Math.round(step.conversion * 100)}% of previous
+                  </span>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {activeBuckets.length ? (
         <section className="rounded-[2rem] border border-white/10 bg-black/30 p-5 md:p-6">
