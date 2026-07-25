@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { buildF1Proposal, type F1Proposal } from "@/lib/f1-proposal";
+import { sendCaseLifecycleMessage } from "@/lib/case-lifecycle";
 import { currentiseEskomBill } from "@/lib/eskom-tariff-currentisation";
 import {
   MIGRATION_CASE_DOCUMENT_BUCKET,
@@ -341,6 +342,11 @@ export async function processCompleteMigrationBillPack(
           blockers: portfolio.blockers,
         },
       }).catch(() => undefined);
+      // The client is told exactly what is missing, rather than discovering a
+      // stalled case on their next visit.
+      void sendCaseLifecycleMessage(updatedCase, "bill_pack_needs_attention", {
+        blockers: portfolio.blockers,
+      }).catch(() => undefined);
       return {
         caseRow: updatedCase,
         billPack: updatedPack as MigrationCaseBillPackRow,
@@ -406,6 +412,14 @@ export async function processCompleteMigrationBillPack(
         tenYearDifference,
       },
     }).catch(() => undefined);
+
+    // The emotional peak of the journey: the client gathered six bills and the
+    // audit resolved into a real proposal. Previously this produced silence.
+    void sendCaseLifecycleMessage(
+      updatedCase,
+      economicallyPositive ? "proposal_ready" : "proposal_gap",
+      { monthlySaving: yearOneDifference, tenYearDifference },
+    ).catch(() => undefined);
 
     return {
       caseRow: updatedCase,

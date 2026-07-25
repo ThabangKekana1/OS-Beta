@@ -79,6 +79,11 @@ export type MigrationCaseRow = {
   kyc_handed_off_at: string | null;
   term_sheet_issued_at: string | null;
   last_client_seen_at: string | null;
+  email_link_hash: string | null;
+  email_link_hint: string | null;
+  origin_lead_id: string | null;
+  origin_association_id: string | null;
+  origin_channel: string | null;
 };
 
 export type MigrationCaseKycReadinessRow = {
