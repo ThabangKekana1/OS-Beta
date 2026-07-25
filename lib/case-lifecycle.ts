@@ -18,7 +18,7 @@ import type { MigrationCaseRow } from "@/lib/migration-case-store";
  * is never contacted again, for any reason.
  */
 
-const SIGN_OFF = ["Foundation-1 (Pty) Ltd", "support@foundation-1.co.za"];
+const SIGN_OFF_NAME = "Foundation-1 (Pty) Ltd";
 
 export type LifecycleMessageKey =
   | "bill_pack_received"
@@ -55,6 +55,15 @@ export type LifecycleContext = {
 
 export function websiteOrigin() {
   return (process.env.NEXT_PUBLIC_WEBSITE_ORIGIN || "https://foundation-1.co.za").replace(/\/+$/, "");
+}
+
+/**
+ * Replies to lifecycle mail land in a mailbox a person actually reads.
+ * Defaults to the warmed sending identity so replies stay on the same domain
+ * that carries the sending reputation.
+ */
+export function lifecycleReplyTo() {
+  return process.env.LIFECYCLE_REPLY_TO?.trim() || "karman@1os.foundation-1.co.za";
 }
 
 function supportEscape() {
@@ -474,9 +483,9 @@ export async function sendCaseLifecycleMessage(
 
   const result = await sendEmail({
     to: caseRow.contact_email,
-    replyTo: "support@foundation-1.co.za",
+    replyTo: lifecycleReplyTo(),
     subject: built.subject,
-    text: [...built.body, "", ...SIGN_OFF].join("\n"),
+    text: [...built.body, "", SIGN_OFF_NAME, lifecycleReplyTo()].join("\n"),
     tags: [{ name: "lifecycle", value: key.replace(/_/g, "-") }],
   });
 
