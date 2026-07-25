@@ -10,6 +10,7 @@ import {
   BrainCircuit,
   ClipboardList,
   FileStack,
+  Handshake,
   Mail,
   PanelLeftClose,
   PanelLeftOpen,
@@ -33,6 +34,12 @@ function navItemsFor(rootPath: "/admin" | "/sales", showSales: boolean) {
           label: "Migration Cases",
           href: "/admin/migration-cases",
           icon: FileStack,
+        },
+        {
+          id: "associations",
+          label: "Associations",
+          href: "/admin/associations",
+          icon: Handshake,
         },
         {
           id: "intelligence",
