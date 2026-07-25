@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { sendEmail } from "@/lib/email";
 import {
   isMigrationCaseWebsiteRequest,
+  migrationCaseTokenExpiry,
   recordMigrationCaseEvent,
   type MigrationCaseRow,
 } from "@/lib/migration-case-store";
@@ -76,7 +77,7 @@ export async function POST(request: NextRequest) {
       const tokenHash = createHash("sha256").update(`migration-case:${token}`).digest("hex");
       const { error: rotateError } = await client
         .from("migration_cases")
-        .update({ access_token_hash: tokenHash, token_hint: token.slice(-6), updated_at: new Date().toISOString() })
+        .update({ access_token_hash: tokenHash, token_hint: token.slice(-6), access_token_expires_at: migrationCaseTokenExpiry(), updated_at: new Date().toISOString() })
         .eq("id", row.id);
       if (rotateError) continue;
       links.push({

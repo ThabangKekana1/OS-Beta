@@ -79,6 +79,7 @@ export type MigrationCaseRow = {
   kyc_handed_off_at: string | null;
   term_sheet_issued_at: string | null;
   last_client_seen_at: string | null;
+  access_token_expires_at: string | null;
   email_link_hash: string | null;
   email_link_hint: string | null;
   origin_lead_id: string | null;
@@ -314,6 +315,7 @@ export async function createMigrationCase(input: CreateMigrationCaseInput) {
     public_reference: createPublicReference(),
     access_token_hash: tokenHash,
     token_hint: token.slice(-6),
+    access_token_expires_at: migrationCaseTokenExpiry(),
     workflow_version: MIGRATION_CASE_WORKFLOW_VERSION,
     stage: "bill_pack_required" as const,
     business_name: cleanText(input.businessName, 180),
@@ -378,6 +380,13 @@ function validToken(token: string) {
   return /^[A-Za-z0-9_-]{40,60}$/.test(token);
 }
 
+/** How long an unused case link stays valid. Refreshed on every real visit. */
+export const MIGRATION_CASE_TOKEN_TTL_DAYS = 90;
+
+export function migrationCaseTokenExpiry(from = Date.now()) {
+  return new Date(from + MIGRATION_CASE_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+}
+
 export async function findMigrationCaseByToken(token: string) {
   if (!validToken(token)) return null;
   const { data, error } = await adminClient()
@@ -388,9 +397,18 @@ export async function findMigrationCaseByToken(token: string) {
   if (error) throw new Error(error.message);
   if (!data) return null;
 
+  // An expired link is treated as unknown. The client recovers through
+  // /login, which issues a fresh one; nothing is lost.
+  const expiresAt = (data as MigrationCaseRow).access_token_expires_at;
+  if (expiresAt && new Date(expiresAt).getTime() <= Date.now()) return null;
+
+  // Touching the case keeps an actively used link alive.
   void adminClient()
     .from("migration_cases")
-    .update({ last_client_seen_at: new Date().toISOString() })
+    .update({
+      last_client_seen_at: new Date().toISOString(),
+      access_token_expires_at: migrationCaseTokenExpiry(),
+    })
     .eq("id", data.id)
     .then(() => undefined);
 

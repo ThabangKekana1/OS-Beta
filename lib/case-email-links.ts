@@ -1,6 +1,6 @@
 import { randomBytes, createHash } from "node:crypto";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
-import type { MigrationCaseRow } from "@/lib/migration-case-store";
+import { migrationCaseTokenExpiry, type MigrationCaseRow } from "@/lib/migration-case-store";
 
 /**
  * Email deep links.
@@ -72,6 +72,7 @@ export async function redeemCaseEmailLink(
     .update({
       access_token_hash: accessHash,
       token_hint: accessToken.slice(-6),
+      access_token_expires_at: migrationCaseTokenExpiry(),
       last_client_seen_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })

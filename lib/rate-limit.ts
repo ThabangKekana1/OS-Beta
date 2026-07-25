@@ -17,6 +17,16 @@ function isMissingRelationError(error: { code?: string; message?: string } | nul
  * Not perfectly atomic (no SELECT FOR UPDATE through PostgREST) but adequate
  * for guarding auth/chat endpoints from abuse. For higher precision use a
  * dedicated rate-limit service.
+ *
+ * FAILURE POSTURE: closed. A read or write error means the limiter cannot
+ * count, so it must not pretend the request is within budget — that turned a
+ * database blip into an unlimited-traffic window. Every gated route needs the
+ * same database to do its real work, so failing closed costs no availability
+ * that was not already lost.
+ *
+ * The one exception is a genuinely absent table, which means the limiter has
+ * not been provisioned rather than that it is failing; that stays permissive so
+ * a fresh environment is not bricked.
  */
 export async function consumeRateLimit(input: {
   scope: string;
@@ -26,14 +36,16 @@ export async function consumeRateLimit(input: {
 }): Promise<RateLimitResult> {
   const now = Date.now();
   const expiresAt = new Date(now + input.windowSeconds * 1000);
-  const fallback: RateLimitResult = {
+  /** Used only when the limiter is not provisioned at all. */
+  const unprovisioned: RateLimitResult = {
     allowed: true,
     remaining: input.limit - 1,
     resetAt: expiresAt,
   };
+  const denied: RateLimitResult = { allowed: false, remaining: 0, resetAt: expiresAt };
 
   const supabase = getSupabaseAdminClient();
-  if (!supabase) return fallback;
+  if (!supabase) return unprovisioned;
 
   // Read current bucket.
   const { data, error } = await supabase
@@ -43,11 +55,10 @@ export async function consumeRateLimit(input: {
     .eq("key", input.key)
     .maybeSingle();
 
-  if (isMissingRelationError(error)) return fallback;
+  if (isMissingRelationError(error)) return unprovisioned;
   if (error) {
-    // Don't block the request on rate-limit infra errors. Log and allow.
-    console.error("[rate-limit] read failed", { error });
-    return fallback;
+    console.error("[rate-limit] read failed; denying", { scope: input.scope, error });
+    return denied;
   }
 
   const existing = data && new Date(data.expires_at as string).getTime() > now ? data : null;
@@ -73,9 +84,10 @@ export async function consumeRateLimit(input: {
     { onConflict: "scope,key" },
   );
 
-  if (upsertResult.error && !isMissingRelationError(upsertResult.error)) {
-    console.error("[rate-limit] write failed", { error: upsertResult.error });
-    return fallback;
+  if (upsertResult.error) {
+    if (isMissingRelationError(upsertResult.error)) return unprovisioned;
+    console.error("[rate-limit] write failed; denying", { scope: input.scope, error: upsertResult.error });
+    return denied;
   }
 
   return {

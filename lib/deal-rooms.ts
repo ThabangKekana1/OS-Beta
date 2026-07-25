@@ -45,13 +45,24 @@ export type DealRoomDocument = {
 
 const TOKEN_BYTES = 24;
 
+/**
+ * Signing secret for deal-room tokens.
+ *
+ * Previously this fell back to SUPABASE_SERVICE_ROLE_KEY and then to a literal
+ * string. Both are bad: the first couples document access to the database
+ * credential, and the second is a published constant. Production must supply a
+ * dedicated secret; development gets a clearly-marked local one.
+ */
 function tokenSecret() {
-  return (
-    process.env.DEAL_ROOM_TOKEN_SECRET ??
-    process.env.MIGRATION_ACCESS_CODE_SECRET ??
-    process.env.SUPABASE_SERVICE_ROLE_KEY ??
-    "foundation1-dealroom-local"
-  );
+  const explicit = process.env.DEAL_ROOM_TOKEN_SECRET?.trim()
+    || process.env.MIGRATION_ACCESS_CODE_SECRET?.trim();
+  if (explicit) return explicit;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "DEAL_ROOM_TOKEN_SECRET is not configured. Set it before issuing deal-room links.",
+    );
+  }
+  return "foundation1-dealroom-local-development-only";
 }
 
 export function newDealRoomToken() {

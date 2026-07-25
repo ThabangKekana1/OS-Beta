@@ -251,6 +251,35 @@ test("bills may be collected progressively, but the audit still needs all six pe
   assert.match(processor, /export async function reopenMigrationBillPack/);
 });
 
+test("access links expire, and the limiter and signing secrets fail safe", () => {
+  const store = source("lib/migration-case-store.ts");
+  const limiter = source("lib/rate-limit.ts");
+  const dealRooms = source("lib/deal-rooms.ts");
+  const associations = source("lib/associations.ts");
+
+  // A forwarded or abandoned case link must not grant access forever.
+  assert.match(store, /MIGRATION_CASE_TOKEN_TTL_DAYS = 90/);
+  assert.match(store, /access_token_expires_at/);
+  assert.match(
+    store,
+    /if \(expiresAt && new Date\(expiresAt\)\.getTime\(\) <= Date\.now\(\)\) return null;/,
+  );
+
+  // The limiter must not hand out an unlimited window when the database blips.
+  assert.match(limiter, /return denied;/);
+  assert.doesNotMatch(limiter, /Don't block the request on rate-limit infra errors/);
+
+  // Signing secrets must never silently degrade to the database credential.
+  for (const [name, text] of [["deal-rooms", dealRooms], ["associations", associations]]) {
+    assert.doesNotMatch(
+      text,
+      /process\.env\.SUPABASE_SERVICE_ROLE_KEY/,
+      `${name} still falls back to the service-role key for signing`,
+    );
+    assert.match(text, /NODE_ENV === "production"/, `${name} does not fail closed in production`);
+  }
+});
+
 test("EOI is a post-proposal gate and produces an immutable PDF certificate", () => {
   const eoiRoute = source("app/api/migration-cases/[token]/eoi/route.ts");
   assert.match(eoiRoute, /caseRow\.stage !== "proposal_ready" && caseRow\.stage !== "proposal_not_recommended"/);

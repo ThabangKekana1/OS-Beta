@@ -30,13 +30,23 @@ export type AssociationReferralRow = {
   commissionPaidAt: string | null;
 };
 
+/**
+ * Signing secret for association portal keys.
+ *
+ * Previously this fell back to SUPABASE_SERVICE_ROLE_KEY and then to a literal
+ * string, meaning anyone holding either could mint a valid portal key for any
+ * association. Production must supply a dedicated secret.
+ */
 function portalSecret() {
-  return (
-    process.env.ASSOCIATION_PORTAL_SECRET ??
-    process.env.MIGRATION_ACCESS_CODE_SECRET ??
-    process.env.SUPABASE_SERVICE_ROLE_KEY ??
-    "foundation1-partners-local"
-  );
+  const explicit = process.env.ASSOCIATION_PORTAL_SECRET?.trim()
+    || process.env.MIGRATION_ACCESS_CODE_SECRET?.trim();
+  if (explicit) return explicit;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "ASSOCIATION_PORTAL_SECRET is not configured. Set it before issuing partner portal links.",
+    );
+  }
+  return "foundation1-partners-local-development-only";
 }
 
 export function portalKeyForCode(referralCode: string) {
