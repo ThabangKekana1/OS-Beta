@@ -1,0 +1,53 @@
+-- Reconciliation: partner attribution applied to the live project
+-- 2026-07-25
+--
+-- WHY THIS FILE EXISTS
+--
+-- The three 2026-07-23 partner-distribution migrations were written but never
+-- applied to this Supabase project. The live database was missing
+-- `migration_cases.partner_referral_id`, the `partner_activities` table and the
+-- `resolve_partner_case_attribution` resolver, which meant every partner and
+-- association referral was being silently discarded: `createMigrationCase` has
+-- a defensive fallback that strips unknown columns, so case creation succeeded
+-- while attribution was thrown away.
+--
+-- WHAT WAS APPLIED
+--
+-- 20260723180000 was applied WITHOUT its `oneos_users.password_hash`
+-- statements. That column does not exist in this deployment — operator
+-- credentials come from ONEOS_AUTH_PROFILES_JSON, not the database — so the
+-- original migration fails at:
+--     alter table public.oneos_users alter column password_hash drop not null;
+--
+-- 20260723200000 was applied for the schema changes and
+-- `resolve_partner_case_attribution` only.
+--
+-- WHAT IS STILL NOT APPLIED, AND WHY
+--
+--   * partner_agreements / partner_revenues — both require
+--     recorded_by_user_id -> oneos_users, and the partner-user model here is
+--     unresolved while password_hash is absent.
+--   * issue_partner_member_invitation, record_partner_invitation_delivery,
+--     cancel_partner_member_invitation — partner self-service invitation
+--     issuing. Not required for the association campaign-link motion, where
+--     Foundation-1 distributes /migrate/<CODE> links directly.
+--   * 20260723190000 partner invitation-only onboarding — depends on the same
+--     partner-user model.
+--
+-- CONSEQUENCE: /partner/login, /partner/onboarding and the partner self-service
+-- dashboard remain non-functional. The association channel does not depend on
+-- them. Resolve the partner-user model before enabling those surfaces.
+--
+-- VERIFIED LIVE after applying:
+--   select * from resolve_partner_case_attribution(
+--     null, 'AGRISA', 'qa-probe@foundation-1.co.za', 'QA Probe Farm');
+--   -> referral_id, association_id, attribution_source = 'campaign_link'
+--   (probe row deleted afterwards)
+--
+-- The applied statements are recorded in supabase_migrations.schema_migrations
+-- as `partner_distribution_foundation_attribution` and
+-- `partner_case_attribution_resolver`. This file is the written record of the
+-- deviation; re-running the 2026-07-23 files against a fresh database will
+-- still fail on password_hash until the partner-user model is settled.
+
+select 1;
