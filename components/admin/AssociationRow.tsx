@@ -21,6 +21,7 @@ export type AssociationRowData = {
   priorityScore: number | null;
   stage: AssociationOutreachStage;
   contactName: string | null;
+  contactRole: string | null;
   contactEmail: string | null;
   lastContactedAt: string | null;
   commissionValue: number;
@@ -108,6 +109,13 @@ export function AssociationRow({ data }: { data: AssociationRowData }) {
           <p className="mt-1.5 text-[0.66rem] leading-5 text-white/38">
             {data.sector}{data.memberBase ? ` · ${data.memberBase}` : ""}
           </p>
+          {data.contactName ? (
+            <p className="mt-1.5 text-[0.66rem] leading-5 text-white/60">
+              {data.contactName}
+              {data.contactRole ? <span className="text-white/34"> · {data.contactRole}</span> : null}
+              {data.contactEmail ? <span className="text-white/34"> · {data.contactEmail}</span> : <span className="text-amber-200/60"> · email not published</span>}
+            </p>
+          ) : null}
           <p className="mt-1 text-[0.62rem] leading-5 text-white/28">
             Next: {meta.nextAction}
             {data.lastContactedAt

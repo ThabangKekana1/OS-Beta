@@ -36,6 +36,7 @@ export type AssociationRecord = {
   last_contacted_at: string | null;
   next_action_at: string | null;
   contact_name: string | null;
+  contact_role: string | null;
   contact_email: string | null;
   commission_value: number;
   notes: string | null;

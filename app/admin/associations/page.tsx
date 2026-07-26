@@ -59,6 +59,7 @@ export default async function AdminAssociationsPage() {
     priorityScore: item.priority_score,
     stage: item.outreach_stage,
     contactName: item.contact_name,
+    contactRole: item.contact_role,
     contactEmail: item.contact_email,
     lastContactedAt: item.last_contacted_at,
     commissionValue: Number(item.commission_value ?? 0),
