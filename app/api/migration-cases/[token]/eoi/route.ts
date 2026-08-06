@@ -58,11 +58,11 @@ export async function POST(
     return NextResponse.json({ ok: false, error: "Invalid JSON body." }, { status: 400 });
   }
   const signerName = cleanString(body.signerName, 160);
-  const signerPosition = cleanString(body.signerPosition, 160);
-  const companyRegistrationNumber = cleanString(body.companyRegistrationNumber, 100) || null;
-  if (signerName.length < 2 || signerPosition.length < 2) {
+  const signerPositionInput = cleanString(body.signerPosition, 160);
+  const companyRegistrationNumberInput = cleanString(body.companyRegistrationNumber, 100) || null;
+  if (signerName.length < 2) {
     return NextResponse.json(
-      { ok: false, error: "Enter the authorised signer's full name and position." },
+      { ok: false, error: "Enter the authorised signer's full name." },
       { status: 400 },
     );
   }
@@ -101,6 +101,16 @@ export async function POST(
       );
     }
 
+    const profile = caseRow.client_profile;
+    const signerPosition = signerPositionInput || profile?.signerPosition || "";
+    if (signerPosition.length < 2) {
+      return NextResponse.json(
+        { ok: false, error: "Enter the signer's position in the company." },
+        { status: 400 },
+      );
+    }
+    const companyRegistrationNumber = companyRegistrationNumberInput ?? profile?.registrationNumber ?? null;
+
     const client = getSupabaseAdminClient();
     if (!client) throw new Error("Supabase admin configuration is unavailable.");
     const signatureId = randomUUID();
@@ -113,6 +123,8 @@ export async function POST(
       proposalGeneratedAt: proposal.created_at,
       companyName: caseRow.business_name,
       companyRegistrationNumber,
+      vatNumber: profile?.vatNumber ?? null,
+      physicalAddress: profile?.physicalAddress ?? null,
       signerName,
       signerPosition,
       signedAt,

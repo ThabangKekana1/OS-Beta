@@ -36,14 +36,14 @@ const LOGIN_COPY: Record<
     footer: "Need sales access? Ask an administrator to provision your profile.",
   },
   partner: {
-    heroEyebrow: "Migration Leader access",
-    heroTitle: "Continue your member migration mission.",
+    heroEyebrow: "Partner access",
+    heroTitle: "Your members, and where each one has reached.",
     heroDescription:
-      "Use the password you created from your Foundation-1 partner invitation.",
+      "Sign in to see every member who started an assessment through your link, the stage they are at, and what Foundation-1 is doing next.",
     formEyebrow: "Partner sign in",
-    formTitle: "Continue to Mission Control",
+    formTitle: "Continue to your members",
     footer:
-      "Partner accounts are invitation-only and must be provisioned by Foundation-1.",
+      "Partner accounts are invitation-only and are provisioned by Foundation-1.",
   },
 };
 
@@ -150,36 +150,44 @@ export function LoginForm({
   };
 
   return (
-    <div className="grid min-h-screen w-full overflow-hidden bg-[#050505] lg:grid-cols-[1.15fr_0.85fr]">
-      <section className="relative flex min-h-[50vh] items-center border-b border-white/10 px-6 py-10 sm:px-10 lg:min-h-screen lg:border-b-0 lg:border-r lg:px-14 lg:py-14">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_22%,rgba(62,153,255,0.23),transparent_36%),radial-gradient(circle_at_78%_75%,rgba(248,250,252,0.15),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.04)_0%,rgba(0,0,0,0.55)_100%)]" />
-
+    <div className="grid min-h-screen w-full overflow-hidden bg-[#060606] lg:grid-cols-[1.1fr_0.9fr]">
+      <section className="relative flex min-h-[42vh] items-center border-b border-white/10 px-6 py-10 sm:px-10 lg:min-h-screen lg:border-b-0 lg:border-r lg:px-14 lg:py-14">
         <div className="relative mx-auto w-full max-w-2xl">
-          <p className="line-label">{copy.heroEyebrow}</p>
-          <h1 className="mt-5 text-[clamp(2rem,4.4vw,4.6rem)] font-medium leading-[0.98] tracking-[-0.05em] text-white">
+          <span className="inline-flex flex-col items-center gap-1.5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/foundation-1-wordmark.png"
+              alt="Foundation-1"
+              width={163}
+              height={9}
+              className="h-[9px] w-[163px]"
+            />
+          </span>
+          <p className="mt-10 font-mono text-[9px] uppercase tracking-[0.16em] text-white/45">{copy.heroEyebrow}</p>
+          <h1 className="mt-4 text-[clamp(1.9rem,3.2vw,2.9rem)] font-medium leading-[1.02] tracking-[-0.05em] text-white">
             {copy.heroTitle}
           </h1>
-          <p className="mt-6 max-w-xl text-base leading-8 text-white/66">
+          <p className="mt-5 max-w-xl text-[13px] leading-7 text-white/50">
             {copy.heroDescription}
           </p>
         </div>
       </section>
 
       <section className="flex min-h-[50vh] items-center px-6 py-10 sm:px-10 lg:min-h-screen lg:px-14 lg:py-14">
-        <div className="mx-auto w-full max-w-[34rem] rounded-[1.6rem] border border-white/12 bg-black/50 p-6 shadow-[0_30px_120px_rgba(0,0,0,0.52)] backdrop-blur-xl sm:p-8">
-          <p className="line-label">{copy.formEyebrow}</p>
-          <h2 className="mt-3 text-2xl font-medium tracking-[-0.04em] text-white">
+        <div className="mx-auto w-full max-w-[26rem] rounded-[9px] border border-white/14 bg-[#0c0c0c] p-6 sm:p-7">
+          <p className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/45">{copy.formEyebrow}</p>
+          <h2 className="mt-3 text-[20px] font-medium tracking-[-0.04em] text-white">
             {copy.formTitle}
           </h2>
 
-          <form className="space-y-5" onSubmit={onSubmit}>
+          <form className="mt-6 space-y-4" onSubmit={onSubmit}>
             {initialNotice ? (
-              <p className="rounded-lg border border-lime-300/35 bg-lime-300/10 px-3 py-2 text-sm text-lime-100">
+              <p className="rounded-[6px] border border-white/20 bg-white/[0.06] px-3 py-2 text-[12px] text-white/80">
                 {initialNotice}
               </p>
             ) : null}
             <div>
-              <label className="mb-2 block text-xs uppercase tracking-[0.18em] text-white/54" htmlFor="email">
+              <label className="mb-2 block font-mono text-[9px] uppercase tracking-[0.15em] text-white/45" htmlFor="email">
                 Email
               </label>
               <input
@@ -187,15 +195,15 @@ export function LoginForm({
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                className="admin-input w-full rounded-xl px-3 py-2.5 text-sm"
-                placeholder="adalove@email.com"
+                className="h-11 w-full rounded-[6px] border border-white/16 bg-white/[0.05] px-3 text-[13px] text-white outline-none transition placeholder:text-white/25 focus:border-white/55"
+                placeholder="name@organisation.co.za"
                 autoComplete="username"
                 required
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-xs uppercase tracking-[0.18em] text-white/54" htmlFor="password">
+              <label className="mb-2 block font-mono text-[9px] uppercase tracking-[0.15em] text-white/45" htmlFor="password">
                 Password
               </label>
               <input
@@ -203,7 +211,7 @@ export function LoginForm({
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                className="admin-input w-full rounded-xl px-3 py-2.5 text-sm"
+                className="h-11 w-full rounded-[6px] border border-white/16 bg-white/[0.05] px-3 text-[13px] text-white outline-none transition placeholder:text-white/25 focus:border-white/55"
                 placeholder="Enter password"
                 autoComplete="current-password"
                 required
@@ -211,7 +219,7 @@ export function LoginForm({
             </div>
 
             {error ? (
-              <p className="rounded-lg border border-rose-500/35 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+              <p className="rounded-[6px] border border-red-300/25 bg-red-400/10 px-3 py-2 text-[12px] text-red-100" role="alert">
                 {error}
               </p>
             ) : null}
@@ -219,13 +227,13 @@ export function LoginForm({
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full rounded-xl border border-white/18 bg-white/95 px-3 py-2.5 text-sm font-medium text-black transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-11 w-full items-center justify-center rounded-[6px] bg-white text-[12px] font-medium text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-45"
             >
-              {isSubmitting ? "Signing in..." : "Sign in"}
+              {isSubmitting ? "Signing in" : "Sign in"}
             </button>
           </form>
 
-          <p className="mt-6 text-center text-xs text-white/55">{copy.footer}</p>
+          <p className="mt-5 text-center text-[10px] leading-5 text-white/30">{copy.footer}</p>
         </div>
       </section>
     </div>

@@ -237,7 +237,7 @@ async function issueAndDeliver(input: {
   const url = partnerInvitationUrl(token);
   const result = await sendEmail({
     to: input.invitation.email,
-    replyTo: "support@foundation-1.co.za",
+    replyTo: "support@1os.foundation-1.co.za",
     subject: `${input.organisationName} invited you to assess your energy migration`,
     text: [
       "Hello,",
@@ -251,7 +251,7 @@ async function issueAndDeliver(input: {
       `This invitation expires on ${new Date(input.expiresAt).toLocaleDateString("en-ZA")}. It is issued to ${input.invitation.email} and can open one migration case.`,
       "",
       "Foundation-1 (Pty) Ltd",
-      "support@foundation-1.co.za",
+      "support@1os.foundation-1.co.za",
     ].join("\n"),
     tags: [
       { name: "category", value: "partner-referral" },

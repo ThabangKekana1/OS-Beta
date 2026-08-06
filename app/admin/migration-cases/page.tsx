@@ -93,7 +93,7 @@ export default async function AdminMigrationCasesPage() {
           ? client.from("migration_case_bill_packs").select("id,status,source_file_count,recognised_period_count,covered_days,blockers,warnings,completed_at").in("id", billPackIds)
           : Promise.resolve({ data: [], error: null }),
         proposalIds.length
-          ? client.from("migration_case_proposals").select("id,status,economically_positive,year_one_monthly_difference,ten_year_difference,preview_snapshot,created_at").in("id", proposalIds)
+          ? client.from("migration_case_proposals").select("id,status,economically_positive,year_one_monthly_difference,ten_year_difference,preview_snapshot,created_at,source").in("id", proposalIds)
           : Promise.resolve({ data: [], error: null }),
         partnerProposalIds.length
           ? client.from("migration_case_partner_proposals").select("id,status,issued_at,signed_at,direct_kyc_confirmed_at").in("id", partnerProposalIds).then((result) => (
@@ -134,6 +134,9 @@ export default async function AdminMigrationCasesPage() {
     termSheetsByCase.set(row.case_id, list);
   }
 
+  // Server component, rendered once per request: a clock read here is stable
+  // for the response. The purity rule targets client re-render instability.
+  // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
   const dealBookValue = termSheetRows.reduce((sum, sheet) => sum + Number(sheet.deal_value_rands), 0);
   const dealBookCount = termSheetRows.length;
@@ -288,8 +291,12 @@ export default async function AdminMigrationCasesPage() {
             const latestByType = kycPackStatus(documents).latest;
             const opsData: MigrationCaseOpsData = {
               caseId: item.id,
+              reference: item.public_reference,
               stage: item.stage,
               eoiSignedAt: item.eoi_signed_at,
+              hasBillPack: Boolean(item.active_bill_pack_id),
+              proposalPublishedAt: item.proposal_ready_at ?? null,
+              proposalSource: (proposal?.source as string | null) ?? null,
               readiness: readiness
                 ? {
                     status: readiness.status,

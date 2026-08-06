@@ -73,14 +73,14 @@ export function buildAssociationOutreachEmail(association: AssociationRecord) {
       "",
       "What a member actually receives:",
       "",
-      "  •  A free assessment of their electricity position, audited against six of their own utility bills — not an area estimate.",
+      "  •  A free assessment of their electricity position, audited against six of their own utility bills, not an area estimate.",
       "  •  A decision-grade proposal showing their true blended tariff, what each pathway costs, and what it saves over ten years.",
       "  •  An honest answer. Where the numbers do not work we say so and show the workings. Roughly a third of the operations we assess are told to stay where they are.",
       "",
       // Deliberately does NOT use why_it_matters: that field records why the
       // association matters to Foundation-1, and telling a secretariat they are
       // a "national gateway" reads exactly as instrumentally as it is.
-      `Your membership covers ${memberBase} — operations that carry sustained electricity load and real exposure to annual tariff increases.`,
+      `Your membership covers ${memberBase}: operations that carry sustained electricity load and real exposure to annual tariff increases.`,
       "",
       `For the association, we pay ${money(association.commission_value)} for each member that reaches a signed funding term sheet. No exclusivity is asked for and no member is obliged to proceed at any stage.`,
       "",

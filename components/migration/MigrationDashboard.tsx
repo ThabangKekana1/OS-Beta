@@ -14,7 +14,7 @@ import { ProposalExplainer } from "@/components/migration/ProposalExplainer";
 import { countDocumentsByType } from "@/lib/document-taxonomy";
 import styles from "@/components/migration/migration.module.css";
 
-const SUPPORT_EMAIL = "support@foundation-1.co.za";
+const SUPPORT_EMAIL = "support@1os.foundation-1.co.za";
 const WHATSAPP_PHONE_DISPLAY = "+27 69 036 8243";
 const WHATSAPP_LINK = "https://wa.me/27690368243";
 const WEBSITE_ORIGIN = process.env.NEXT_PUBLIC_WEBSITE_ORIGIN ?? "https://foundation-1.co.za";

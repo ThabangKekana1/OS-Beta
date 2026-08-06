@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
 
     void sendEmail({
       to: email,
-      replyTo: "support@foundation-1.co.za",
+      replyTo: "support@1os.foundation-1.co.za",
       subject: links.length === 1
         ? `${links[0].reference}: your secure migration case link`
         : "Your secure Foundation-1 migration case links",
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
         ...links.flatMap((link) => [`${link.businessName} (${link.reference})`, link.url, ""]),
         "Keep these links private. Anyone with a link can view the case.",
         "",
-        "If you did not request this, reply to support@foundation-1.co.za.",
+        "If you did not request this, reply to support@1os.foundation-1.co.za.",
         "",
         "Foundation-1 (Pty) Ltd",
       ].join("\n"),

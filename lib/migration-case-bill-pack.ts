@@ -12,6 +12,7 @@ import {
   type MigrationCaseRow,
 } from "@/lib/migration-case-store";
 import { ensurePrivateBucket } from "@/lib/server-json-store";
+import { createNotification } from "@/lib/notifications";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import {
   aggregateUtilityBills,
@@ -19,6 +20,11 @@ import {
   type UtilityBillDocumentAnalysis,
 } from "@/lib/utility-bill-analysis";
 import { analyseUtilityBillFile } from "@/lib/utility-bill-pdf";
+import {
+  isOperatorAssessmentMode,
+  isSimulatedBillExtractionEnabled,
+  simulateUtilityBillAnalysis,
+} from "@/lib/simulated-bill-extraction";
 import { ENGINE_CONSTANTS } from "@/lib/pricing-engine";
 import { REQUIRED_FORMAL_BILLING_PERIODS } from "@/lib/indicative-migration-report";
 import { recordFunnelEvent } from "@/lib/report-capture";
@@ -202,11 +208,12 @@ async function uploadAndAnalyse(
   caseRow: MigrationCaseRow,
   billPackId: string,
   buffered: BufferedBillFile[],
+  sequenceOffset = 0,
 ) {
   const client = await ensurePrivateBucket(MIGRATION_CASE_DOCUMENT_BUCKET);
   if (!client) throw new Error("Private document storage is unavailable.");
 
-  return Promise.all(buffered.map(async (item) => {
+  return Promise.all(buffered.map(async (item, index) => {
     const fileId = randomUUID();
     const storagePath = `${caseRow.public_reference}/${billPackId}/${fileId}-${cleanFileName(item.file.name)}`;
     const { error: uploadError } = await client.storage
@@ -219,14 +226,21 @@ async function uploadAndAnalyse(
     if (uploadError) throw new Error(`Could not store ${item.file.name}: ${uploadError.message}`);
 
     const stableBytes = Uint8Array.from(item.bytes);
-    const analysis = await analyseUtilityBillFile(
-      {
-        name: item.file.name,
-        type: item.file.type,
-        arrayBuffer: async () => stableBytes.buffer,
-      },
-      { sourceHash: item.sha256 },
-    );
+    const analysis = isSimulatedBillExtractionEnabled()
+      ? simulateUtilityBillAnalysis({
+          fileName: item.file.name,
+          sourceHash: item.sha256,
+          sequence: sequenceOffset + index,
+          targetMonthlySpendExVat: caseRow.monthly_spend_ex_vat,
+        })
+      : await analyseUtilityBillFile(
+          {
+            name: item.file.name,
+            type: item.file.type,
+            arrayBuffer: async () => stableBytes.buffer,
+          },
+          { sourceHash: item.sha256 },
+        );
 
     return {
       id: fileId,
@@ -423,13 +437,14 @@ async function runBillPackAudit(
         blockers: portfolio.blockers,
       },
     }).catch(() => undefined);
-    // The client is told exactly what is missing, rather than discovering a
-    // stalled case on their next visit. Keyed per pack and per recognition
-    // result, so a second distinct failure notifies again.
+    // The client hears "received, we are on it" — the blockers are an
+    // operator worklist, not a client demand. Foundation-1 completes the
+    // audit by hand (re-audit/reopen tools) and only comes back to the
+    // client if something specific is genuinely missing.
     void sendCaseLifecycleMessage(
       updatedCase,
-      "bill_pack_needs_attention",
-      { blockers: portfolio.blockers },
+      "bill_pack_in_review",
+      {},
       `${billPackId}:${portfolio.uniquePeriodCount}`,
     ).catch(() => undefined);
     return {
@@ -611,13 +626,12 @@ export async function reopenMigrationBillPack(
 /**
  * Adds utility bills to a case as the client finds them.
  *
- * The narrowest gate in the funnel used to be an all-or-nothing upload: six to
- * twelve files, one browser session, no partial save. A client holding five
- * bills was simply blocked, and an interrupted upload started over.
- *
- * Files now accumulate in an open pack. Each upload re-runs recognition across
- * everything held so far and reports honest progress. The moment six billing
- * periods are recognised the atomic audit runs exactly as before.
+ * There is no client-facing file count: some clients scan every bill into one
+ * merged document, others upload month by month. Every batch re-runs
+ * recognition over everything held and then runs the audit. When the evidence
+ * is complete the proposal is produced automatically; when it is not, the pack
+ * moves to Foundation-1's review desk and the client is told we are on it —
+ * never blocked by a number.
  */
 export async function addMigrationBillFiles(
   caseRow: MigrationCaseRow,
@@ -625,6 +639,9 @@ export async function addMigrationBillFiles(
 ): Promise<BillPackProcessingResult & { progress: BillCollectionProgress }> {
   if (caseRow.stage === "eoi_signed") {
     throw new Error("This proposal has already been released and its supporting bill pack is locked.");
+  }
+  if (!caseRow.nda_signed_at) {
+    throw new Error("Sign the Non-Disclosure Agreement in your case before uploading utility bills.");
   }
 
   const openPack = await findOpenBillPack(caseRow.id);
@@ -663,60 +680,42 @@ export async function addMigrationBillFiles(
   await updateMigrationCase(caseRow.id, { active_bill_pack_id: billPackId });
 
   try {
-    const storedFiles = await uploadAndAnalyse(caseRow, billPackId, buffered);
+    const storedFiles = await uploadAndAnalyse(
+      caseRow,
+      billPackId,
+      buffered,
+      existing.analyses.length,
+    );
     const { error: fileInsertError } = await adminClient()
       .from("migration_case_bill_files")
       .insert(storedFiles);
     if (fileInsertError) throw new Error(fileInsertError.message);
 
-    const analyses = [...existing.analyses, ...storedFiles.map((file) => file.analysis)];
+    const analyses = isSimulatedBillExtractionEnabled()
+      // Simulation: any batch stands in for a complete six-period pack so the
+      // whole journey can be exercised locally, merged single-file scans
+      // included. The document model replaces this in production.
+      ? Array.from({ length: 6 }, (_, index) =>
+          simulateUtilityBillAnalysis({
+            fileName: storedFiles[index % storedFiles.length]?.original_name ?? `simulated-period-${index + 1}.pdf`,
+            sourceHash: `${billPackId}-sim-${index}`,
+            sequence: index,
+            targetMonthlySpendExVat: caseRow.monthly_spend_ex_vat,
+          }))
+      : [...existing.analyses, ...storedFiles.map((file) => file.analysis)];
     const portfolio = buildPortfolio(analyses);
     const progress = describeProgress(portfolio, analyses.length);
 
-    // Enough periods to audit: run the same atomic audit as a single submission.
-    if (progress.readyForAudit) {
-      await updateMigrationCase(caseRow.id, { stage: "bill_pack_processing" });
-      await recordMigrationCaseEvent({
-        caseId: caseRow.id,
-        eventType: "complete_bill_pack_submitted",
-        actorType: "client",
-        detail: `${analyses.length} utility-bill files gathered; six billing periods recognised.`,
-        metadata: { billPackId, progressive: true },
-      }).catch(() => undefined);
-      const audited = await runBillPackAudit(caseRow, billPackId, analyses);
-      return { ...audited, progress };
-    }
-
-    // Still gathering. Hold the pack open and report honest progress.
-    const { data: updatedPack, error: packError } = await adminClient()
-      .from("migration_case_bill_packs")
-      .update({
-        status: "collecting",
-        source_file_count: analyses.length,
-        recognised_period_count: portfolio.uniquePeriodCount,
-        covered_days: portfolio.coveredDays,
-        portfolio,
-        blockers: [],
-        warnings: portfolio.warnings,
-        failure_reason: null,
-      })
-      .eq("id", billPackId)
-      .select("*")
-      .single();
-    if (packError || !updatedPack) {
-      throw new Error(packError?.message ?? "Unable to save the bill pack.");
-    }
-
+    // Every batch is decided immediately: a complete pack audits straight
+    // through to the proposal; anything else lands on Foundation-1's review
+    // desk. The client is never blocked by a file count.
+    await updateMigrationCase(caseRow.id, { stage: "bill_pack_processing" });
     await recordMigrationCaseEvent({
       caseId: caseRow.id,
-      eventType: "bill_files_added",
+      eventType: "complete_bill_pack_submitted",
       actorType: "client",
-      detail: `${storedFiles.length} file${storedFiles.length === 1 ? "" : "s"} added; ${portfolio.uniquePeriodCount} of ${REQUIRED_FORMAL_BILLING_PERIODS} billing periods recognised.`,
-      metadata: {
-        billPackId,
-        filesHeld: analyses.length,
-        recognisedPeriods: portfolio.uniquePeriodCount,
-      },
+      detail: `${analyses.length} utility-bill ${analyses.length === 1 ? "file" : "files"} submitted; ${portfolio.uniquePeriodCount} billing ${portfolio.uniquePeriodCount === 1 ? "period" : "periods"} recognised automatically.`,
+      metadata: { billPackId, progressive: true },
     }).catch(() => undefined);
 
     void recordFunnelEvent({
@@ -731,13 +730,47 @@ export async function addMigrationBillFiles(
       },
     }).catch(() => undefined);
 
-    return {
-      caseRow,
-      billPack: updatedPack as MigrationCaseBillPackRow,
-      proposal: null,
-      analyses,
-      progress,
-    };
+    // Phase 1: assessments are produced off-platform. The pack is received and
+    // held; an operator publishes the assessment, which advances the case.
+    if (isOperatorAssessmentMode()) {
+      const held = await updateMigrationCase(caseRow.id, { stage: "bill_pack_processing" });
+      await adminClient()
+        .from("migration_case_bill_packs")
+        .update({ status: "processing", source_file_count: analyses.length })
+        .eq("id", billPackId);
+
+      void sendCaseLifecycleMessage(
+        held,
+        "bill_pack_received",
+        {},
+        `${billPackId}:${analyses.length}`,
+      ).catch(() => undefined);
+
+      void createNotification({
+        audience: "admin",
+        kind: "customer_uploaded_document",
+        title: `${caseRow.public_reference}: utility bills received`,
+        body: `${caseRow.business_name} uploaded ${analyses.length} ${analyses.length === 1 ? "file" : "files"}. Ready for assessment.`,
+        link: "/admin/migration-cases",
+      }).catch(() => undefined);
+
+      const { data: heldPack } = await adminClient()
+        .from("migration_case_bill_packs")
+        .select("*")
+        .eq("id", billPackId)
+        .single();
+
+      return {
+        caseRow: held,
+        billPack: heldPack as MigrationCaseBillPackRow,
+        proposal: null,
+        analyses,
+        progress,
+      };
+    }
+
+    const audited = await runBillPackAudit(caseRow, billPackId, analyses);
+    return { ...audited, progress };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Bill upload failed.";
     await recordMigrationCaseEvent({

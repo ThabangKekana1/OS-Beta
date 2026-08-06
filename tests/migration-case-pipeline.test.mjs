@@ -138,6 +138,7 @@ test("negative proposals are complete but still require the post-proposal EOI", 
     supply_type: "eskom-direct",
     created_at: "2026-07-11T00:00:00.000Z",
     indicative_report: {},
+    nda_signed_at: "2026-07-10T09:00:00.000Z",
   };
   const proposal = {
     id: "proposal-1",
@@ -188,6 +189,7 @@ test("positive proposals remain locked until the post-proposal EOI", () => {
     supply_type: "eskom-direct",
     created_at: "2026-07-11T00:00:00.000Z",
     indicative_report: {},
+    nda_signed_at: "2026-07-10T09:00:00.000Z",
   };
   const proposal = {
     id: "proposal-2",
@@ -226,24 +228,28 @@ test("optional visitor-entered kWh keeps physical uncertainty bands and remains 
   assert.match(report.limitations.join(" "), /has not been reconciled to a statement/i);
 });
 
-test("bills may be collected progressively, but the audit still needs all six periods", () => {
+test("bills may be collected without a client-facing count, but the audit still needs all six periods", () => {
   const processor = source("lib/migration-case-bill-pack.ts");
   const uploadRoute = source("app/api/migration-cases/[token]/bill-pack/route.ts");
 
   assert.equal(REQUIRED_FORMAL_BILLING_PERIODS, 6);
 
-  // Collection is incremental: a client may add bills as they find them.
+  // Collection is incremental and count-free: merged single-file scans are
+  // accepted and every batch is decided immediately.
   assert.match(uploadRoute, /addMigrationBillFiles/);
   assert.doesNotMatch(uploadRoute, /files\.length < COMPLETE_BILL_PACK_MIN_FILES/);
   assert.match(processor, /export async function addMigrationBillFiles/);
+  assert.match(processor, /const audited = await runBillPackAudit\(caseRow, billPackId, analyses\)/);
 
-  // The audit remains atomic and gated on six recognised periods. A partial
-  // history must never produce a proposal.
-  assert.match(
-    processor,
-    /readyForAudit: portfolio\.uniquePeriodCount >= REQUIRED_FORMAL_BILLING_PERIODS/,
-  );
-  assert.match(processor, /if \(progress\.readyForAudit\)/);
+  // Uploads are gated on the signed NDA (POPIA + limited-sharing consent).
+  assert.match(processor, /if \(!caseRow\.nda_signed_at\)/);
+
+  // The audit remains atomic: a proposal is only produced from a portfolio
+  // that satisfies every blocker, including six recognised periods. A partial
+  // history lands on the review desk instead.
+  assert.match(processor, /const portfolioReady = portfolio\.formalProposalReady/);
+  assert.match(processor, /if \(!portfolioReady\)/);
+  assert.match(processor, /bill_pack_in_review/);
   assert.doesNotMatch(processor, /proposalReadiness\(/);
 
   // A stalled pack now has an operator exit in both directions.
@@ -293,6 +299,8 @@ test("EOI is a post-proposal gate and produces an immutable PDF certificate", ()
     proposalGeneratedAt: "2026-07-11T00:00:00.000Z",
     companyName: "Example Agri",
     companyRegistrationNumber: "2026/000001/07",
+    vatNumber: "4000000000",
+    physicalAddress: "12 Farm Road, Vredefort, Free State",
     signerName: "Authorised Director",
     signerPosition: "Director",
     signedAt: "2026-07-11T01:00:00.000Z",
@@ -303,7 +311,7 @@ test("EOI is a post-proposal gate and produces an immutable PDF certificate", ()
 
   assert.equal(Buffer.from(result.bytes).subarray(0, 5).toString(), "%PDF-");
   assert.match(result.filename, /foundation-1-eoi-example-agri/);
-  assert.equal(MIGRATION_CASE_EOI_DECLARATIONS_VERSION, "2026-07-12.1");
+  assert.equal(MIGRATION_CASE_EOI_DECLARATIONS_VERSION, "2026-08-01.1");
 
   const gapResult = buildMigrationCaseEoiPdf({
     signatureId: "00000000-0000-4000-8000-000000000003",
@@ -312,6 +320,8 @@ test("EOI is a post-proposal gate and produces an immutable PDF certificate", ()
     proposalGeneratedAt: "2026-07-12T00:00:00.000Z",
     companyName: "Gap Example",
     companyRegistrationNumber: null,
+    vatNumber: null,
+    physicalAddress: null,
     signerName: "Authorised Owner",
     signerPosition: "Owner",
     signedAt: "2026-07-12T01:00:00.000Z",

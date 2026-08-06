@@ -9,7 +9,7 @@ import {
 
 export const metadata: Metadata = {
   title: "Partner Portal | Foundation-1",
-  description: "Association partner portal — member pipeline and commission ledger.",
+  description: "Association partner portal: member pipeline and commission ledger.",
   robots: { index: false, follow: false },
 };
 
@@ -70,7 +70,7 @@ export default async function PartnerPortalPage({
           <h1 className="mt-2 text-2xl font-semibold tracking-[-0.03em]">{association.name}</h1>
           <p className="mt-2 text-sm leading-6 text-white/60">
             {association.sector ? `${association.sector} · ` : ""}Member energy programme partner.
-            Share the member link below — every member who starts an assessment through it is
+            Share the member link below. Every member who starts an assessment through it is
             attributed to {association.name} automatically.
           </p>
         </header>
@@ -103,7 +103,7 @@ export default async function PartnerPortalPage({
           <h2 className="text-[0.66rem] uppercase tracking-[0.18em] text-white/60">Member pipeline</h2>
           {referrals.length === 0 ? (
             <p className="mt-3 text-sm text-white/60">
-              No members yet. Share your link to start the pipeline — the first assessment takes a
+                No members yet. Share your link to start the pipeline. The first assessment takes a
               member about a minute.
             </p>
           ) : (
@@ -124,7 +124,7 @@ export default async function PartnerPortalPage({
                   <span className="text-xs text-white/70">
                     {row.commissionDue
                       ? `${zar(row.commissionDue)} ${row.commissionPaidAt ? "paid" : "accrued"}`
-                      : "—"}
+                      : "Not yet"}
                   </span>
                 </li>
               ))}
@@ -137,7 +137,7 @@ export default async function PartnerPortalPage({
         </section>
 
         <footer className="mt-6 flex flex-wrap items-center justify-between gap-3 text-xs text-white/60">
-          <span>Foundation-1 (Pty) Ltd · Reg 2026/138664/07 · partners@foundation-1.co.za</span>
+          <span>Foundation-1 (Pty) Ltd · Reg 2026/138664/07 · sales@1os.foundation-1.co.za</span>
           <Link href="/" className="underline decoration-white/30 underline-offset-4 hover:text-white">
             foundation-1.co.za
           </Link>

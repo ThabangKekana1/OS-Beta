@@ -504,9 +504,9 @@ function commercialPage(pdf: Pdf, proposal: F1Proposal) {
   y += 43;
   y = drawTable(pdf, y, proposal.commercial.structures, [
     { label: "OPTION", width: 32, value: (row) => row.label },
-    { label: "MONTHLY", width: 32, align: "right", value: (row) => row.monthlyCharge === null ? "—" : money(row.monthlyCharge) },
-    { label: "UPFRONT", width: 29, align: "right", value: (row) => row.upfront === null ? "—" : money(row.upfront) },
-    { label: "ESC.", width: 20, align: "right", value: (row) => row.escalation === null ? "—" : `${Math.round(row.escalation * 100)}%` },
+    { label: "MONTHLY", width: 32, align: "right", value: (row) => row.monthlyCharge === null ? "n/a" : money(row.monthlyCharge) },
+    { label: "UPFRONT", width: 29, align: "right", value: (row) => row.upfront === null ? "n/a" : money(row.upfront) },
+    { label: "ESC.", width: 20, align: "right", value: (row) => row.escalation === null ? "n/a" : `${Math.round(row.escalation * 100)}%` },
     { label: "WHAT IT MEANS", width: 65, value: (row) => row.comparisonNote },
   ], { fontSize: 7, pageTitle: "Commercial structures" });
   y = sectionTitle(pdf, "Turnkey value", "Where the capital goes", y + 10);
@@ -589,7 +589,7 @@ export function migrationProposalPdfFilename(proposal: F1Proposal) {
 export function buildMigrationProposalPdf(proposal: F1Proposal) {
   const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait", compress: true });
   pdf.setProperties({
-    title: `Foundation-1 Migration Proposal — ${proposal.businessName}`,
+    title: `Foundation-1 Migration Proposal: ${proposal.businessName}`,
     subject: "Bill-audited pre-engineering renewable-energy migration assessment",
     author: "Foundation-1 (Pty) Ltd",
     creator: "Foundation-1 1OS",

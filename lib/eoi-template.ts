@@ -115,7 +115,7 @@ export function buildBlankEoiTemplateText(): string {
     "   Foundation-1. Utility evidence must already have been assessed.",
     "",
     "Questions? Contact Foundation-1:",
-    "  Email:  support@foundation-1.co.za",
+    "  Email:  support@1os.foundation-1.co.za",
     "  Web:    https://www.foundation-1.co.za",
     "────────────────────────────────────────────────────────────────",
   ].join("\n");

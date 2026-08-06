@@ -461,10 +461,10 @@ export function PublicMarketingShell({ children }: { children: (theme: "dark" | 
             <p className={isLight ? "text-xs text-black" : "text-xs text-white"}>
               © 2026 1OS | Reg: 2026/138664/07 | BBBEE Level 1 | All rights reserved. |{" "}
               <a
-                href="mailto:sales@foundation-1.co.za"
+                href="mailto:sales@1os.foundation-1.co.za"
                 className={isLight ? "text-black transition hover:text-black/70" : "text-white transition hover:text-white/70"}
               >
-                sales@foundation-1.co.za
+                sales@1os.foundation-1.co.za
               </a>{" "}
               |{" "}
               <a

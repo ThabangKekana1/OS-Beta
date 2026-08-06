@@ -13,7 +13,17 @@ import {
   type KycSelfCheck,
 } from "@/lib/migration-case-kyc";
 import type { SaPlaceContext } from "@/lib/sa-places";
+import { parsePartnerBrandSnapshot, type PartnerBrand } from "@/lib/partner-branding";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
+import {
+  buildMigrationCaseEoiLetterParagraphs,
+  buildMigrationCaseNdaClauses,
+  FOUNDATION_NDA_PARTY,
+  FOUNDATION_NDA_SIGNATORY,
+  MIGRATION_CASE_EOI_LETTER_RECIPIENT,
+  MIGRATION_CASE_EOI_LETTER_TITLE,
+  MIGRATION_CASE_NDA_VERSION,
+} from "@/lib/migration-case-agreements";
 
 export const MIGRATION_CASE_WORKFLOW_VERSION = "2026-07-11.1";
 export const MIGRATION_CASE_DOCUMENT_BUCKET = "migration-case-documents";
@@ -35,6 +45,19 @@ export type MigrationCaseStage =
   | "term_sheet_issued"
   // Legacy zero-custody stage retained for historical rows only.
   | "kyc_direct_submitted";
+
+export type MigrationCaseClientProfile = {
+  registeredName: string;
+  registrationNumber: string | null;
+  vatNumber: string | null;
+  /** Composed single-line address used on the NDA and EOI letterheads. */
+  physicalAddress: string;
+  addressStreet?: string | null;
+  addressCity?: string | null;
+  addressProvince?: string | null;
+  addressPostalCode?: string | null;
+  signerPosition: string;
+};
 
 export type MigrationCaseRow = {
   id: string;
@@ -59,6 +82,11 @@ export type MigrationCaseRow = {
   source_campaign: string | null;
   referrer: string | null;
   partner_referral_id: string | null;
+  partner_brand: PartnerBrand | null;
+  client_profile: MigrationCaseClientProfile | null;
+  profile_completed_at: string | null;
+  nda_signed_at: string | null;
+  active_nda_id: string | null;
   active_bill_pack_id: string | null;
   active_proposal_id: string | null;
   active_partner_proposal_id: string | null;
@@ -182,6 +210,14 @@ export type MigrationCaseProposalRow = {
   preview_snapshot: Record<string, unknown>;
   proposal_snapshot: Record<string, unknown>;
   engine_version: string;
+  source?: "engine" | "operator" | null;
+  document_storage_path?: string | null;
+  document_original_name?: string | null;
+  document_content_type?: string | null;
+  document_file_size_bytes?: number | null;
+  document_sha256?: string | null;
+  published_by?: string | null;
+  operator_note?: string | null;
 };
 
 export type MigrationCaseEoiRow = {
@@ -195,6 +231,29 @@ export type MigrationCaseEoiRow = {
   declarations_version: string;
   pdf_storage_path: string | null;
   pdf_sha256: string | null;
+};
+
+export type MigrationCaseNdaRow = {
+  id: string;
+  case_id: string;
+  created_at: string;
+  signed_at: string;
+  signer_name: string;
+  signer_position: string;
+  popia_consent: boolean;
+  sharing_consent: boolean;
+  agreement_version: string;
+  pdf_storage_path: string | null;
+  pdf_sha256: string | null;
+};
+
+export type MigrationCaseSupportMessageRow = {
+  id: string;
+  case_id: string;
+  created_at: string;
+  author_type: "client" | "foundation1";
+  author_name: string | null;
+  message: string;
 };
 
 export type MigrationCasePartnerProposalRow = {
@@ -239,6 +298,7 @@ export type CreateMigrationCaseInput = {
   sourceCampaign?: string | null;
   referrer?: string | null;
   partnerReferralId?: string | null;
+  partnerBrand?: PartnerBrand | null;
   termsAcceptedAt?: string | null;
   kycSelfCheck?: KycSelfCheck | null;
 };
@@ -247,6 +307,7 @@ export type MigrationCaseRelations = {
   billPack: MigrationCaseBillPackRow | null;
   proposal: MigrationCaseProposalRow | null;
   eoi: MigrationCaseEoiRow | null;
+  nda: MigrationCaseNdaRow | null;
   partnerProposal: MigrationCasePartnerProposalRow | null;
   kycReadiness: MigrationCaseKycReadinessRow | null;
   kycDocuments: MigrationCaseKycDocumentRow[];
@@ -335,6 +396,7 @@ export async function createMigrationCase(input: CreateMigrationCaseInput) {
   };
   if (input.termsAcceptedAt) row.terms_accepted_at = input.termsAcceptedAt;
   if (input.kycSelfCheck) row.kyc_self_check = input.kycSelfCheck;
+  if (input.partnerBrand) row.partner_brand = input.partnerBrand;
 
   let inserted = await adminClient()
     .from("migration_cases")
@@ -343,13 +405,14 @@ export async function createMigrationCase(input: CreateMigrationCaseInput) {
     .single();
   if (
     inserted.error
-    && /terms_accepted_at|kyc_self_check|partner_referral_id/i.test(inserted.error.message)
+    && /terms_accepted_at|kyc_self_check|partner_referral_id|partner_brand/i.test(inserted.error.message)
     && /column|schema cache/i.test(inserted.error.message)
   ) {
     // Remote schema may not carry the staged custody/distribution migrations yet.
     if (/terms_accepted_at/i.test(inserted.error.message)) delete row.terms_accepted_at;
     if (/kyc_self_check/i.test(inserted.error.message)) delete row.kyc_self_check;
     if (/partner_referral_id/i.test(inserted.error.message)) delete row.partner_referral_id;
+    if (/partner_brand/i.test(inserted.error.message)) delete row.partner_brand;
     inserted = await adminClient()
       .from("migration_cases")
       .insert(row)
@@ -429,7 +492,7 @@ export async function getMigrationCaseRelations(
   caseRow: Pick<MigrationCaseRow, "id" | "active_bill_pack_id" | "active_proposal_id" | "active_partner_proposal_id" | "active_submission_id">,
 ): Promise<MigrationCaseRelations> {
   const client = adminClient();
-  const [billPackResult, proposalResult, eoiResult, partnerProposalResult, readinessResult, kycDocumentsResult, submissionResult, termSheetsResult] = await Promise.all([
+  const [billPackResult, proposalResult, eoiResult, ndaResult, partnerProposalResult, readinessResult, kycDocumentsResult, submissionResult, termSheetsResult] = await Promise.all([
     caseRow.active_bill_pack_id
       ? client
           .from("migration_case_bill_packs")
@@ -447,6 +510,11 @@ export async function getMigrationCaseRelations(
     client
       .from("migration_case_eois")
       .select("id,case_id,proposal_id,signed_at,signer_name,signer_position,company_registration_number,declarations_version,pdf_storage_path,pdf_sha256")
+      .eq("case_id", caseRow.id)
+      .maybeSingle(),
+    client
+      .from("migration_case_ndas")
+      .select("*")
       .eq("case_id", caseRow.id)
       .maybeSingle(),
     caseRow.active_partner_proposal_id
@@ -490,6 +558,7 @@ export async function getMigrationCaseRelations(
     billPack: billPackResult.data as MigrationCaseBillPackRow | null,
     proposal: proposalResult.data as MigrationCaseProposalRow | null,
     eoi: eoiResult.data as MigrationCaseEoiRow | null,
+    nda: tolerantData(ndaResult as { data: MigrationCaseNdaRow | null; error: { message: string } | null }, null),
     partnerProposal: partnerProposalResult.data as MigrationCasePartnerProposalRow | null,
     kycReadiness: tolerantData(readinessResult as { data: MigrationCaseKycReadinessRow | null; error: { message: string } | null }, null),
     kycDocuments: tolerantData(kycDocumentsResult as { data: MigrationCaseKycDocumentRow[] | null; error: { message: string } | null }, []),
@@ -550,6 +619,9 @@ export function publicMigrationCaseState(
   const eoiSigned = Boolean(relations.eoi);
   const proposal = relations.proposal;
   const proposalReleased = eoiSigned;
+  const profileCompleted = Boolean(caseRow.profile_completed_at && caseRow.client_profile);
+  const nda = relations.nda ?? null;
+  const ndaSigned = Boolean(nda) || Boolean(caseRow.nda_signed_at);
   const readiness = relations.kycReadiness ?? null;
   const readinessConfirmed = readiness?.status === "confirmed"
     || Boolean(caseRow.kyc_readiness_confirmed_at);
@@ -565,12 +637,47 @@ export function publicMigrationCaseState(
       stage: caseRow.stage,
       businessName: caseRow.business_name,
       contactName: caseRow.contact_name,
+      contactEmail: caseRow.contact_email,
+      contactPhone: caseRow.contact_phone,
       siteCity: caseRow.site_city,
       province: caseRow.province,
       supplyType: caseRow.supply_type,
       createdAt: caseRow.created_at,
       initialReport: caseRow.indicative_report,
+      partnerBrand: parsePartnerBrandSnapshot(caseRow.partner_brand),
     },
+    clientProfile: caseRow.client_profile
+      ? {
+          ...caseRow.client_profile,
+          completedAt: caseRow.profile_completed_at,
+        }
+      : null,
+    nda: nda
+      ? {
+          signed: true,
+          signedAt: nda.signed_at,
+          signedBy: nda.signer_name,
+          signerPosition: nda.signer_position,
+          agreementVersion: nda.agreement_version,
+          receiptAvailable: Boolean(nda.pdf_storage_path),
+        }
+      : { signed: false },
+    ndaAgreement: {
+      version: MIGRATION_CASE_NDA_VERSION,
+      foundationSignatory: FOUNDATION_NDA_SIGNATORY,
+      foundationParty: FOUNDATION_NDA_PARTY,
+      clauses: buildMigrationCaseNdaClauses(caseRow.business_name),
+    },
+    eoiLetter: proposal
+      ? {
+          title: MIGRATION_CASE_EOI_LETTER_TITLE,
+          recipient: MIGRATION_CASE_EOI_LETTER_RECIPIENT,
+          paragraphs: buildMigrationCaseEoiLetterParagraphs({
+            companyName: caseRow.business_name,
+            economicallyPositive: proposal.economically_positive,
+          }),
+        }
+      : null,
     billPack: relations.billPack
       ? {
           status: relations.billPack.status,
@@ -667,10 +774,13 @@ export function publicMigrationCaseState(
       reference: sheet.reference,
     })),
     actions: {
-      canUploadCompleteBillPack: !eoiSigned,
+      canCompleteProfile: !profileCompleted,
+      canSignNda: profileCompleted && !ndaSigned,
+      canUploadCompleteBillPack: ndaSigned && !eoiSigned,
       canSignEoi:
         (caseRow.stage === "proposal_ready" || caseRow.stage === "proposal_not_recommended")
         && Boolean(proposal)
+        && ndaSigned
         && !eoiSigned,
       canDownloadProposal: proposalReleased && Boolean(proposal),
       canDownloadEoiReceipt: eoiSigned && Boolean(relations.eoi?.pdf_storage_path),
@@ -691,6 +801,10 @@ export async function updateMigrationCase(
   caseId: string,
   patch: Partial<{
     stage: MigrationCaseStage;
+    client_profile: MigrationCaseClientProfile | null;
+    profile_completed_at: string | null;
+    nda_signed_at: string | null;
+    active_nda_id: string | null;
     active_bill_pack_id: string | null;
     active_proposal_id: string | null;
     active_partner_proposal_id: string | null;
@@ -732,6 +846,10 @@ export async function listMigrationCasesForAdmin(limit = 100) {
     .limit(resolvedLimit);
   if (error) throw new Error(error.message);
   return (data ?? []).map((item) => ({
+    client_profile: null,
+    profile_completed_at: null,
+    nda_signed_at: null,
+    active_nda_id: null,
     active_partner_proposal_id: null,
     active_submission_id: null,
     partner_proposal_ready_at: null,

@@ -151,7 +151,7 @@ test("migration dashboard runs website-first (funnel removed from 1OS)", () => {
   assert.match(migrationDashboard, /foundation-1\.co\.za/);
   assert.match(migrationDashboard, /\/api\/migration\/profiles\/status/);
   assert.match(migrationDashboard, /adminStatus\?\.migrationStatus/);
-  assert.match(migrationDashboard, /support@foundation-1\.co\.za/);
+  assert.match(migrationDashboard, /support@1os\.foundation-1\.co\.za/);
   assert.match(migrationDashboard, /https:\/\/wa\.me\/27690368243/);
   assert.match(migrationShell, /NEXT_PUBLIC_WEBSITE_ORIGIN/);
   assert.match(migrationShell, /WEBSITE_ASSESSMENT_URL/);
@@ -319,9 +319,9 @@ test("automatic email signature remains while editable signature API is gone", (
   assert.match(sendRoute, /foundationDisplayNameForEmail/);
   assert.match(adminMailboxes, /email: "karman@1os\.foundation-1\.co\.za"/);
   assert.match(adminMailboxes, /label: "Support"/);
-  assert.match(adminMailboxes, /email: "support@foundation-1\.co\.za"/);
+  assert.match(adminMailboxes, /email: "support@1os\.foundation-1\.co\.za"/);
   assert.match(adminMailboxes, /label: "Sales"/);
-  assert.match(adminMailboxes, /email: "sales@foundation-1\.co\.za"/);
+  assert.match(adminMailboxes, /email: "sales@1os\.foundation-1\.co\.za"/);
   assert.doesNotMatch(adminMailboxes, /email: "karman@replies\.1os\.co\.za"/);
   assert.doesNotMatch(adminMailboxes, /email: "support@replies\.1os\.co\.za"/);
   assert.match(emailAddressing, /DEFAULT_OUTBOUND_EMAIL_DOMAIN = "foundation-1\.co\.za"/);

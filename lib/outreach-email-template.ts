@@ -29,14 +29,22 @@ function textToHtml(value: string): string {
 
 export function buildFoundationOutreachBody(lead: OutreachTemplateLead | null): string {
   const name = firstName(lead?.contactName) || "[name]";
+  const estimateUrl = lead?.migrationEstimateUrl?.trim();
 
   return [
     `Good day ${name},`,
     "",
-    "Foundation-1 helps South African agribusinesses switch from Eskom to a clean-energy PPA tariff—saving qualifying businesses up to 60% on electricity costs.",
+    "Foundation-1 helps South African agribusinesses switch from Eskom to a clean-energy PPA tariff, saving qualifying businesses up to 60% on electricity costs.",
     "",
     "There is no infrastructure purchase, maintenance or insurance required. Send us six months of utility bills, and we’ll prepare a migration report showing your projected tariff and savings over the PPA term.",
     "",
+    ...(estimateUrl
+      ? [
+          "You can see an indicative figure for yourself first. It takes about a minute, needs no utility bill and creates no obligation:",
+          estimateUrl,
+          "",
+        ]
+      : []),
     "I’ve attached a short presentation. Are you available for a brief conversation to assess your potential savings?",
     "",
     "Thanks,",

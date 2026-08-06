@@ -294,7 +294,7 @@ async function handleMessage(message: WaMessage): Promise<void> {
     // Unknown sender — reply with a polite message
     await sendWhatsAppReply(
       message.from,
-      "Hi! We received your file but couldn't match your number to a Foundation-1 account. Please contact us at support@foundation-1.co.za.",
+      "Hi! We received your file but couldn't match your number to a Foundation-1 account. Please contact us at support@1os.foundation-1.co.za.",
     );
     return;
   }

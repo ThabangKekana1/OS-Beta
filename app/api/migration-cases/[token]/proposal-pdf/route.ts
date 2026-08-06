@@ -5,8 +5,10 @@ import {
   findMigrationCaseByToken,
   getMigrationCaseRelations,
   isMigrationCaseWebsiteRequest,
+  MIGRATION_CASE_DOCUMENT_BUCKET,
 } from "@/lib/migration-case-store";
 import { consumeRateLimit } from "@/lib/rate-limit";
+import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,7 +55,33 @@ export async function GET(
       );
     }
 
-    const proposal = relations.proposal.proposal_snapshot as unknown as F1Proposal;
+    const proposalRow = relations.proposal;
+
+    // Phase 1 assessments are produced off-platform and stored as a document.
+    if (proposalRow.source === "operator" && proposalRow.document_storage_path) {
+      const client = getSupabaseAdminClient();
+      if (!client) throw new Error("Private document storage is unavailable.");
+      const download = await client.storage
+        .from(MIGRATION_CASE_DOCUMENT_BUCKET)
+        .download(proposalRow.document_storage_path);
+      if (download.error || !download.data) {
+        throw new Error("The stored assessment could not be read.");
+      }
+      const bytes = Buffer.from(await download.data.arrayBuffer());
+      const filename = proposalRow.document_original_name
+        || `foundation-1-assessment-${caseRow.public_reference}.pdf`;
+      return new NextResponse(bytes, {
+        status: 200,
+        headers: {
+          "Content-Type": proposalRow.document_content_type || "application/pdf",
+          "Content-Disposition": `attachment; filename="${filename.replace(/"/g, "")}"`,
+          "Cache-Control": "private, no-store",
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
+    }
+
+    const proposal = proposalRow.proposal_snapshot as unknown as F1Proposal;
     if (!proposal || typeof proposal.businessName !== "string" || !proposal.ufmsOption) {
       throw new Error("The stored proposal snapshot is invalid.");
     }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check, FileUp, Send, ShieldCheck, Stamp } from "lucide-react";
 import { OrbitalBusyDot } from "@/components/FoundationMark";
+import { AssessmentPublishControl } from "@/components/admin/AssessmentPublishControl";
 import { PartnerProposalIssueControl } from "@/components/admin/PartnerProposalIssueControl";
 
 type KycDocumentSlot = {
@@ -17,8 +18,12 @@ type KycDocumentSlot = {
 
 export type MigrationCaseOpsData = {
   caseId: string;
+  reference: string;
   stage: string;
   eoiSignedAt: string | null;
+  hasBillPack: boolean;
+  proposalPublishedAt: string | null;
+  proposalSource: string | null;
   readiness: null | {
     status: "confirmed" | "parked";
     confirmedAt: string | null;
@@ -413,11 +418,22 @@ function BillPackReviewControl({ data }: { data: MigrationCaseOpsData }) {
 }
 
 export function MigrationCaseOps({ data }: { data: MigrationCaseOpsData }) {
+  const assessmentDesk = (
+    <AssessmentPublishControl
+      caseId={data.caseId}
+      reference={data.reference}
+      hasBillPack={data.hasBillPack}
+      publishedAt={data.proposalPublishedAt}
+      publishedSource={data.proposalSource}
+    />
+  );
+
   if (!data.eoiSignedAt) {
     return (
       <div className="space-y-3">
         {data.stage === "bill_pack_review" ? <BillPackReviewControl data={data} /> : null}
-        <p className="text-[0.68rem] leading-5 text-white/30">Pre-EOI. Operator actions unlock after the signed EOI.</p>
+        <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3">{assessmentDesk}</div>
+        <p className="text-[0.68rem] leading-5 text-white/30">Bank-facing actions unlock after the signed EOI.</p>
       </div>
     );
   }
@@ -425,6 +441,7 @@ export function MigrationCaseOps({ data }: { data: MigrationCaseOpsData }) {
   const showTermSheet = Boolean(data.kyc.handedOffAt) || data.termSheets.length > 0 || data.stage === "kyc_direct_submitted";
   return (
     <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.025] p-3">
+      {assessmentDesk}
       <SubmissionControl data={data} />
       {data.submission || data.partnerProposal ? (
         <PartnerProposalIssueControl

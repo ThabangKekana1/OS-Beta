@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Check, Copy, Mail, Send } from "lucide-react";
+import { PartnerPortalAccessControl } from "@/components/admin/PartnerPortalAccessControl";
 import {
   ASSOCIATION_OUTREACH_STAGES,
   type AssociationOutreachStage,
@@ -137,6 +138,7 @@ export function AssociationRow({ data }: { data: AssociationRowData }) {
 
       {open ? (
         <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
+          <PartnerPortalAccessControl associationId={data.id} associationName={data.name} />
           <div className="grid gap-2 sm:grid-cols-2">
             <input
               value={contactName}

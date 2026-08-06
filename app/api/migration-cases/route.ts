@@ -14,6 +14,7 @@ import {
   PartnerAttributionError,
   resolvePartnerCaseAttribution,
 } from "@/lib/partner-distribution";
+import { getPartnerBrandByAssociationId } from "@/lib/partner-branding";
 
 export const runtime = "nodejs";
 
@@ -145,6 +146,9 @@ export async function POST(request: NextRequest) {
       contactEmail,
       businessName,
     });
+    const partnerBrand = resolvedAttribution?.associationId
+      ? await getPartnerBrandByAssociationId(resolvedAttribution.associationId)
+      : null;
     const result = await createMigrationCase({
       businessName,
       contactName,
@@ -162,6 +166,7 @@ export async function POST(request: NextRequest) {
       sourceCampaign,
       referrer,
       partnerReferralId: resolvedAttribution?.referralId ?? null,
+      partnerBrand,
       termsAcceptedAt: new Date().toISOString(),
     });
     const websiteOrigin = (process.env.NEXT_PUBLIC_WEBSITE_ORIGIN || "https://foundation-1.co.za")
@@ -171,7 +176,7 @@ export async function POST(request: NextRequest) {
 
     void sendEmail({
       to: contactEmail,
-      replyTo: "support@foundation-1.co.za",
+      replyTo: "support@1os.foundation-1.co.za",
       subject: `${result.caseRow.public_reference}: your secure migration case`,
       text: [
         `Hi ${contactName},`,
@@ -187,7 +192,7 @@ export async function POST(request: NextRequest) {
         "Keep this link private. It gives access to your migration case.",
         "",
         "Foundation-1 (Pty) Ltd",
-        "support@foundation-1.co.za",
+        "support@1os.foundation-1.co.za",
       ].join("\n"),
     }).catch(() => undefined);
 

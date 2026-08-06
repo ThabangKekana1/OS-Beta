@@ -72,12 +72,12 @@ export default async function DealRoomPage({
             Email Foundation-1
           </a>
           <a
-            href="https://wa.me/27690368243?text=Hi%20Foundation-1%2C%20my%20deal%20room%20link%20is%20not%20working."
+            href="https://wa.me/27698117112?text=Hi%20Foundation-1%2C%20my%20deal%20room%20link%20is%20not%20working."
             target="_blank"
             rel="noopener noreferrer"
             className="rounded-full border border-white/25 px-5 py-2 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-white/80 hover:border-white/50 hover:text-white"
           >
-            WhatsApp +27 69 036 8243
+            WhatsApp 069 811 7112
           </a>
         </div>
       </main>

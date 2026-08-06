@@ -111,5 +111,7 @@ test("the public site carries individual and campaign attribution through its pr
   assert.match(builder, /partnerInviteToken: attribution\.partnerInviteToken/);
   assert.match(builder, /partnerCampaignCode: attribution\.partnerCampaignCode/);
   assert.match(proxyRoute, /\.\.\.body/);
-  assert.match(campaignRoute, /redirect\(`\/pricing\?p=/);
+  // Published campaign links land on the co-branded member entry, which itself
+  // falls back to /pricing when the partner has no brand enabled.
+  assert.match(campaignRoute, /redirect\(`\/estimate\/a\//);
 });

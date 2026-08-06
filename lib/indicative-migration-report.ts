@@ -379,7 +379,7 @@ export function buildIndicativeMigrationReport(
       escalation: ENGINE_CONSTANTS.ufmsEscalation,
       available: true,
       conditional: false,
-      note: "Funded charge escalates 6% while the utility path escalates faster — the gap compounds every year.",
+      note: "Funded charge escalates 6% while the utility path escalates faster. The gap compounds every year.",
     },
     {
       id: "awaken",

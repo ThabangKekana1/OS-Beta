@@ -1,5 +1,6 @@
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email";
+import { FOUNDATION_SUPPORT } from "@/lib/foundation-addresses";
 import { issueCaseEmailLinkToken } from "@/lib/case-email-links";
 import type { MigrationCaseRow } from "@/lib/migration-case-store";
 
@@ -8,7 +9,7 @@ import type { MigrationCaseRow } from "@/lib/migration-case-store";
  *
  * The migration pipeline moves through thirteen stages. Before this module
  * existed only three of them spoke to the client, so the most valuable moment
- * in the journey — a completed bill-audited proposal — produced silence.
+ * in the journey, a completed bill-audited proposal, produced silence.
  *
  * Every message is written once to `migration_case_lifecycle_messages` keyed by
  * (case_id, message_key). That makes delivery exactly-once and lets the daily
@@ -22,6 +23,7 @@ const SIGN_OFF_NAME = "Foundation-1 (Pty) Ltd";
 
 export type LifecycleMessageKey =
   | "bill_pack_received"
+  | "bill_pack_in_review"
   | "proposal_ready"
   | "proposal_gap"
   | "bill_pack_needs_attention"
@@ -63,7 +65,7 @@ export function websiteOrigin() {
  * that carries the sending reputation.
  */
 export function lifecycleReplyTo() {
-  return process.env.LIFECYCLE_REPLY_TO?.trim() || "karman@1os.foundation-1.co.za";
+  return process.env.LIFECYCLE_REPLY_TO?.trim() || FOUNDATION_SUPPORT;
 }
 
 function supportEscape() {
@@ -103,9 +105,27 @@ function template(
           "",
           "Every billing period is read individually: supplier, tariff, billing dates, consumption, fixed charges, VAT and any rebill or correction. We do not estimate what a bill already states.",
           "",
-          "This usually completes within minutes. We will email you the moment the bill-audited proposal is finished — you do not need to keep the page open.",
+          "This usually completes within minutes. We will email you the moment the bill-audited proposal is finished. You do not need to keep the page open.",
           "",
           `Your case: ${portalUrl}`,
+        ],
+      };
+
+    case "bill_pack_in_review":
+      return {
+        subject: `${ref}: your bills are in, we are on it`,
+        body: [
+          `Hi ${first},`,
+          "",
+          `We have received the utility bills you uploaded for ${business}. Thank you. Nothing more is needed from you right now.`,
+          "",
+          "Foundation-1 is completing the audit: supplier, tariff, billing periods, consumption and every charge line are being validated by our team. If anything in the pack needs clarifying, we will contact you directly.",
+          "",
+          "You will get an email here the moment the bill-audited proposal is ready.",
+          "",
+          `Your case: ${portalUrl}`,
+          "",
+          supportEscape(),
         ],
       };
 
@@ -126,7 +146,7 @@ function template(
           "",
           "These figures come from your own bills, not from an area estimate. The proposal shows every assumption, the system sizing, and the limits of what the evidence supports.",
           "",
-          "The next step is the non-binding Expression of Interest. It creates no obligation to transact — it records your interest and releases the full proposal and its underlying workings.",
+          "The next step is the non-binding Expression of Interest. It creates no obligation to transact. It records your interest and releases the full proposal and its underlying workings.",
           "",
           `Review your proposal: ${portalUrl}`,
           "",
@@ -167,7 +187,7 @@ function template(
           ...blockers.map((blocker) => `  •  ${blocker}`),
           blockers.length ? "" : "  •  The pack did not contain six recognisable billing periods.",
           "",
-          "Nothing is lost and nothing is rejected. Add or replace the affected files and submit the pack again — the audit restarts automatically.",
+          "Nothing is lost and nothing is rejected. Add or replace the affected files and submit the pack again. The audit restarts automatically.",
           "",
           `Resubmit here: ${portalUrl}`,
           "",
@@ -178,13 +198,13 @@ function template(
 
     case "kyc_ready":
       return {
-        subject: `${ref}: your pack is funder-ready`,
+        subject: `${ref}: your pack is ready for submission`,
         body: [
           `Hi ${first},`,
           "",
-          `Your readiness confirmation is recorded and the case for ${business} is now queued for funder submission.`,
+          `Your readiness confirmation is recorded and the case for ${business} is now queued for submission.`,
           "",
-          "Foundation-1 submits complete packs in batches. We will email you on the day yours goes across, together with the date by which the funder is expected to respond.",
+          "Foundation-1 submits complete packs in batches. We will email you on the day yours goes across, together with the date by which a response is expected.",
           "",
           "Nothing is required from you right now.",
           "",
@@ -197,15 +217,15 @@ function template(
         ? new Date(context.slaDueAt).toLocaleDateString("en-ZA", { dateStyle: "long" })
         : null;
       return {
-        subject: `${ref}: submitted to the funder`,
+        subject: `${ref}: your pack has been submitted`,
         body: [
           `Hi ${first},`,
           "",
-          `The complete bankable pack for ${business} has been submitted to the funder.`,
+          `The complete bankable pack for ${business} has been submitted.`,
           "",
           due ? `A response is expected by ${due}.` : "We are tracking the response against an agreed service level.",
           "",
-          "We chase this on your behalf. If the funder is late, we escalate — you do not need to follow up.",
+          "We chase this on your behalf. If the response is late, we escalate. You do not need to follow up.",
           "",
           `Your case: ${portalUrl}`,
         ],
@@ -236,7 +256,7 @@ function template(
           "",
           `We have your signed formal proposal for ${business}. Thank you.`,
           "",
-          "The next step is your KYC pack — six documents, uploaded securely in your case as you gather them. You do not need them all at once.",
+          "The next step is your KYC pack: six documents, uploaded securely in your case as you gather them. You do not need them all at once.",
           "",
           `Continue here: ${portalUrl}`,
         ],
@@ -250,7 +270,7 @@ function template(
           "",
           `All six KYC documents for ${business} have been checked and verified.`,
           "",
-          "Your pack is now complete. Foundation-1 releases it to the funder under a recorded handoff, and we will confirm the moment that happens.",
+          "Your pack is now complete. Foundation-1 releases it to the bank under a recorded handoff, and we will confirm the moment that happens.",
           "",
           `Your case: ${portalUrl}`,
         ],
@@ -258,11 +278,11 @@ function template(
 
     case "kyc_handed_off":
       return {
-        subject: `${ref}: your pack is with the funder`,
+        subject: `${ref}: your pack has been handed over`,
         body: [
           `Hi ${first},`,
           "",
-          `Your verified pack for ${business} has been formally handed to ${context.recipientLabel || "the funder"}.`,
+          `Your verified pack for ${business} has been formally handed to ${context.recipientLabel || "the bank"}.`,
           "",
           "A record of exactly which documents were released, and when, is held in your case for your own audit trail.",
           "",
@@ -350,7 +370,7 @@ function template(
           "",
           "Nothing is deleted. Your indicative report and your secure link stay valid, and you can submit the bills whenever the timing is better.",
           "",
-          "If the timing is simply wrong, replying to tell us so is genuinely useful — it stops us contacting you unnecessarily.",
+          "If the timing is simply wrong, replying to tell us so is genuinely useful. It stops us contacting you unnecessarily.",
           "",
           `Your case: ${portalUrl}`,
         ],
@@ -380,7 +400,7 @@ function template(
           "",
           `Your bill-audited proposal for ${business} is complete and has not been opened yet.`,
           "",
-          "The non-binding Expression of Interest releases the full report — every calculation, assumption and limitation behind the numbers. It commits you to nothing.",
+          "The non-binding Expression of Interest releases the full report: every calculation, assumption and limitation behind the numbers. It commits you to nothing.",
           "",
           `Open your proposal: ${portalUrl}`,
           "",
@@ -436,8 +456,8 @@ export async function sendCaseLifecycleMessage(
    * Discriminator for messages that may legitimately recur.
    *
    * Reminders stay exactly-once for the life of the case, so they pass
-   * nothing. A repeatable event — a bill pack failing recognition a second
-   * time, or an operator reopening a pack — passes something that identifies
+ * nothing. A repeatable event, a bill pack failing recognition a second
+ * time, or an operator reopening a pack, passes something that identifies
    * the occurrence, so each distinct event notifies exactly once.
    */
   dedupeSuffix?: string,

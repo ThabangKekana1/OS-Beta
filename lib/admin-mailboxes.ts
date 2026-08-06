@@ -15,13 +15,18 @@ const ADMIN_SENDERS = [
   },
   {
     label: "Sales",
-    email: "sales@foundation-1.co.za",
-    aliases: ["sales@replies.1os.co.za", "sales@1os.co.za"],
+    email: "sales@1os.foundation-1.co.za",
+    aliases: ["sales@foundation-1.co.za", "sales@replies.1os.co.za", "sales@1os.co.za"],
   },
   {
     label: "Support",
-    email: "support@foundation-1.co.za",
-    aliases: ["support@replies.1os.co.za", "support@1os.co.za"],
+    email: "support@1os.foundation-1.co.za",
+    aliases: ["support@foundation-1.co.za", "support@replies.1os.co.za", "support@1os.co.za"],
+  },
+  {
+    label: "Migrations",
+    email: "migrate@1os.foundation-1.co.za",
+    aliases: [],
   },
 ] as const;
 

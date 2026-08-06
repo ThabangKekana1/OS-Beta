@@ -208,7 +208,12 @@ export async function listPartnerRevenuesForSession(
     .eq("association_id", organisationId)
     .neq("status", "void");
 
-  if (error) throw new Error(error.message);
+  // Rewards are optional: a partner must still see their member pipeline on a
+  // deployment where the revenue table has not been applied.
+  if (error) {
+    if (error.code === "42P01" || /partner_revenues/i.test(error.message)) return [];
+    throw new Error(error.message);
+  }
   return (data ?? []).map((row) => ({
     id: row.id as string,
     associationId: row.association_id as string,
