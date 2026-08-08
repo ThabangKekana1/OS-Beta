@@ -295,9 +295,31 @@ export async function runFunderReportPipeline(input: {
     /* learning loop must never break the pipeline */
   }
 
-  if (report.status === "ready") {
+  // FOUNDER RULE (2026-08-08): every report is approved by the operator before
+  // the client sees it. Auto-publish only when FUNDER_REPORT_AUTOPUBLISH=1 is
+  // set explicitly AND the report verified clean; the default is always-hold.
+  const autoPublish = process.env.FUNDER_REPORT_AUTOPUBLISH === "1";
+  if (report.status === "ready" && (autoPublish || input.operatorConfirmed)) {
     await publishFunderReport(caseRow, report, input.triggeredBy);
     return { report, published: true, skipped: sources.skipped };
+  }
+  if (report.status === "ready") {
+    await recordMigrationCaseEvent({
+      caseId: caseRow.id,
+      eventType: "funder_report_hold",
+      actorType: "system",
+      detail: "Funder report verified clean and held for operator approval before release.",
+      metadata: { holdReasons: ["awaiting operator approval"], verified: true },
+    });
+    await createNotification({
+      audience: "admin",
+      kind: "system",
+      title: `${caseRow.public_reference}: funder report ready for your approval`,
+      body: `${caseRow.business_name}: report verified clean; approve to release it to the client.`,
+      link: `/admin/migration-cases`,
+      email: false,
+    }).catch(() => undefined);
+    return { report, published: false, skipped: sources.skipped };
   }
 
   await recordMigrationCaseEvent({
