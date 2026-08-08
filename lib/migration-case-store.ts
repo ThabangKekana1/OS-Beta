@@ -6,9 +6,12 @@ import {
   type TariffFamilyId,
 } from "@/lib/indicative-migration-report";
 import {
+  evaluateKycGate,
   KYC_DOCUMENT_TYPES,
+  kycPlanFromStoredItems,
   type KycDocumentType,
   type KycFixItItem,
+  type KycItemPlanEntry,
   type KycReadinessItem,
   type KycSelfCheck,
 } from "@/lib/migration-case-kyc";
@@ -120,10 +123,12 @@ export type MigrationCaseKycReadinessRow = {
   case_id: string;
   created_at: string;
   updated_at: string;
-  status: "confirmed" | "parked";
+  /** "in_progress" is written by the document gate while items remain open. */
+  status: "confirmed" | "parked" | "in_progress";
   confirmed_by: string;
   attestation_version: string;
-  items: KycReadinessItem[];
+  /** Legacy attestation items or three-state document-gate plan entries. */
+  items: (KycReadinessItem | KycItemPlanEntry)[];
   fix_it_plan: KycFixItItem[];
   reassess_on: string | null;
   confirmed_at: string | null;
@@ -173,6 +178,14 @@ export type MigrationCaseTermSheetRow = {
   source: "funder_direct" | "foundation1";
   issued_at: string;
   deal_value_rands: number;
+  /**
+   * Term-sheet tracker (staged migration 20260816120000). Absent on remote
+   * schemas that have not applied it yet — readers must treat a missing
+   * status as "received".
+   */
+  status?: "received" | "signed" | "declined" | null;
+  received_at?: string | null;
+  status_updated_at?: string | null;
   reference: string | null;
   notes: string | null;
   original_name: string | null;
@@ -627,6 +640,10 @@ export function publicMigrationCaseState(
   const readinessConfirmed = readiness?.status === "confirmed"
     || Boolean(caseRow.kyc_readiness_confirmed_at);
   const pack = kycPackStatus(relations.kycDocuments);
+  const gate = evaluateKycGate(
+    relations.kycDocuments ?? [],
+    kycPlanFromStoredItems(readiness?.items, readiness?.fix_it_plan),
+  );
   const termSheets = relations.termSheets ?? [];
   const submission = relations.submission ?? null;
   const handedOff = Boolean(caseRow.kyc_handed_off_at);
@@ -742,6 +759,21 @@ export function publicMigrationCaseState(
         };
       }),
     },
+    // The document gate: three states per item, Fix-It hints, promised dates.
+    // Partial uploads are always fine; completeness only gates the BANK
+    // handoff, never the client's journey.
+    kycGate: {
+      requiredCount: gate.requiredCount,
+      receivedCount: gate.receivedCount,
+      verifiedCount: gate.verifiedCount,
+      promisedCount: gate.promisedCount,
+      dontHaveCount: gate.dontHaveCount,
+      outstandingCount: gate.outstandingCount,
+      complete: gate.complete,
+      bankReady: gate.bankReady,
+      nextExpectedBy: gate.nextExpectedBy,
+      items: gate.items,
+    },
     submission: submission
       ? {
           submittedAt: submission.submitted_at,
@@ -791,9 +823,10 @@ export function publicMigrationCaseState(
         eoiSigned
         && Boolean(relations.partnerProposal)
         && !relations.partnerProposal?.signed_at,
-      canUploadKycDocuments:
-        Boolean(relations.partnerProposal?.signed_at)
-        && !handedOff,
+      // Founder rule: documents are collected from the moment the EOI is
+      // signed. Any subset is accepted immediately; nothing blocks the client.
+      canUploadKycDocuments: eoiSigned && !handedOff,
+      canPlanKycItems: eoiSigned && !handedOff,
     },
   };
 }

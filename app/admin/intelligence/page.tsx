@@ -6,11 +6,23 @@ import {
   runtimeEnvironment,
 } from "@/lib/intelligence/store";
 import { summarizeIntelligence } from "@/lib/intelligence/improvement-engine";
+import {
+  summarizeEngineCalibration,
+  summarizeReaderCorrections,
+  type MetricStatus,
+} from "@/lib/intelligence/learning-loop";
+import {
+  readEngineCalibrationRows,
+  readFunnelMetrics,
+  readLatestWeeklyBrief,
+  readReaderCorrectionRows,
+} from "@/lib/intelligence/learning-store";
 import type { TelemetryEnvironment } from "@/lib/intelligence/telemetry";
 import {
   InsightDecisionControl,
   LearningCycleControl,
 } from "@/components/admin/IntelligenceControls";
+import { WeeklyBriefControl } from "@/components/admin/WeeklyBriefControl";
 
 export const metadata: Metadata = {
   title: "Product Intelligence | 1OS Admin",
@@ -34,6 +46,13 @@ function tone(value: string) {
   return "border-white/10 bg-white/[0.03]";
 }
 
+const METRIC_STATUS_STYLE: Record<MetricStatus, string> = {
+  green: "bg-lime-300/15 text-lime-100 border-lime-300/30",
+  amber: "bg-amber-300/15 text-amber-100 border-amber-300/30",
+  red: "bg-rose-400/15 text-rose-100 border-rose-400/30",
+  no_data: "bg-white/5 text-white/40 border-white/15",
+};
+
 export default async function AdminIntelligencePage({
   searchParams,
 }: {
@@ -49,6 +68,17 @@ export default async function AdminIntelligencePage({
   const graphSuccessRate = summary.graphRunCount
     ? Math.round((summary.successfulGraphRuns / summary.graphRunCount) * 100)
     : 0;
+
+  // Learning loops (all schema-tolerant: empty until the learning-loop
+  // migration is applied).
+  const [funnel, calibrationRows, correctionRows, weeklyBrief] = await Promise.all([
+    readFunnelMetrics().catch(() => null),
+    readEngineCalibrationRows({ environment }).catch(() => []),
+    readReaderCorrectionRows({ environment }).catch(() => []),
+    readLatestWeeklyBrief({ environment }).catch(() => null),
+  ]);
+  const calibration = summarizeEngineCalibration(calibrationRows);
+  const corrections = summarizeReaderCorrections(correctionRows);
 
   return (
     <div className="mx-auto max-w-[1500px] space-y-6">
@@ -115,6 +145,169 @@ export default async function AdminIntelligencePage({
             </span>
           </div>
         ))}
+      </section>
+
+      {/* Doc 06 §7 — the numbers that run the weekly review. */}
+      <section className="rounded-[1.7rem] border border-white/10 bg-black/30 p-5 md:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-[0.62rem] uppercase tracking-[0.2em] text-white/35">
+            Funnel vs targets · doc 06 §7 · last {funnel?.windowDays ?? 28} days
+          </p>
+        </div>
+        {funnel ? (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-xs">
+              <thead>
+                <tr className="text-[0.56rem] uppercase tracking-[0.14em] text-white/35">
+                  <th className="py-2 pr-4 font-normal">Metric</th>
+                  <th className="py-2 pr-4 font-normal">Value</th>
+                  <th className="py-2 pr-4 font-normal">Target</th>
+                  <th className="py-2 pr-4 font-normal">Alarm</th>
+                  <th className="py-2 font-normal">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {funnel.metrics.map((metric) => (
+                  <tr key={metric.key} className="border-t border-white/5">
+                    <td className="py-2.5 pr-4 text-white/75">{metric.label}</td>
+                    <td className="py-2.5 pr-4 font-medium text-white">{metric.display}</td>
+                    <td className="py-2.5 pr-4 text-white/45">{metric.target}</td>
+                    <td className="py-2.5 pr-4 text-white/45">{metric.alarm}</td>
+                    <td className="py-2.5">
+                      <span
+                        className={`inline-block rounded-full border px-2.5 py-0.5 text-[0.56rem] uppercase tracking-[0.12em] ${METRIC_STATUS_STYLE[metric.status]}`}
+                      >
+                        {metric.status.replace("_", " ")}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mt-4 text-sm leading-6 text-white/35">
+            Funnel metrics need the Supabase admin configuration.
+          </p>
+        )}
+        <div className="mt-6">
+          <p className="text-[0.62rem] uppercase tracking-[0.2em] text-white/35">
+            Where cases are stuck (7+ days in stage)
+          </p>
+          <div className="mt-3 space-y-2">
+            {funnel && funnel.stuckCases.length ? (
+              funnel.stuckCases.map((item) => (
+                <div
+                  key={item.reference}
+                  className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl border border-white/8 bg-white/[0.025] px-4 py-2.5 text-xs"
+                >
+                  <code className="text-white/65">{item.reference}</code>
+                  <span className="truncate text-white/50">
+                    {item.businessName} — {item.blockingItem}
+                  </span>
+                  <span className="whitespace-nowrap text-rose-200/70">
+                    {item.days}d in {item.stage.replace(/_/g, " ")}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm leading-6 text-white/35">
+                No case has sat in a stage for 7+ days.
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Learning loops: engine calibration + reader accuracy. INTERNAL. */}
+      <section className="grid gap-5 xl:grid-cols-2">
+        <div className="rounded-[1.7rem] border border-white/10 bg-black/30 p-5">
+          <p className="text-[0.62rem] uppercase tracking-[0.2em] text-white/35">
+            Engine calibration · clone vs funder paper
+          </p>
+          <div className="mt-4 space-y-2">
+            {calibration.length ? (
+              calibration.map((item) => (
+                <div
+                  key={`${item.source}-${item.field}`}
+                  className={`rounded-xl border px-4 py-3 text-xs ${
+                    item.drift
+                      ? "border-rose-400/25 bg-rose-400/[0.06]"
+                      : "border-white/8 bg-white/[0.025]"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-white/75">
+                      {item.source}.{item.field}
+                    </span>
+                    <span className="text-white/50">
+                      p50 {item.rollingP50DeviationPct ?? "—"}% · {item.sampleCases} proposal(s)
+                    </span>
+                  </div>
+                  {item.drift ? (
+                    <p className="mt-2 leading-5 text-rose-100/80">
+                      Drift — suggest {item.constantName} ≈ {item.suggestedConstant} (currently{" "}
+                      {item.currentConstant}). Human-reviewed change only.
+                    </p>
+                  ) : null}
+                </div>
+              ))
+            ) : (
+              <p className="text-sm leading-6 text-white/35">
+                No funder-report cross-checks in the ledger yet. Each report run
+                records their stated numbers vs our prediction.
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="rounded-[1.7rem] border border-white/10 bg-black/30 p-5">
+          <p className="text-[0.62rem] uppercase tracking-[0.2em] text-white/35">
+            Reader accuracy · operator corrections
+          </p>
+          <div className="mt-4 space-y-2">
+            {corrections.byField.length ? (
+              corrections.byField.slice(0, 8).map((field) => (
+                <div
+                  key={`${field.source}-${field.field}`}
+                  className="grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-xl border border-white/8 bg-white/[0.025] px-4 py-2.5 text-xs"
+                >
+                  <span className="text-white/70">
+                    {field.field}{" "}
+                    <span className="text-white/35">({field.source})</span>
+                  </span>
+                  <span className="text-white/45">{field.corrections} correction(s)</span>
+                  <span className="text-white/45">{field.sharePct ?? 0}%</span>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm leading-6 text-white/35">
+                No operator corrections captured yet — extractions passed clean
+                or the ledger migration is not applied.
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Weekly operating brief — deterministic Monday markdown. */}
+      <section className="rounded-[1.7rem] border border-white/10 bg-black/30 p-5 md:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-[0.62rem] uppercase tracking-[0.2em] text-white/35">
+            Weekly operating brief{" "}
+            {weeklyBrief ? `· week of ${weeklyBrief.week_start}` : "· none stored yet"}
+          </p>
+          <WeeklyBriefControl />
+        </div>
+        {weeklyBrief ? (
+          <pre className="mt-4 max-h-[28rem] overflow-auto whitespace-pre-wrap rounded-xl border border-white/8 bg-black/40 p-4 text-[0.7rem] leading-5 text-white/65">
+            {weeklyBrief.markdown}
+          </pre>
+        ) : (
+          <p className="mt-4 text-sm leading-6 text-white/35">
+            The 03:00 UTC learning-cycle cron generates the brief every Monday.
+            Generate one now, or download a live assembly with the buttons above.
+          </p>
+        )}
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">

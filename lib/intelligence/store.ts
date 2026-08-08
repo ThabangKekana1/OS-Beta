@@ -6,6 +6,10 @@ import {
   buildImprovementInsights,
   IMPROVEMENT_ENGINE_VERSION,
 } from "@/lib/intelligence/improvement-engine";
+import {
+  readEngineCalibrationRows,
+  readReaderCorrectionRows,
+} from "@/lib/intelligence/learning-store";
 import type {
   AcceptedTelemetryEvent,
   TelemetryEnvironment,
@@ -217,11 +221,19 @@ export async function runImprovementLearningCycle(input?: {
   }
 
   await rollupBehaviorMetrics(snapshot.events, environment);
+  // Learning-loop feeds (schema-tolerant: empty until the learning-loop
+  // migration is applied).
+  const [calibrationRows, correctionRows] = await Promise.all([
+    readEngineCalibrationRows({ days: 90, environment }).catch(() => []),
+    readReaderCorrectionRows({ days: 90, environment }).catch(() => []),
+  ]);
   const drafts = buildImprovementInsights({
     events: snapshot.events,
     graphRuns: snapshot.graphRuns,
     environment,
     days,
+    calibrationRows,
+    correctionRows,
   });
   const existingStatus = new Map(
     snapshot.insights.map((item) => [

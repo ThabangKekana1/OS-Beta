@@ -369,19 +369,21 @@ test("KYC custody model: readiness gate, document custody, submission drum and t
   // Legacy zero-custody stage retained for historical rows.
   assert.match(migration, /'kyc_direct_submitted'/);
 
-  // The Bankable-Pack Rule is enforced in software: no partner proposal
-  // without confirmed readiness AND a recorded funder submission.
-  assert.match(issueRoute, /kyc_readiness_confirmed_at/);
+  // The Bankable-Pack Rule, warn-not-block edition: the returned partner
+  // proposal requires a recorded funder submission; KYC completeness is
+  // assessed at submission time with warnings the operator must acknowledge.
   assert.match(issueRoute, /submitted_to_funder_at/);
+  assert.doesNotMatch(issueRoute, /must confirm the six-item KYC readiness checklist/);
   assert.match(submissionRoute, /Bankable-Pack Rule/);
   assert.match(submissionRoute, /sla_due_at/);
 
-  // Custody flow: KYC documents are collected AFTER the signed proposal,
+  // Custody flow: KYC documents are collected from the signed EOI onward
+  // (founder rule 2026-08: partial uploads are fine and never block),
   // extracted as data, and handed off only with an exact recipient manifest.
   assert.match(signedRoute, /signed formal UFMS proposal/);
   assert.match(readinessRoute, /evaluateKycReadiness/);
   assert.match(documentsRoute, /extractKycDocumentData/);
-  assert.match(documentsRoute, /partnerProposal\?\.signed_at/);
+  assert.match(documentsRoute, /eoi_signed_at/);
   assert.match(handoffRoute, /manifest/);
   assert.match(handoffRoute, /recipient/);
 
@@ -484,10 +486,11 @@ test("public state walks the custody pipeline: readiness → submission → prop
     pdf_storage_path: "F1-MC-C1D2E3F4A5B6/eoi/signed.pdf",
   };
 
-  // After EOI: readiness is the next action; KYC uploads stay locked.
+  // After EOI: the document gate opens — partial uploads are accepted
+  // immediately (founder rule, 2026-08 KYC gate).
   const afterEoi = publicMigrationCaseState(baseCase, { billPack: null, proposal, eoi });
   assert.equal(afterEoi.actions.canConfirmKycReadiness, true);
-  assert.equal(afterEoi.actions.canUploadKycDocuments, false);
+  assert.equal(afterEoi.actions.canUploadKycDocuments, true);
   assert.equal(afterEoi.kycPack.requiredCount, 6);
   assert.equal(afterEoi.kycPack.documents.length, 6);
   assert.ok(afterEoi.kycPack.documents.every((slot) => slot.status === "outstanding"));

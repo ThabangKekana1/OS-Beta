@@ -1,3 +1,8 @@
+import {
+  buildLearningLoopInsights,
+  type EngineCalibrationRow,
+  type ReaderCorrectionRow,
+} from "@/lib/intelligence/learning-loop";
 import type {
   BehaviorEventRow,
   GraphRunRow,
@@ -5,7 +10,7 @@ import type {
 } from "@/lib/intelligence/types";
 import type { TelemetryEnvironment } from "@/lib/intelligence/telemetry";
 
-export const IMPROVEMENT_ENGINE_VERSION = "2026-07-23.1";
+export const IMPROVEMENT_ENGINE_VERSION = "2026-08-16.1";
 
 function percent(part: number, total: number) {
   return total > 0 ? Math.round((part / total) * 1000) / 10 : 0;
@@ -44,6 +49,9 @@ export function buildImprovementInsights(input: {
   environment: TelemetryEnvironment;
   periodEnd?: Date;
   days?: number;
+  /** Learning-loop feeds (optional; the engine works without them). */
+  calibrationRows?: EngineCalibrationRow[];
+  correctionRows?: ReaderCorrectionRow[];
 }) {
   const days = Math.max(1, Math.min(90, input.days ?? 30));
   const end = input.periodEnd ?? new Date();
@@ -174,6 +182,17 @@ export function buildImprovementInsights(input: {
       ),
     );
   }
+
+  // Learning-loop rules: engine-calibration drift + reader-correction rate.
+  insights.push(
+    ...buildLearningLoopInsights({
+      calibrationRows: input.calibrationRows ?? [],
+      correctionRows: input.correctionRows ?? [],
+      environment: context.environment,
+      periodStart: context.periodStart,
+      periodEnd: context.periodEnd,
+    }),
+  );
 
   if (input.events.length < 25) {
     insights.push(

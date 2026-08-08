@@ -40,7 +40,8 @@ export type LifecycleMessageKey =
   | "reminder_bill_pack_d14"
   | "reminder_review_d2"
   | "reminder_eoi_d3"
-  | "reminder_eoi_d7";
+  | "reminder_eoi_d7"
+  | "reminder_kyc_promised";
 
 type Template = { subject: string; body: string[] };
 
@@ -53,6 +54,11 @@ export type LifecycleContext = {
   slaDueAt?: string | null;
   recipientLabel?: string | null;
   termSheetPathway?: string | null;
+  /** Chase rail for a promised KYC document. */
+  kycItemLabel?: string | null;
+  kycExpectedBy?: string | null;
+  kycFixIt?: string | null;
+  kycReceivedCount?: number | null;
 };
 
 export function websiteOrigin() {
@@ -423,6 +429,35 @@ function template(
           supportEscape(),
         ],
       };
+
+    case "reminder_kyc_promised": {
+      const label = context.kycItemLabel || "one of your compliance documents";
+      const planned = context.kycExpectedBy
+        ? new Date(`${context.kycExpectedBy}T00:00:00`).toLocaleDateString("en-ZA", { dateStyle: "long" })
+        : null;
+      const inCount = typeof context.kycReceivedCount === "number" ? context.kycReceivedCount : null;
+      return {
+        subject: `${ref}: the ${label.toLowerCase()} you planned for ${planned ?? "this week"}`,
+        body: [
+          `Hi ${first},`,
+          "",
+          planned
+            ? `When you set up the document pack for ${business}, you planned to provide the ${label.toLowerCase()} by ${planned}.`
+            : `When you set up the document pack for ${business}, you planned to provide the ${label.toLowerCase()} around now.`,
+          "",
+          context.kycFixIt ? `If it is proving hard to get: ${context.kycFixIt}` : "",
+          "",
+          inCount !== null
+            ? `${inCount} of 6 documents are already in. Upload this one and the item turns green immediately:`
+            : "Upload it and the item turns green immediately:",
+          `${portalUrl}`,
+          "",
+          "If it is delayed, simply move the date in your case. Nothing stalls while we wait — Foundation-1 only sends a pack to the bank once it is complete.",
+          "",
+          supportEscape(),
+        ].filter((line, index, all) => !(line === "" && all[index - 1] === "")),
+      };
+    }
 
     default:
       return null;

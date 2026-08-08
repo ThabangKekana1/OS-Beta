@@ -11,6 +11,9 @@ type KycDocumentSlot = {
   type: string;
   label: string;
   status: "outstanding" | "received" | "verified" | "rejected";
+  /** Client-declared three-state: uploaded / promised / dont_have / outstanding. */
+  state: "uploaded" | "promised" | "dont_have" | "outstanding";
+  expectedBy: string | null;
   fileName: string | null;
   uploadedAt: string | null;
   reviewNote: string | null;
@@ -25,7 +28,7 @@ export type MigrationCaseOpsData = {
   proposalPublishedAt: string | null;
   proposalSource: string | null;
   readiness: null | {
-    status: "confirmed" | "parked";
+    status: "confirmed" | "parked" | "in_progress";
     confirmedAt: string | null;
     missing: string[];
     reassessOn: string | null;
@@ -55,9 +58,24 @@ export type MigrationCaseOpsData = {
     packCompleteAt: string | null;
     verifiedAt: string | null;
     handedOffAt: string | null;
+    receivedCount: number;
+    verifiedCount: number;
+    requiredCount: number;
+    complete: boolean;
+    bankReady: boolean;
+    nextExpectedBy: string | null;
     documents: KycDocumentSlot[];
   };
-  termSheets: { pathway: string; issuedAt: string; dealValueRands: number; reference: string | null }[];
+  termSheets: {
+    id: string | null;
+    pathway: string;
+    issuedAt: string;
+    dealValueRands: number;
+    reference: string | null;
+    /** Tracker status; null until the staged tracker migration is applied. */
+    status: "received" | "signed" | "declined" | null;
+    receivedAt: string | null;
+  }[];
 };
 
 function date(value?: string | null) {
@@ -110,14 +128,43 @@ function SubmissionControl({ data }: { data: MigrationCaseOpsData }) {
   const [batchReference, setBatchReference] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-
-  const readinessConfirmed = data.readiness?.status === "confirmed";
+  const [warnings, setWarnings] = useState<string[]>([]);
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
     setError("");
     try {
       await action();
+      window.location.reload();
+    } catch (issue) {
+      setError(issue instanceof Error ? issue.message : "The operation failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * The founder's rule: an incomplete KYC pack WARNS, it never blocks.
+   * The first attempt surfaces the warnings; "Submit anyway" resends with an
+   * explicit acknowledgement. Karman decides — the system informs.
+   */
+  async function submit(acknowledgeIncompleteKyc: boolean) {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/admin/migration-cases/${encodeURIComponent(data.caseId)}/submission`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channel, batchReference, acknowledgeIncompleteKyc }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | { ok?: boolean; error?: string; warnNotBlock?: boolean; warnings?: string[] }
+        | null;
+      if (payload?.warnNotBlock && Array.isArray(payload.warnings)) {
+        setWarnings(payload.warnings);
+        return;
+      }
+      if (!response.ok || !payload?.ok) throw new Error(payload?.error ?? "The operation failed.");
       window.location.reload();
     } catch (issue) {
       setError(issue instanceof Error ? issue.message : "The operation failed.");
@@ -148,19 +195,18 @@ function SubmissionControl({ data }: { data: MigrationCaseOpsData }) {
     );
   }
 
-  if (!readinessConfirmed) {
-    return (
-      <p className="text-[0.68rem] leading-5 text-white/30">
-        {data.readiness?.status === "parked"
-          ? `Readiness parked · ${data.readiness.missing.length} missing · reassess ${date(data.readiness.reassessOn) ?? "soon"}`
-          : "Awaiting the client's KYC readiness confirmation."}
-      </p>
-    );
-  }
-
+  const packComplete = data.kyc.complete;
   return (
     <div className="space-y-2">
-      <p className="text-[0.62rem] uppercase tracking-[0.14em] text-lime-200/72">Submission-ready</p>
+      {packComplete ? (
+        <p className="text-[0.62rem] uppercase tracking-[0.14em] text-lime-200/72">
+          Submission-ready · pack {data.kyc.receivedCount}/{data.kyc.requiredCount}
+        </p>
+      ) : (
+        <p className="text-[0.62rem] uppercase tracking-[0.14em] text-amber-200/78">
+          Pack incomplete · {data.kyc.receivedCount}/{data.kyc.requiredCount} in — submitting is your call, not blocked
+        </p>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <select
           value={channel}
@@ -177,10 +223,23 @@ function SubmissionControl({ data }: { data: MigrationCaseOpsData }) {
           placeholder="Batch ref"
           className="h-8 w-24 rounded-lg border border-white/14 bg-black px-2 text-[0.66rem] text-white/78 placeholder:text-white/24"
         />
-        <ActionButton busy={busy} onClick={() => void run(() => postJson(`/api/admin/migration-cases/${encodeURIComponent(data.caseId)}/submission`, { channel, batchReference }))}>
+        <ActionButton busy={busy} onClick={() => void submit(false)}>
           <Send className="size-3.5" /> Record submission
         </ActionButton>
       </div>
+      {warnings.length ? (
+        <div className="space-y-1.5 rounded-lg border border-amber-300/25 bg-amber-300/[0.06] p-2.5">
+          {warnings.map((warning) => (
+            <p key={warning} className="text-[0.66rem] leading-5 text-amber-100/85">{warning}</p>
+          ))}
+          <div className="flex flex-wrap gap-2 pt-1">
+            <ActionButton busy={busy} tone="outline" onClick={() => void submit(true)}>
+              <Send className="size-3.5" /> Submit anyway — I accept the incomplete pack
+            </ActionButton>
+            <ActionButton tone="outline" onClick={() => setWarnings([])}>Hold back</ActionButton>
+          </div>
+        </div>
+      ) : null}
       {error ? <p className="text-[0.66rem] text-rose-200" role="alert">{error}</p> : null}
     </div>
   );
@@ -224,25 +283,49 @@ function KycReviewControl({ data }: { data: MigrationCaseOpsData }) {
     }
   }
 
-  const received = data.kyc.documents.filter((slot) => slot.status !== "outstanding");
-  if (!received.length) {
-    return <p className="text-[0.68rem] leading-5 text-white/30">Awaiting KYC documents from the client.</p>;
-  }
-
+  // The completeness card: n/6 with a single unmistakable flag. The
+  // "bank-ready" badge appears only at 6/6 VERIFIED — custody alone is not
+  // bank-ready.
   return (
     <div className="space-y-2">
-      <p className="flex items-center gap-2 text-[0.66rem] font-medium uppercase tracking-[0.14em] text-white/70">
-        <ShieldCheck className="size-3.5" /> KYC custody · {received.filter((slot) => slot.status === "verified").length}/6 verified
-      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="flex items-center gap-2 text-[0.66rem] font-medium uppercase tracking-[0.14em] text-white/70">
+          <ShieldCheck className="size-3.5" /> KYC pack · {data.kyc.receivedCount}/{data.kyc.requiredCount} in · {data.kyc.verifiedCount}/{data.kyc.requiredCount} verified
+        </p>
+        <span className={`rounded-md border px-2 py-0.5 text-[0.56rem] font-semibold uppercase tracking-[0.14em] ${
+          data.kyc.complete
+            ? "border-lime-300/40 bg-lime-300/12 text-lime-200"
+            : "border-amber-300/40 bg-amber-300/10 text-amber-200"
+        }`}>{data.kyc.complete ? "Complete" : "Incomplete"}</span>
+        {data.kyc.bankReady ? (
+          <span className="rounded-md border border-emerald-300/45 bg-emerald-300/14 px-2 py-0.5 text-[0.56rem] font-semibold uppercase tracking-[0.14em] text-emerald-200">
+            Bank-ready
+          </span>
+        ) : null}
+      </div>
+      {!data.kyc.complete && data.kyc.nextExpectedBy ? (
+        <p className="text-[0.64rem] text-white/40">Next promised document expected {date(data.kyc.nextExpectedBy)}.</p>
+      ) : null}
       <ul className="space-y-1.5">
         {data.kyc.documents.map((slot) => (
           <li key={slot.type} className="rounded-lg border border-white/8 bg-black/30 px-2.5 py-2">
             <div className="flex items-center justify-between gap-2">
               <span className="min-w-0 truncate text-[0.66rem] text-white/62">{slot.label}</span>
               <span className={`shrink-0 text-[0.58rem] uppercase tracking-[0.12em] ${
-                slot.status === "verified" ? "text-emerald-300" : slot.status === "rejected" ? "text-rose-300" : slot.status === "received" ? "text-amber-200" : "text-white/26"
-              }`}>{slot.status}</span>
+                slot.status === "verified" ? "text-emerald-300" : slot.status === "rejected" ? "text-rose-300" : slot.status === "received" ? "text-amber-200" : slot.state === "promised" ? "text-sky-200" : slot.state === "dont_have" ? "text-rose-200/80" : "text-white/26"
+              }`}>{
+                slot.status !== "outstanding"
+                  ? slot.status
+                  : slot.state === "promised"
+                    ? `promised${slot.expectedBy ? ` · ${slot.expectedBy}` : ""}`
+                    : slot.state === "dont_have"
+                      ? "client doesn't have"
+                      : "outstanding"
+              }</span>
             </div>
+            {slot.uploadedAt ? (
+              <p className="mt-0.5 text-[0.58rem] text-white/28">{slot.fileName ?? "document"} · {date(slot.uploadedAt)}</p>
+            ) : null}
             {slot.status === "received" && slot.id ? (
               rejecting === slot.id ? (
                 <div className="mt-2 space-y-1.5">
@@ -290,9 +373,25 @@ function TermSheetControl({ data }: { data: MigrationCaseOpsData }) {
   const [source, setSource] = useState("funder_direct");
   const [value, setValue] = useState("");
   const [reference, setReference] = useState("");
+  const [receivedAt, setReceivedAt] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [statusBusy, setStatusBusy] = useState("");
   const [error, setError] = useState("");
+
+  /** Tracker: received → signed | declined. Declined leaves the deal book. */
+  async function setSheetStatus(termSheetId: string, status: "received" | "signed" | "declined") {
+    setStatusBusy(termSheetId);
+    setError("");
+    try {
+      await postJson(`/api/admin/migration-cases/${encodeURIComponent(data.caseId)}/term-sheet`, { termSheetId, status }, "PATCH");
+      window.location.reload();
+    } catch (issue) {
+      setError(issue instanceof Error ? issue.message : "Unable to update the term sheet.");
+    } finally {
+      setStatusBusy("");
+    }
+  }
 
   async function record() {
     const dealValue = Number(value.replace(/[^\d.]/g, ""));
@@ -308,6 +407,7 @@ function TermSheetControl({ data }: { data: MigrationCaseOpsData }) {
       form.set("source", source);
       form.set("dealValueRands", String(dealValue));
       if (reference) form.set("reference", reference);
+      if (receivedAt) form.set("receivedAt", receivedAt);
       if (file) form.set("file", file, file.name);
       const response = await fetch(`/api/admin/migration-cases/${encodeURIComponent(data.caseId)}/term-sheet`, {
         method: "POST",
@@ -327,14 +427,26 @@ function TermSheetControl({ data }: { data: MigrationCaseOpsData }) {
     <div className="space-y-2">
       {data.termSheets.length ? (
         <ul className="space-y-1.5">
-          {data.termSheets.map((sheet) => (
-            <li key={`${sheet.pathway}:${sheet.issuedAt}`} className="rounded-lg border border-lime-300/18 bg-lime-300/[0.05] px-2.5 py-2">
-              <p className="text-[0.66rem] font-medium uppercase tracking-[0.12em] text-lime-200">
-                {sheet.pathway} · {money(sheet.dealValueRands)}
-              </p>
-              <p className="mt-0.5 text-[0.62rem] text-white/38">{date(sheet.issuedAt)}{sheet.reference ? ` · ${sheet.reference}` : ""}</p>
-            </li>
-          ))}
+          {data.termSheets.map((sheet) => {
+            const status = sheet.status ?? "received";
+            return (
+              <li key={`${sheet.pathway}:${sheet.issuedAt}`} className={`rounded-lg border px-2.5 py-2 ${status === "declined" ? "border-rose-300/18 bg-rose-300/[0.04]" : "border-lime-300/18 bg-lime-300/[0.05]"}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <p className={`text-[0.66rem] font-medium uppercase tracking-[0.12em] ${status === "declined" ? "text-rose-200/80" : "text-lime-200"}`}>
+                    {sheet.pathway} · {money(sheet.dealValueRands)}
+                  </p>
+                  <span className={`shrink-0 text-[0.56rem] uppercase tracking-[0.14em] ${status === "signed" ? "text-emerald-300" : status === "declined" ? "text-rose-300" : "text-amber-200/80"}`}>{status}</span>
+                </div>
+                <p className="mt-0.5 text-[0.62rem] text-white/38">{date(sheet.receivedAt ?? sheet.issuedAt)}{sheet.reference ? ` · ${sheet.reference}` : ""}</p>
+                {sheet.id && status === "received" ? (
+                  <div className="mt-1.5 flex gap-2">
+                    <ActionButton busy={statusBusy === sheet.id} onClick={() => void setSheetStatus(sheet.id!, "signed")}><Check className="size-3" /> Signed</ActionButton>
+                    <ActionButton busy={statusBusy === sheet.id} tone="outline" onClick={() => void setSheetStatus(sheet.id!, "declined")}>Declined</ActionButton>
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       ) : null}
       <details className="rounded-lg border border-white/10 bg-white/[0.02] p-2.5">
@@ -355,6 +467,10 @@ function TermSheetControl({ data }: { data: MigrationCaseOpsData }) {
           </div>
           <input value={value} onChange={(event) => setValue(event.target.value)} placeholder="Deal value (R)" inputMode="decimal" className="h-8 w-full rounded-lg border border-white/14 bg-black px-2 text-[0.66rem] text-white/78 placeholder:text-white/24" />
           <input value={reference} onChange={(event) => setReference(event.target.value)} placeholder="Reference (optional)" className="h-8 w-full rounded-lg border border-white/14 bg-black px-2 text-[0.66rem] text-white/78 placeholder:text-white/24" />
+          <label className="block text-[0.6rem] text-white/38">
+            <span className="mb-1 block uppercase tracking-[0.12em]">Received date (defaults to today)</span>
+            <input type="date" value={receivedAt} onChange={(event) => setReceivedAt(event.target.value)} className="h-8 w-full rounded-lg border border-white/14 bg-black px-2 text-[0.66rem] text-white/78" />
+          </label>
           <label className="block text-[0.6rem] text-white/38">
             <span className="mb-1 block uppercase tracking-[0.12em]">Term sheet PDF (optional)</span>
             <input type="file" accept=".pdf,application/pdf" onChange={(event) => setFile(event.target.files?.[0] ?? null)} className="block w-full text-[0.64rem] text-white/48 file:mr-2 file:rounded-md file:border-0 file:bg-white file:px-2 file:py-1 file:text-[0.6rem] file:text-black" />
@@ -446,7 +562,9 @@ export function MigrationCaseOps({ data }: { data: MigrationCaseOpsData }) {
       </div>
     );
   }
-  const showKyc = Boolean(data.partnerProposal?.signedAt) || data.kyc.documents.some((slot) => slot.status !== "outstanding");
+  // The completeness card shows from the moment bank-facing actions unlock:
+  // Karman must always see n/6 before deciding to submit externally.
+  const showKyc = true;
   const showTermSheet = Boolean(data.kyc.handedOffAt) || data.termSheets.length > 0 || data.stage === "kyc_direct_submitted";
   return (
     <div className="space-y-3 rounded-xl border border-white/10 bg-white/[0.025] p-3">

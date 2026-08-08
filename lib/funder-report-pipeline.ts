@@ -31,6 +31,11 @@ import {
   type FunderReport,
   type FunderReportCorrections,
 } from "@/lib/funder-report";
+import { deriveFunderReportCorrectionEntries } from "@/lib/intelligence/learning-loop";
+import {
+  persistEngineCalibration,
+  persistReaderCorrections,
+} from "@/lib/intelligence/learning-store";
 import { buildFunderReportPdf } from "@/lib/funder-report-pdf";
 import { publishOperatorProposal } from "@/lib/migration-case-operator-proposal";
 import {
@@ -282,6 +287,14 @@ export async function runFunderReportPipeline(input: {
 
   await persistReport(caseRow, report);
 
+  // LEARNING LOOP: ledger every clone-engine cross-check (their stated
+  // number vs our prediction). Guarded — reporting never breaks on this.
+  try {
+    await persistEngineCalibration({ report });
+  } catch {
+    /* learning loop must never break the pipeline */
+  }
+
   if (report.status === "ready") {
     await publishFunderReport(caseRow, report, input.triggeredBy);
     return { report, published: true, skipped: sources.skipped };
@@ -327,6 +340,22 @@ export async function confirmFunderReport(input: {
   corrections?: FunderReportCorrections | null;
   confirmedBy: string;
 }): Promise<RunFunderReportResult> {
+  // LEARNING LOOP: the previously stored report holds the machine's original
+  // extractions; the operator's corrections against them are labelled
+  // examples. Guarded — capture must never block the confirm.
+  try {
+    const previous = await getStoredFunderReport(input.caseRow);
+    const entries = deriveFunderReportCorrectionEntries(previous, input.corrections);
+    await persistReaderCorrections({
+      caseReference: input.caseRow.public_reference,
+      source: "funder_report",
+      entries,
+      correctedBy: input.confirmedBy,
+      context: { reportVersion: previous?.version ?? null },
+    });
+  } catch {
+    /* learning loop must never break the confirm path */
+  }
   const result = await runFunderReportPipeline({
     caseRow: input.caseRow,
     triggeredBy: input.confirmedBy,

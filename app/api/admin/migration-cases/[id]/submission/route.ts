@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerAuthSession } from "@/lib/auth-server";
 import {
+  assessSubmissionKyc,
+  evaluateKycGate,
+  kycPlanFromStoredItems,
+} from "@/lib/migration-case-kyc";
+import {
   getMigrationCaseRelations,
   recordMigrationCaseEvent,
   updateMigrationCase,
@@ -43,7 +48,13 @@ export async function POST(
     return NextResponse.json({ ok: false, error: "Not authorised." }, { status: 401 });
   }
   const { id } = await params;
-  let payload: { channel?: unknown; batchReference?: unknown; notes?: unknown; slaDays?: unknown };
+  let payload: {
+    channel?: unknown;
+    batchReference?: unknown;
+    notes?: unknown;
+    slaDays?: unknown;
+    acknowledgeIncompleteKyc?: unknown;
+  };
   try {
     payload = await request.json();
   } catch {
@@ -67,12 +78,6 @@ export async function POST(
         { status: 409 },
       );
     }
-    if (!caseRow.kyc_readiness_confirmed_at) {
-      return NextResponse.json(
-        { ok: false, error: "Bankable-Pack Rule: the client must confirm the six-item KYC readiness checklist before submission." },
-        { status: 409 },
-      );
-    }
     if (caseRow.submitted_to_funder_at && caseRow.active_submission_id) {
       return NextResponse.json(
         { ok: false, error: "A funder submission is already recorded for this case." },
@@ -81,6 +86,39 @@ export async function POST(
     }
 
     const relations = await getMigrationCaseRelations(caseRow);
+
+    // The founder's rule in code: an incomplete KYC pack WARNS the operator,
+    // it never blocks the submission. Karman decides; the system informs.
+    // The first attempt against an incomplete pack returns the warnings and
+    // asks for an explicit acknowledgement on the retry.
+    const gate = evaluateKycGate(
+      relations.kycDocuments ?? [],
+      kycPlanFromStoredItems(relations.kycReadiness?.items, relations.kycReadiness?.fix_it_plan),
+    );
+    const kycAssessment = assessSubmissionKyc(gate);
+    const acknowledged = payload.acknowledgeIncompleteKyc === true;
+    if (kycAssessment.warnings.length && !acknowledged) {
+      return NextResponse.json(
+        {
+          ok: false,
+          warnNotBlock: true,
+          requiresAcknowledgement: true,
+          warnings: kycAssessment.warnings,
+          kyc: {
+            receivedCount: gate.receivedCount,
+            verifiedCount: gate.verifiedCount,
+            requiredCount: gate.requiredCount,
+            complete: gate.complete,
+            bankReady: gate.bankReady,
+            missing: gate.missing,
+            nextExpectedBy: gate.nextExpectedBy,
+          },
+          error: kycAssessment.warnings[0],
+        },
+        { status: 409 },
+      );
+    }
+
     const submittedAt = new Date().toISOString();
     const slaDueAt = new Date(Date.now() + slaDays * 24 * 60 * 60 * 1000).toISOString();
     const manifest = {
@@ -90,6 +128,11 @@ export async function POST(
       recognisedBillingPeriods: relations.billPack?.recognised_period_count ?? null,
       coveredDays: relations.billPack?.covered_days ?? null,
       kycReadinessConfirmedAt: caseRow.kyc_readiness_confirmed_at,
+      kycReceivedCount: gate.receivedCount,
+      kycVerifiedCount: gate.verifiedCount,
+      kycComplete: gate.complete,
+      kycMissing: gate.missing,
+      kycIncompleteAcknowledged: kycAssessment.warnings.length ? acknowledged : false,
       economicallyPositive: relations.proposal?.economically_positive ?? null,
     };
 
@@ -123,7 +166,9 @@ export async function POST(
       caseId: caseRow.id,
       eventType: "submitted_to_funder",
       actorType: "operator",
-      detail: `Bankable pack submitted to the funder channel (${channel.replace(/_/g, " ")}). Response due within ${slaDays} days.`,
+      detail: kycAssessment.warnings.length
+        ? `Pack submitted to the funder channel (${channel.replace(/_/g, " ")}) with the KYC pack at ${gate.receivedCount}/${gate.requiredCount} — the operator acknowledged the incomplete-pack warning. Response due within ${slaDays} days.`
+        : `Bankable pack submitted to the funder channel (${channel.replace(/_/g, " ")}). Response due within ${slaDays} days.`,
       metadata: { submissionId: submission.id, channel, slaDueAt, manifest },
     }).catch(() => undefined);
 
@@ -146,7 +191,7 @@ export async function PATCH(
     return NextResponse.json({ ok: false, error: "Not authorised." }, { status: 401 });
   }
   const { id } = await params;
-  let payload: { action?: unknown; outcome?: unknown; notes?: unknown };
+  let payload: { action?: unknown; outcome?: unknown; notes?: unknown; acknowledgedAt?: unknown };
   try {
     payload = await request.json();
   } catch {
@@ -163,21 +208,27 @@ export async function PATCH(
     const now = new Date().toISOString();
 
     if (action === "acknowledge") {
+      // The operator records the funder's actual acknowledgement date when it
+      // differs from today (an email that arrived while the console was shut).
+      const explicit = cleanText(payload.acknowledgedAt, 30);
+      const acknowledgedAt = explicit && !Number.isNaN(new Date(explicit).getTime())
+        ? new Date(explicit).toISOString()
+        : now;
       const { error } = await client
         .from("migration_case_submissions")
-        .update({ acknowledged_at: now })
+        .update({ acknowledged_at: acknowledgedAt })
         .eq("id", caseRow.active_submission_id)
         .is("acknowledged_at", null);
       if (error) throw new Error(error.message);
-      await updateMigrationCase(caseRow.id, { funder_acknowledged_at: now });
+      await updateMigrationCase(caseRow.id, { funder_acknowledged_at: acknowledgedAt });
       await recordMigrationCaseEvent({
         caseId: caseRow.id,
         eventType: "funder_acknowledged",
         actorType: "operator",
         detail: "The funder acknowledged receipt of the submitted pack.",
-        metadata: { submissionId: caseRow.active_submission_id },
+        metadata: { submissionId: caseRow.active_submission_id, acknowledgedAt },
       }).catch(() => undefined);
-      return NextResponse.json({ ok: true, acknowledgedAt: now });
+      return NextResponse.json({ ok: true, acknowledgedAt });
     }
 
     if (action === "outcome") {

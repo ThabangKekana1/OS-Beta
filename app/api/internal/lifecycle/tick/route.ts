@@ -2,7 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import { createNotification } from "@/lib/notifications";
 import { sendCaseLifecycleMessage, type LifecycleMessageKey } from "@/lib/case-lifecycle";
-import type { MigrationCaseRow } from "@/lib/migration-case-store";
+import {
+  dueKycPromises,
+  evaluateKycGate,
+  kycPlanFromStoredItems,
+} from "@/lib/migration-case-kyc";
+import type {
+  MigrationCaseKycDocumentRow,
+  MigrationCaseKycReadinessRow,
+  MigrationCaseRow,
+} from "@/lib/migration-case-store";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -121,6 +130,63 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  // Chase rail: promised KYC documents whose date has arrived without an
+  // upload. Exactly-once per (case, item, promised date) via the lifecycle
+  // message key; moving the date re-arms the reminder naturally. Degrades to
+  // a no-op when the readiness table (or its plan rows) is absent.
+  let kycChased = 0;
+  try {
+    const { data: readinessData } = await supabase
+      .from("migration_case_kyc_readiness")
+      .select("*")
+      .neq("status", "confirmed")
+      .limit(400);
+    const readinessRows = (readinessData ?? []) as MigrationCaseKycReadinessRow[];
+    if (readinessRows.length) {
+      const caseIds = readinessRows.map((row) => row.case_id);
+      const [{ data: caseData }, { data: documentData }] = await Promise.all([
+        supabase.from("migration_cases").select("*").in("id", caseIds),
+        supabase.from("migration_case_kyc_documents").select("*").in("case_id", caseIds),
+      ]);
+      const casesById = new Map(((caseData ?? []) as MigrationCaseRow[]).map((row) => [row.id, row]));
+      const documentsByCase = new Map<string, MigrationCaseKycDocumentRow[]>();
+      for (const row of (documentData ?? []) as MigrationCaseKycDocumentRow[]) {
+        const list = documentsByCase.get(row.case_id) ?? [];
+        list.push(row);
+        documentsByCase.set(row.case_id, list);
+      }
+      const today = new Date(now).toISOString().slice(0, 10);
+      for (const readiness of readinessRows) {
+        const caseRow = casesById.get(readiness.case_id);
+        if (!caseRow || caseRow.kyc_pack_complete_at || caseRow.kyc_handed_off_at) continue;
+        const gate = evaluateKycGate(
+          documentsByCase.get(readiness.case_id) ?? [],
+          kycPlanFromStoredItems(readiness.items, readiness.fix_it_plan),
+        );
+        for (const item of dueKycPromises(gate, today)) {
+          const result = await sendCaseLifecycleMessage(
+            caseRow,
+            "reminder_kyc_promised",
+            {
+              kycItemLabel: item.label,
+              kycExpectedBy: item.expectedBy,
+              kycFixIt: item.fixIt,
+              kycReceivedCount: gate.receivedCount,
+            },
+            `${item.id}:${item.expectedBy}`,
+          );
+          outcome[`reminder_kyc_promised:${result}`] = (outcome[`reminder_kyc_promised:${result}`] ?? 0) + 1;
+          if (result === "sent") {
+            sent += 1;
+            kycChased += 1;
+          }
+        }
+      }
+    }
+  } catch {
+    // The chase rail must never break the daily tick.
+  }
+
   // Funder service levels that are close to breaching.
   const { data: dueRows } = await supabase
     .from("migration_cases")
@@ -149,6 +215,7 @@ export async function GET(request: NextRequest) {
     sent,
     stalled: stalled.length,
     slaDue: dueRows?.length ?? 0,
+    kycChased,
     outcome,
   });
 }

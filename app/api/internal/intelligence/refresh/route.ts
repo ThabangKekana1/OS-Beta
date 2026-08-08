@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { generateAndStoreWeeklyBrief } from "@/lib/intelligence/learning-store";
 import { secureTelemetryKeyMatches } from "@/lib/intelligence/telemetry";
 import {
   runImprovementLearningCycle,
@@ -25,7 +26,12 @@ export async function GET(request: NextRequest) {
       environment: runtimeEnvironment(),
       days: 30,
     });
-    return NextResponse.json({ ok: true, ...result });
+    // Monday (UTC): generate the deterministic weekly operating brief.
+    // Never throws; the learning cycle result stands regardless.
+    const weeklyBrief = await generateAndStoreWeeklyBrief({
+      environment: runtimeEnvironment(),
+    });
+    return NextResponse.json({ ok: true, ...result, weeklyBrief });
   } catch (error) {
     return NextResponse.json(
       {

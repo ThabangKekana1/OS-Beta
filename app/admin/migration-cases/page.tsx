@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { MigrationCaseOps, type MigrationCaseOpsData } from "@/components/admin/MigrationCaseOps";
-import { KYC_DOCUMENT_TYPES } from "@/lib/migration-case-kyc";
+import { evaluateKycGate, kycPlanFromStoredItems } from "@/lib/migration-case-kyc";
 import { documentSignatureStatusLabel, type DocumentSignatureRow } from "@/lib/document-signing";
 import { listDocumentSignaturesForCases } from "@/lib/document-signing-store";
 import {
@@ -14,6 +14,13 @@ import {
 } from "@/lib/migration-case-store";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import { readFunnelSummary } from "@/lib/funnel-summary";
+import { SubmissionQueue, type SubmissionQueueItem, type SubmissionSlaItem } from "@/components/admin/SubmissionQueue";
+import {
+  buildSlaEscalationDraft,
+  classifySubmissionReadiness,
+  slaClock,
+} from "@/lib/submission-queue";
+import { summariseDealBook } from "@/lib/worklist";
 
 export const metadata: Metadata = {
   title: "Migration Cases | 1OS Admin",
@@ -146,10 +153,92 @@ export default async function AdminMigrationCasesPage() {
   // for the response. The purity rule targets client re-render instability.
   // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
-  const dealBookValue = termSheetRows.reduce((sum, sheet) => sum + Number(sheet.deal_value_rands), 0);
-  const dealBookCount = termSheetRows.length;
+  // Deal book (§7): cumulative R value of term-sheeted deals. Declined sheets
+  // leave the book; rows without the staged tracker status count as received.
+  const dealBook = summariseDealBook(termSheetRows.map((sheet) => ({
+    dealValueRands: Number(sheet.deal_value_rands),
+    status: sheet.status ?? null,
+  })));
+  const dealBookValue = dealBook.totalRands;
+  const dealBookCount = dealBook.count;
   const signedCount = cases.filter((item) => item.eoi_signed_at).length;
   const proposalCount = cases.filter((item) => item.active_proposal_id).length;
+
+  // ---------------------------------------------------------------------
+  // Submission queue (the drum's buffer) + SLA clocks for live submissions.
+  // ---------------------------------------------------------------------
+  const queueItems: SubmissionQueueItem[] = [];
+  const slaItems: SubmissionSlaItem[] = [];
+  for (const item of cases) {
+    const submission = submissionsByCase.get(item.id) ?? null;
+    const signature = signaturesByCase.get(item.id) ?? null;
+    const signedFunderProposalAt = signature?.status === "submitted_by_client"
+      ? (signature.submitted_at ?? signature.signed_at)
+      : null;
+
+    const submitted = Boolean(item.submitted_to_funder_at || submission);
+    if (submitted && submission && submission.outcome === "pending") {
+      const clock = slaClock({
+        submittedAt: submission.submitted_at,
+        slaDays: submission.sla_days,
+        acknowledgedAt: submission.acknowledged_at,
+        now,
+      });
+      const draftInput = {
+        reference: item.public_reference,
+        businessName: item.business_name,
+        submittedAt: submission.submitted_at,
+        slaDueAt: submission.sla_due_at,
+        batchReference: submission.batch_reference,
+        channel: submission.channel,
+        dayNumber: clock.dayNumber,
+      };
+      slaItems.push({
+        caseId: item.id,
+        reference: item.public_reference,
+        businessName: item.business_name,
+        submittedAt: submission.submitted_at,
+        slaDays: submission.sla_days,
+        slaDueAt: submission.sla_due_at,
+        acknowledgedAt: submission.acknowledged_at,
+        batchReference: submission.batch_reference,
+        channel: submission.channel,
+        clock,
+        day5Draft: clock.escalationDue ? buildSlaEscalationDraft("day5_escalation", draftInput) : null,
+        day8Draft: clock.breachDue ? buildSlaEscalationDraft("day8_breach", draftInput) : null,
+      });
+    }
+    // Pre-submission cases sit on a queue shelf; closed/legacy cases do not.
+    if (!submitted
+      && !item.kyc_handed_off_at
+      && !item.term_sheet_issued_at
+      && item.stage !== "kyc_direct_submitted") {
+      const readiness = readinessByCase.get(item.id) ?? null;
+      const classified = classifySubmissionReadiness({
+        stage: item.stage,
+        eoiSignedAt: item.eoi_signed_at,
+        kycReadinessConfirmedAt: item.kyc_readiness_confirmed_at,
+        readinessParked: readiness?.status === "parked",
+        signedFunderProposalAt,
+        submittedToFunderAt: item.submitted_to_funder_at,
+        hasBillPack: Boolean(item.active_bill_pack_id),
+        hasProposal: Boolean(item.active_proposal_id),
+      });
+      queueItems.push({
+        caseId: item.id,
+        reference: item.public_reference,
+        businessName: item.business_name,
+        siteCity: item.site_city,
+        province: item.province,
+        tier: classified.tier,
+        blockedReason: classified.blockedReason,
+        eoiSignedAt: item.eoi_signed_at,
+        kycReadinessConfirmedAt: item.kyc_readiness_confirmed_at,
+        signedFunderProposalAt,
+      });
+    }
+  }
+  slaItems.sort((a, b) => b.clock.dayNumber - a.clock.dayNumber);
 
   // ---------------------------------------------------------------------
   // The Daily Worklist — constraint-sorted (protect the submission drum).
@@ -192,7 +281,7 @@ export default async function AdminMigrationCasesPage() {
     if (partnerProposal?.signed_at && !pack.complete && !item.kyc_handed_off_at) {
       bucket("chase-kyc").items.push(chip(`${pack.receivedCount}/6 in custody`));
     }
-    if (readiness?.status === "parked" && !item.kyc_readiness_confirmed_at) {
+    if ((readiness?.status === "parked" || readiness?.status === "in_progress") && !item.kyc_readiness_confirmed_at) {
       bucket("parked").items.push(chip(readiness.reassess_on ? `reassess ${readiness.reassess_on}` : "no date"));
     }
     if (item.stage === "bill_pack_review") {
@@ -211,7 +300,7 @@ export default async function AdminMigrationCasesPage() {
             <p className="mt-4 max-w-3xl text-sm leading-6 text-white/48">Foundation-1 verifies the six-item KYC pack in custody before any funder submission, releases it with an exact recipient manifest, and records every term sheet into the deal book.</p>
           </div>
           <div className="grid grid-cols-4 gap-2">
-            {[[String(cases.length), "Cases"], [String(proposalCount), "Proposals"], [String(signedCount), "EOIs"], [dealBookCount ? money(dealBookValue) : "R0", `Deal book · ${dealBookCount}`]].map(([value, label]) => (
+            {[[String(cases.length), "Cases"], [String(proposalCount), "Proposals"], [String(signedCount), "EOIs"], [dealBookCount ? money(dealBookValue) : "R0", `Deal book · ${dealBookCount}${dealBook.signedCount ? ` (${dealBook.signedCount} signed)` : ""}`]].map(([value, label]) => (
               <div key={String(label)} className="min-w-24 rounded-[1rem] border border-white/10 bg-black/25 p-4 text-center"><strong className="block text-xl font-medium text-white md:text-2xl">{value}</strong><span className="mt-1 block text-[0.58rem] uppercase tracking-[0.2em] text-white/34">{label}</span></div>
             ))}
           </div>
@@ -283,6 +372,8 @@ export default async function AdminMigrationCasesPage() {
         </section>
       ) : null}
 
+      <SubmissionQueue queue={queueItems} slaItems={slaItems} />
+
       <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-black/30">
         <div className="hidden grid-cols-[0.8fr_1.05fr_0.7fr_0.7fr_1.2fr_0.55fr] gap-4 border-b border-white/10 px-6 py-4 text-[0.6rem] uppercase tracking-[0.18em] text-white/30 lg:grid">
           <span>Case / stage</span><span>Client / site</span><span>Bill evidence</span><span>Economics</span><span>Operate</span><span>Created</span>
@@ -296,6 +387,10 @@ export default async function AdminMigrationCasesPage() {
             const submission = submissionsByCase.get(item.id) ?? null;
             const documents = kycDocumentsByCase.get(item.id) ?? [];
             const termSheets = termSheetsByCase.get(item.id) ?? [];
+            const gate = evaluateKycGate(
+              documents,
+              kycPlanFromStoredItems(readiness?.items, readiness?.fix_it_plan),
+            );
             const latestByType = kycPackStatus(documents).latest;
             const opsData: MigrationCaseOpsData = {
               caseId: item.id,
@@ -309,7 +404,7 @@ export default async function AdminMigrationCasesPage() {
                 ? {
                     status: readiness.status,
                     confirmedAt: readiness.confirmed_at,
-                    missing: (readiness.items ?? []).filter((entry) => !entry.held).map((entry) => entry.id),
+                    missing: gate.missing,
                     reassessOn: readiness.reassess_on,
                   }
                 : null,
@@ -346,24 +441,35 @@ export default async function AdminMigrationCasesPage() {
                 packCompleteAt: item.kyc_pack_complete_at,
                 verifiedAt: item.kyc_verified_at,
                 handedOffAt: item.kyc_handed_off_at,
-                documents: KYC_DOCUMENT_TYPES.map((definition) => {
-                  const document = latestByType.get(definition.id);
+                receivedCount: gate.receivedCount,
+                verifiedCount: gate.verifiedCount,
+                requiredCount: gate.requiredCount,
+                complete: gate.complete,
+                bankReady: gate.bankReady,
+                nextExpectedBy: gate.nextExpectedBy,
+                documents: gate.items.map((entry) => {
+                  const document = latestByType.get(entry.id) ?? null;
                   return {
                     id: document?.id ?? null,
-                    type: definition.id,
-                    label: definition.label,
+                    type: entry.id,
+                    label: entry.label,
                     status: document ? document.status : "outstanding",
-                    fileName: document?.original_name ?? null,
-                    uploadedAt: document?.created_at ?? null,
+                    state: entry.state,
+                    expectedBy: entry.expectedBy,
+                    fileName: entry.fileName,
+                    uploadedAt: entry.uploadedAt,
                     reviewNote: document?.review_note ?? null,
                   };
                 }),
               },
               termSheets: termSheets.map((sheet) => ({
+                id: sheet.id ?? null,
                 pathway: sheet.pathway,
                 issuedAt: sheet.issued_at,
                 dealValueRands: Number(sheet.deal_value_rands),
                 reference: sheet.reference,
+                status: sheet.status ?? null,
+                receivedAt: sheet.received_at ?? null,
               })),
             };
             const commercialFit = proposal?.preview_snapshot

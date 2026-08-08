@@ -11,6 +11,7 @@ import {
   ClipboardList,
   FileStack,
   Handshake,
+  ListTodo,
   Mail,
   PanelLeftClose,
   PanelLeftOpen,
@@ -29,6 +30,12 @@ function navItemsFor(rootPath: "/admin" | "/sales", showSales: boolean) {
   return [
   ...(rootPath === "/admin"
     ? [
+        {
+          id: "worklist",
+          label: "Daily Worklist",
+          href: "/admin/worklist",
+          icon: ListTodo,
+        },
         {
           id: "migration-cases",
           label: "Migration Cases",

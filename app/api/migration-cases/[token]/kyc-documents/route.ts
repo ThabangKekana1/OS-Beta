@@ -4,6 +4,8 @@ import {
   extractKycDocumentData,
   isKycDocumentType,
   KYC_DOCUMENT_MAX_BYTES,
+  KYC_DOCUMENT_TYPES,
+  KYC_PLAN_VERSION,
   kycDocumentLabel,
 } from "@/lib/migration-case-kyc";
 import {
@@ -102,9 +104,12 @@ export async function POST(
       return NextResponse.json({ ok: false, error: "Migration case not found." }, { status: 404 });
     }
     const relations = await getMigrationCaseRelations(caseRow);
-    if (!relations.partnerProposal?.signed_at) {
+    // Founder rule: documents are accepted from the moment the EOI is signed.
+    // Any subset is fine — partial packs save immediately and never block the
+    // client; completeness only gates the BANK handoff.
+    if (!caseRow.eoi_signed_at) {
       return NextResponse.json(
-        { ok: false, error: "KYC documents are collected after the signed pathway proposal is returned." },
+        { ok: false, error: "KYC documents are collected after the non-binding EOI is signed." },
         { status: 409 },
       );
     }
@@ -183,9 +188,32 @@ export async function POST(
     const pack = kycPackStatus(documents);
     let updatedCase = caseRow;
     if (pack.complete && !caseRow.kyc_pack_complete_at) {
+      const completeAt = new Date().toISOString();
       updatedCase = await updateMigrationCase(caseRow.id, {
-        kyc_pack_complete_at: new Date().toISOString(),
+        kyc_pack_complete_at: completeAt,
+        // A full custody pack proves readiness outright: mark the case
+        // submission-eligible exactly as the S7 attestation would have.
+        ...(caseRow.kyc_readiness_confirmed_at ? {} : { kyc_readiness_confirmed_at: completeAt }),
+        ...(caseRow.stage === "eoi_signed" ? { stage: "kyc_ready" as const } : {}),
       });
+      // Best-effort: settle the readiness record as confirmed so the plan,
+      // worklist and gate all agree the pack is in. Never fails the upload.
+      await client
+        .from("migration_case_kyc_readiness")
+        .upsert(
+          {
+            case_id: caseRow.id,
+            status: "confirmed",
+            confirmed_by: caseRow.contact_name || "Client",
+            attestation_version: KYC_PLAN_VERSION,
+            items: KYC_DOCUMENT_TYPES.map((definition) => ({ id: definition.id, held: true, note: null })),
+            fix_it_plan: [],
+            reassess_on: null,
+            confirmed_at: completeAt,
+          },
+          { onConflict: "case_id" },
+        )
+        .then(() => undefined, () => undefined);
       await recordMigrationCaseEvent({
         caseId: caseRow.id,
         eventType: "kyc_pack_complete",

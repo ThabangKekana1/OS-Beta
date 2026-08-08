@@ -59,12 +59,11 @@ export async function POST(
         { status: 409 },
       );
     }
-    if (!caseRow.kyc_readiness_confirmed_at) {
-      return NextResponse.json(
-        { ok: false, error: "Bankable-Pack Rule: the client must confirm the six-item KYC readiness checklist before the funder round." },
-        { status: 409 },
-      );
-    }
+    // The recorded funder submission is the gate here. Readiness/completeness
+    // was assessed at submission time (warn-not-block: an incomplete pack
+    // warns the operator and requires an explicit acknowledgement, it never
+    // blocks — Karman decides, the system informs). kyc_readiness_confirmed_at
+    // therefore no longer hard-blocks the returned proposal.
     if (!caseRow.submitted_to_funder_at) {
       return NextResponse.json(
         { ok: false, error: "Bankable-Pack Rule: record the funder submission before issuing the returned pathway proposal." },

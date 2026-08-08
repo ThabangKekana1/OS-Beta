@@ -97,12 +97,12 @@ export type KycReadinessEvaluation = {
 
 /** The standing guidance shown for a missing item in the Fix-It plan. */
 export const KYC_FIX_IT_GUIDANCE: Record<KycDocumentType, string> = {
-  company_registration: "Request the CIPC registration documents (CoR 14.3 / CM1) from your accountant or download them from CIPC e-Services.",
-  director_fica: "Collect a certified ID copy and a proof of residence not older than three months for every director.",
-  audited_financials: "Request the latest signed audited financial statements from your auditor; reviewed statements may be discussed with Foundation-1 if an audit is not required.",
-  management_accounts: "Ask your bookkeeper or accountant for year-to-date management accounts (income statement and balance sheet).",
-  bank_statements: "Download the last six months of business account statements from internet banking as PDFs.",
-  tax_clearance: "Request a Tax Compliance Status PIN letter on SARS eFiling (Tax Status → Tax Compliance Status).",
+  company_registration: "Your accountant holds these, or download the CIPC disclosure certificate (CoR 14.3 / CM1) yourself from CIPC e-Services — it takes minutes.",
+  director_fica: "Each director needs a certified ID copy (any SAPS station or bank branch certifies free of charge) plus a proof of residence under three months old — a municipal bill or bank statement works.",
+  audited_financials: "Your auditor issues these — ask for the latest signed set. If your entity is not audited, ask your accountant for the independently reviewed or compiled statements and tell us.",
+  management_accounts: "Your accountant or bookkeeper can produce year-to-date management accounts (income statement and balance sheet) from your books — usually within a day or two of asking.",
+  bank_statements: "Log in to business internet banking and download the last six months as bank-stamped PDFs — every major SA bank has a statements tab; no branch visit needed.",
+  tax_clearance: "On SARS eFiling: log in → Tax Status → Tax Compliance Status → request a PIN letter. Issued immediately if you are compliant; your accountant or tax practitioner can also pull it.",
 };
 
 function cleanNote(value: unknown) {
@@ -190,6 +190,280 @@ export function sanitiseKycSelfCheck(raw: unknown): KycSelfCheck | null {
     any = true;
   }
   return any ? result : null;
+}
+
+
+// ---------------------------------------------------------------------------
+// Document gate (S7/S8) — three states per item, partial saves always accepted
+// ---------------------------------------------------------------------------
+//
+// Founder rule (2026-08): clients upload whatever they have; PARTIAL UPLOADS
+// ARE FINE and the client's journey is never blocked. For anything missing
+// the client can record "I will provide it by [date]" or "I don't have this",
+// each with a practical Fix-It hint. Foundation-1 only forwards a pack to the
+// bank once it is complete — the system WARNS the operator, it never decides.
+
+export const KYC_PLAN_VERSION = "2026-08-16.1";
+
+export type KycItemPlanStatus = "promised" | "dont_have";
+
+/** A client-declared plan entry for one not-yet-uploaded document. */
+export type KycItemPlanEntry = {
+  id: KycDocumentType;
+  status: KycItemPlanStatus;
+  /** YYYY-MM-DD; meaningful for "promised" items, optional otherwise. */
+  expectedBy: string | null;
+  note: string | null;
+};
+
+const PLAN_STATUSES = new Set<string>(["promised", "dont_have"]);
+
+function cleanDate(value: unknown): string | null {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+}
+
+/**
+ * Sanitises a client-submitted item plan. ANY subset of the six items is
+ * accepted — partial saves are the normal case, never an error. Unknown
+ * document types and malformed entries are dropped silently.
+ */
+export function sanitiseKycItemPlan(raw: unknown): KycItemPlanEntry[] {
+  if (!Array.isArray(raw)) return [];
+  const byId = new Map<KycDocumentType, KycItemPlanEntry>();
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const candidate = entry as { id?: unknown; status?: unknown; expectedBy?: unknown; note?: unknown };
+    if (!isKycDocumentType(candidate.id)) continue;
+    if (typeof candidate.status !== "string" || !PLAN_STATUSES.has(candidate.status)) continue;
+    byId.set(candidate.id, {
+      id: candidate.id,
+      status: candidate.status as KycItemPlanStatus,
+      expectedBy: cleanDate(candidate.expectedBy),
+      note: cleanNote(candidate.note) || null,
+    });
+  }
+  return [...byId.values()];
+}
+
+/** Later declarations for the same item replace earlier ones; the rest keep. */
+export function mergeKycItemPlan(
+  existing: KycItemPlanEntry[],
+  updates: KycItemPlanEntry[],
+): KycItemPlanEntry[] {
+  const byId = new Map<KycDocumentType, KycItemPlanEntry>();
+  for (const entry of existing) byId.set(entry.id, entry);
+  for (const entry of updates) byId.set(entry.id, entry);
+  return KYC_DOCUMENT_TYPES
+    .map((definition) => byId.get(definition.id))
+    .filter((entry): entry is KycItemPlanEntry => Boolean(entry));
+}
+
+/**
+ * Reads a plan out of a stored readiness row, tolerating both shapes:
+ * the three-state plan entries written by the document gate and the legacy
+ * attestation items ({ id, held, note }) paired with their Fix-It plan.
+ */
+export function kycPlanFromStoredItems(items: unknown, fixItPlan?: unknown): KycItemPlanEntry[] {
+  const direct = sanitiseKycItemPlan(items);
+  if (direct.length) return direct;
+  if (!Array.isArray(items)) return [];
+  const expectedById = new Map<string, string | null>();
+  if (Array.isArray(fixItPlan)) {
+    for (const entry of fixItPlan) {
+      if (!entry || typeof entry !== "object") continue;
+      const candidate = entry as { id?: unknown; expectedBy?: unknown };
+      if (!isKycDocumentType(candidate.id)) continue;
+      expectedById.set(candidate.id, cleanDate(candidate.expectedBy));
+    }
+  }
+  const plan: KycItemPlanEntry[] = [];
+  for (const entry of items) {
+    if (!entry || typeof entry !== "object") continue;
+    const candidate = entry as { id?: unknown; held?: unknown; note?: unknown };
+    if (!isKycDocumentType(candidate.id) || candidate.held !== false) continue;
+    const expectedBy = expectedById.get(candidate.id) ?? null;
+    plan.push({
+      id: candidate.id,
+      status: expectedBy ? "promised" : "dont_have",
+      expectedBy,
+      note: cleanNote(candidate.note) || null,
+    });
+  }
+  return plan;
+}
+
+/** The minimum shape of a custody document row the gate needs to read. */
+export type KycGateDocumentLike = {
+  document_type: string;
+  status: string;
+  original_name?: string | null;
+  created_at: string;
+  review_note?: string | null;
+};
+
+export type KycGateItemState = "uploaded" | "promised" | "dont_have" | "outstanding";
+
+export type KycGateItem = {
+  id: KycDocumentType;
+  label: string;
+  detail: string;
+  /** The three client states plus "outstanding" (no upload, no declaration). */
+  state: KycGateItemState;
+  documentStatus: "received" | "verified" | "rejected" | null;
+  fileName: string | null;
+  uploadedAt: string | null;
+  reviewNote: string | null;
+  expectedBy: string | null;
+  note: string | null;
+  /** Practical SA-specific hint; null once the document is in custody. */
+  fixIt: string | null;
+};
+
+export type KycGateStatus = {
+  items: KycGateItem[];
+  requiredCount: number;
+  receivedCount: number;
+  verifiedCount: number;
+  promisedCount: number;
+  dontHaveCount: number;
+  outstandingCount: number;
+  /** All six documents in custody (received or verified, none rejected). */
+  complete: boolean;
+  /** All six documents verified by the operator — the only bank-ready state. */
+  bankReady: boolean;
+  missing: KycDocumentType[];
+  /** Earliest promised date among not-yet-uploaded items. */
+  nextExpectedBy: string | null;
+};
+
+/**
+ * The single source of truth for KYC pack state. An upload always wins over a
+ * declaration; a rejected upload reopens the slot (the plan entry, if any,
+ * resurfaces so the chase rails keep working).
+ */
+export function evaluateKycGate(
+  documents: readonly KycGateDocumentLike[] | null | undefined,
+  plan: readonly KycItemPlanEntry[] = [],
+): KycGateStatus {
+  const latest = new Map<string, KycGateDocumentLike>();
+  for (const document of documents ?? []) {
+    if (!isKycDocumentType(document.document_type)) continue;
+    const existing = latest.get(document.document_type);
+    if (!existing || document.created_at > existing.created_at) {
+      latest.set(document.document_type, document);
+    }
+  }
+  const planById = new Map(plan.map((entry) => [entry.id, entry]));
+
+  const items: KycGateItem[] = [];
+  const missing: KycDocumentType[] = [];
+  let received = 0;
+  let verified = 0;
+  let promised = 0;
+  let dontHave = 0;
+  let outstanding = 0;
+  let nextExpectedBy: string | null = null;
+
+  for (const definition of KYC_DOCUMENT_TYPES) {
+    const document = latest.get(definition.id) ?? null;
+    const declared = planById.get(definition.id) ?? null;
+    const inCustody = Boolean(document && document.status !== "rejected");
+    let state: KycGateItemState;
+    if (document && inCustody) {
+      state = "uploaded";
+      received += 1;
+      if (document.status === "verified") verified += 1;
+    } else if (declared) {
+      state = declared.status;
+      if (declared.status === "promised") promised += 1;
+      else dontHave += 1;
+      missing.push(definition.id);
+      if (declared.status === "promised" && declared.expectedBy) {
+        if (!nextExpectedBy || declared.expectedBy < nextExpectedBy) nextExpectedBy = declared.expectedBy;
+      }
+    } else {
+      state = "outstanding";
+      outstanding += 1;
+      missing.push(definition.id);
+    }
+    items.push({
+      id: definition.id,
+      label: definition.label,
+      detail: definition.detail,
+      state,
+      documentStatus: document ? (document.status as "received" | "verified" | "rejected") : null,
+      fileName: document?.original_name ?? null,
+      uploadedAt: document?.created_at ?? null,
+      reviewNote: document?.status === "rejected" ? document.review_note ?? null : null,
+      expectedBy: !inCustody ? declared?.expectedBy ?? null : null,
+      note: !inCustody ? declared?.note ?? null : null,
+      fixIt: inCustody ? null : KYC_FIX_IT_GUIDANCE[definition.id],
+    });
+  }
+
+  return {
+    items,
+    requiredCount: KYC_DOCUMENT_TYPES.length,
+    receivedCount: received,
+    verifiedCount: verified,
+    promisedCount: promised,
+    dontHaveCount: dontHave,
+    outstandingCount: outstanding,
+    complete: received === KYC_DOCUMENT_TYPES.length,
+    bankReady: verified === KYC_DOCUMENT_TYPES.length,
+    missing,
+    nextExpectedBy,
+  };
+}
+
+/**
+ * Promised items whose date has arrived without an upload — the chase rail.
+ * `today` is a YYYY-MM-DD date string (SA business date).
+ */
+export function dueKycPromises(gate: KycGateStatus, today: string) {
+  return gate.items.filter(
+    (item) => item.state === "promised" && item.expectedBy !== null && item.expectedBy <= today,
+  );
+}
+
+export type SubmissionKycAssessment = {
+  complete: boolean;
+  bankReady: boolean;
+  /** The founder's rule in code: an incomplete pack WARNS, it never blocks. */
+  blocks: false;
+  warnings: string[];
+};
+
+/**
+ * What the operator must see before an external submission. Missing items
+ * produce explicit warnings (with promised dates where the client gave them);
+ * nothing here ever prevents the submission — Karman decides, the system
+ * informs.
+ */
+export function assessSubmissionKyc(gate: KycGateStatus): SubmissionKycAssessment {
+  const warnings: string[] = [];
+  if (!gate.complete) {
+    const detail = gate.items
+      .filter((item) => item.state !== "uploaded")
+      .map((item) => {
+        if (item.state === "promised") {
+          return `${item.label} (promised${item.expectedBy ? ` by ${item.expectedBy}` : ""})`;
+        }
+        if (item.state === "dont_have") return `${item.label} (client does not have this)`;
+        return `${item.label} (no upload, no plan)`;
+      });
+    warnings.push(
+      `KYC pack INCOMPLETE: ${gate.receivedCount}/${gate.requiredCount} documents in custody. Outstanding: ${detail.join("; ")}.`,
+    );
+    warnings.push(
+      "Submitting now hands the client to the bank/Green Share before Foundation-1 holds the full pack. You may proceed — this is a warning, not a block.",
+    );
+  } else if (!gate.bankReady) {
+    warnings.push(
+      `KYC pack complete but only ${gate.verifiedCount}/${gate.requiredCount} verified. Verify all six before the pack is bank-ready.`,
+    );
+  }
+  return { complete: gate.complete, bankReady: gate.bankReady, blocks: false, warnings };
 }
 
 // ---------------------------------------------------------------------------
