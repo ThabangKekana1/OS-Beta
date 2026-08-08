@@ -228,3 +228,161 @@ test("legacy partner-template sizing anchors remain reproducible", () => {
   assert.equal(sizeSystem(6_068).pvKwp, 35);
   within(buildCapex(sizeSystem(12_483)).total, 2_085_299, 0.01);
 });
+
+/* ------------------------------------------------------------------ */
+/* ENGINE V3: funder-quote prediction pins                              */
+/* ------------------------------------------------------------------ */
+
+const {
+  predictFunderQuote,
+  predictWheelingQuote,
+  predictCombined,
+  tenYearSeries,
+  FUNDER_CONSTANTS,
+} = engine;
+
+test("predictFunderQuote reproduces all four extracted funder decks to <=0.1%", () => {
+  const decks = [
+    { name: "MVM", monthlyKwh: 52_013, tariffStructure: "flat", pvKwp: 300, bessKwh: 300, capex: 6_166_288, ufms: 98_471 },
+    { name: "Seokas", monthlyKwh: 11_948, tariffStructure: "flat", pvKwp: 75, bessKwh: 100, capex: 2_085_299, ufms: 33_301 },
+    { name: "Ratanga", monthlyKwh: 5_367, tariffStructure: "flat", pvKwp: 35, bessKwh: 50, capex: 955_159, ufms: 15_253 },
+    { name: "Primo", monthlyKwh: 24_372, tariffStructure: "time-of-use", pvKwp: 150, bessKwh: 250, capex: 4_183_577, ufms: 66_809 },
+  ];
+  for (const deck of decks) {
+    const quote = predictFunderQuote({ monthlyKwh: deck.monthlyKwh, tariffStructure: deck.tariffStructure });
+    assert.equal(quote.pvKwp, deck.pvKwp, `${deck.name} pvKwp`);
+    assert.equal(quote.bessKwh, deck.bessKwh, `${deck.name} bessKwh`);
+    within(quote.capex, deck.capex, 0.001);
+    within(quote.ufmsMonthly, deck.ufms, 0.001);
+    assert.ok(quote.capexBand[0] < deck.capex && deck.capex < quote.capexBand[1], `${deck.name} capex band`);
+  }
+});
+
+test("predictFunderQuote sizing snaps up, sizes storage blocks and flags oversize loads", () => {
+  assert.equal(predictFunderQuote({ monthlyKwh: 8_000 }).pvKwp, 50);
+  assert.equal(predictFunderQuote({ monthlyKwh: 8_000 }).bessKwh, 50);
+  assert.equal(predictFunderQuote({ monthlyKwh: 13_500 }).pvKwp, 100);
+  assert.equal(predictFunderQuote({ monthlyKwh: 13_500 }).bessKwh, 100);
+  const oversized = predictFunderQuote({ monthlyKwh: 90_000 });
+  assert.equal(oversized.pvKwp, 300);
+  assert.equal(oversized.outOfStandardRange, true);
+  const tou = predictFunderQuote({ monthlyKwh: 8_000, tariffStructure: "time-of-use" });
+  assert.equal(tou.bessKwh, 150);
+  assert.equal(tou.pcsKw, 50);
+});
+
+test("MVM wheeling eligible share derives from the bill's energy lines", () => {
+  // MVM Feb-2025 bill: energy lines R67,892 of a R113,472 total (59.8%).
+  const prediction = predictWheelingQuote({
+    monthlySpend: 113_472,
+    energyMonthlySpend: 67_892,
+    monthlyKwh: 52_013,
+    distributor: "eskom-direct",
+  });
+  assert.ok(
+    Math.abs(prediction.energyShareOfBill - 0.598) <= 0.01,
+    `energy share ${prediction.energyShareOfBill} outside 0.598 +/- 0.01`,
+  );
+  assert.equal(prediction.eligible, true);
+  assert.equal(prediction.firmRate, 1.85);
+  assert.deepEqual(prediction.rateBand, [0.98, 1.85]);
+});
+
+test("wheeling eligibility is gated by the distributor's use-of-system status", () => {
+  for (const distributor of ["eskom-direct", "city-power", "matjhabeng-lm"]) {
+    assert.equal(predictWheelingQuote({ monthlySpend: 100_000, monthlyKwh: 35_000, distributor }).eligible, true);
+  }
+  const blocked = predictWheelingQuote({ monthlySpend: 100_000, monthlyKwh: 35_000, distributor: "other-municipal" });
+  assert.equal(blocked.eligible, false);
+  assert.equal(blocked.wheeledMonthlyKwh, 0);
+  assert.equal(blocked.monthlySaving, 0);
+});
+
+test("predictCombined never double-counts kWh between UFMS and wheeling", () => {
+  const combined = predictCombined({
+    monthlySpend: 75_383,
+    monthlyKwh: 24_372,
+    tariffStructure: "time-of-use",
+    distributor: "eskom-direct",
+    residualBillShare: 0.1,
+  });
+  within(combined.onsiteServedKwh + combined.residualGridKwh, 24_372, 1e-6);
+  assert.equal(combined.eskomResidualKwh, 0);
+  assert.ok(combined.wheeledResidualKwh < 24_372);
+  assert.ok(combined.wheeledResidualKwh <= combined.residualGridKwh + 1e-9);
+  assert.equal(
+    combined.monthlyCost,
+    engine.round2(
+      combined.funderQuote.ufmsMonthly +
+        combined.wheeledResidualCost +
+        combined.eskomResidualCost +
+        combined.retainedNonEnergyMonthly,
+    ),
+  );
+  const municipal = predictCombined({
+    monthlySpend: 75_383,
+    monthlyKwh: 24_372,
+    distributor: "other-municipal",
+  });
+  assert.equal(municipal.wheeledResidualKwh, 0);
+  assert.ok(municipal.eskomResidualKwh > 0);
+});
+
+test("Primo ten-year series tracks the funder deck arrays (informational pin)", () => {
+  // Deck arrays from presentations/src/decks/clients/primo-poultry-121.ts.
+  const deck = {
+    eskom: [904_593, 1_888_247, 2_957_872, 4_120_983, 5_385_749, 6_761_056, 8_256_565, 9_882_781, 11_651_129, 13_574_030],
+    wheeling: [932_918, 1_915_940, 2_949_927, 4_035_398, 5_172_447, 6_360_650, 7_598_954, 8_885_545, 10_217_705, 11_591_634],
+    ufms: [828_795, 1_708_060, 2_640_888, 3_630_563, 4_680_573, 5_794_621, 6_976_641, 8_230_809, 9_561_561, 10_973_610],
+    combined: [857_120, 1_735_753, 2_632_943, 3_544_978, 4_467_271, 5_394_215, 6_319_030, 7_233_573, 8_128_137, 8_991_214],
+  };
+  const series = tenYearSeries({
+    monthlySpend: 75_383,
+    monthlyKwh: 24_372,
+    tariffStructure: "time-of-use",
+    distributor: "eskom-direct",
+    billEnergyShare: 0.6,
+    residualBillShare: 0.03, // the funder's own Primo residual assumption
+  });
+  const maxDeviation = (generated, reference) =>
+    Math.max(...generated.map((value, index) => Math.abs(value / reference[index] - 1)));
+  // Eskom baseline and UFMS path reproduce the deck almost exactly.
+  assert.ok(maxDeviation(series.eskom, deck.eskom) <= 0.001, `eskom off ${maxDeviation(series.eskom, deck.eskom)}`);
+  assert.ok(maxDeviation(series.ufms, deck.ufms) <= 0.001, `ufms off ${maxDeviation(series.ufms, deck.ufms)}`);
+  // Wheeling: deck used a 1.86 rate and internally inconsistent escalation
+  // (stated 7%, cumulative arithmetic implies ~4.75%); the 6% mid-case
+  // generator stays within +/-10% every year.
+  assert.ok(
+    maxDeviation(series.wheeling, deck.wheeling) <= 0.1,
+    `wheeling off ${maxDeviation(series.wheeling, deck.wheeling)}`,
+  );
+  // Combined: the deck's combined series is literally ufms + wheeling - eskom
+  // (an additive, double-counting construction) — verified below. A
+  // non-double-counting waterfall cannot reproduce it beyond ~+/-22%; the pin
+  // records the achieved deviation.
+  for (let index = 0; index < 10; index += 1) {
+    const additive = deck.ufms[index] + deck.wheeling[index] - deck.eskom[index];
+    assert.ok(
+      Math.abs(additive - deck.combined[index]) <= 2,
+      `deck combined identity broken at year ${index + 1}`,
+    );
+  }
+  assert.ok(
+    maxDeviation(series.combined, deck.combined) <= 0.22,
+    `combined off ${maxDeviation(series.combined, deck.combined)}`,
+  );
+});
+
+test("ten-year series defaults use the verified funder decomposition", () => {
+  const series = tenYearSeries({ monthlySpend: 100_000, monthlyKwh: 35_000 });
+  assert.equal(series.assumptions.eskomEscalation, 0.0874);
+  assert.equal(series.assumptions.ufmsEscalation, 0.06);
+  // Funder decks escalate the utility baseline by a 10-year factor of x15.0057.
+  within(series.eskom[9] / series.eskom[0], 15.0057, 0.001);
+  assert.equal(series.eskom.length, 10);
+  for (const key of ["eskom", "ufms", "wheeling", "combined"]) {
+    for (let index = 1; index < 10; index += 1) {
+      assert.ok(series[key][index] > series[key][index - 1], `${key} cumulative must increase`);
+    }
+  }
+});

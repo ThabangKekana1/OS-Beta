@@ -620,7 +620,9 @@ test("public pricing stays a two-input savings teaser and keeps infrastructure b
   );
 
   assert.match(publicCalculator, /Spend \+ area/);
-  assert.match(publicCalculator, /const GENERATION_DELAY_MS = 5_000/);
+  // Funnel audit F4: the generation beat is theatre, not computation — capped
+  // at 1.5s so the highest-traffic screen never idles on a fake wait.
+  assert.match(publicCalculator, /const GENERATION_DELAY_MS = 1_500/);
   assert.match(publicCalculator, /Eden, Awaken, Nightshade and a blended approach/);
   assert.match(publicCalculator, /EOI before full proposal/);
   assert.match(publicCalculator, /KYC readiness before bank handoff/);

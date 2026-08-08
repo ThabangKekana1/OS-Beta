@@ -1193,3 +1193,498 @@ function buildExplainer(
   ];
   return lines;
 }
+
+/* ------------------------------------------------------------------ */
+/* FUNDER-QUOTE PREDICTION (ENGINE V3)                                  */
+/*                                                                      */
+/* The client-facing estimate must match what the funders will most     */
+/* likely produce. The functions below predict the funder's own paper   */
+/* (Nedbank/Eqstra UFMS decks and the Green Share wheeling rate card)   */
+/* rather than Foundation-1's honest engineering view, which remains    */
+/* runPricingEngine(). Calibrated against four extracted decks (MVM,    */
+/* Seokas, Ratanga, Primo) to <=0.1%. CONFIDENTIAL: internals must      */
+/* never appear in client- or partner-facing output.                    */
+/* ------------------------------------------------------------------ */
+
+export const FUNDER_CONSTANTS = {
+  /** Template monthly yield used by the funder for sizing (location-blind). */
+  templateMonthlyYieldKwhPerKwp: 173.375,
+  /** Standard PV package sizes observed on funder paper. */
+  pvSizesKwp: [35, 50, 75, 100, 150, 200, 250, 300] as const,
+  /** PowerCube BESS blocks; kWp is rounded UP to the next block. */
+  bessBlocksKwh: [50, 100, 150, 200, 250, 300] as const,
+  /** Extra storage added when the tariff is time-of-use / night load. */
+  touStorageAdderKwh: 100,
+  /** Incremental storage above the 1:1 base block, R/kWh. */
+  storageAdderRandPerKwh: 3_755,
+  /** Monthly UFMS charge = factor x turnkey capex (exact on 4/4 decks). */
+  ufmsMonthlyRateFactor: 0.015969,
+  termMonths: 120,
+  ufmsEscalation: 0.06,
+  assetFinanceRate: 0.1475,
+  /** Capex band half-width around the interpolated P50 (soft-cost wobble). */
+  capexBandPct: 0.03,
+  /** Escalation the funder decks actually apply to the Eskom baseline
+   * (10-yr factor x15.0057 in all three template decks, despite the "12%"
+   * printed in the text). */
+  funderUtilityEscalation: 0.0874,
+  /** Green Share wheeling firm (BESS-backed) tariff, R/kWh. */
+  wheelingFirmRate: 1.85,
+  /** Observed rate card band: PV-only unfirmed floor to firmed ceiling. */
+  wheelingRateBand: [0.98, 1.85] as const,
+  /** Mid-case wheeling escalation ("max 6% CPI" on the MVM deck). */
+  wheelingEscalation: 0.06,
+  wheelingTermYears: 10,
+  /** Energy lines as a share of the total bill (MVM bills: 0.53-0.60). */
+  defaultBillEnergyShare: 0.6,
+  /** Residual grid spend as a share of the bill in the funder's own 10-yr
+   * arithmetic: 13.9% (MVM), 12.0% (Ratanga), 3.0% (Seokas/Primo). */
+  residualBillShareBand: [0.03, 0.14] as const,
+  defaultResidualBillShare: 0.1,
+} as const;
+
+/** Capex R/kWp anchors observed on funder decks; linear interpolation. */
+const FUNDER_CAPEX_ANCHORS: ReadonlyArray<readonly [number, number]> = [
+  [35, 27_290],
+  [75, 27_804],
+  [300, 20_554],
+];
+
+export type WheelingDistributor =
+  | "eskom-direct"
+  | "city-power"
+  | "matjhabeng-lm"
+  | "other-municipal";
+
+export type FunderQuoteInput = {
+  /** 6-12 bill average monthly consumption, kWh. */
+  monthlyKwh: number;
+  tariffStructure?: TariffStructure;
+};
+
+export type FunderQuote = {
+  pvKwp: number;
+  pcsKw: number;
+  bessKwh: number;
+  baselineBessKwh: number;
+  touStorageAdderApplied: boolean;
+  /** Generation the funder will claim: kWp x 173.375 (location-blind). */
+  claimedMonthlyGenerationKwh: number;
+  capex: number;
+  capexBand: [number, number];
+  randPerKwp: number;
+  incrementalStorageCost: number;
+  ufmsMonthly: number;
+  ufmsMonthlyBand: [number, number];
+  ufmsEscalation: number;
+  termMonths: number;
+  assetFinanceMonthly: number;
+  outOfStandardRange: boolean;
+  note: string;
+};
+
+export function funderCapexPerKwp(kwp: number): number {
+  const anchors = FUNDER_CAPEX_ANCHORS;
+  if (kwp <= anchors[0][0]) return anchors[0][1];
+  if (kwp >= anchors[anchors.length - 1][0]) return anchors[anchors.length - 1][1];
+  for (let index = 0; index < anchors.length - 1; index += 1) {
+    const [x1, y1] = anchors[index];
+    const [x2, y2] = anchors[index + 1];
+    if (kwp >= x1 && kwp <= x2) {
+      return y1 + ((y2 - y1) * (kwp - x1)) / (x2 - x1);
+    }
+  }
+  return anchors[anchors.length - 1][1];
+}
+
+function snapUp(value: number, steps: readonly number[]): number | null {
+  for (const step of steps) {
+    if (step >= value) return step;
+  }
+  return null;
+}
+
+/**
+ * Predict the Nedbank/Eqstra UFMS quote for a load. Sizing, capex and the
+ * monthly charge reproduce the four extracted decks to <=0.1%.
+ */
+export function predictFunderQuote(input: FunderQuoteInput): FunderQuote {
+  const F = FUNDER_CONSTANTS;
+  const monthlyKwh = Number(input.monthlyKwh);
+  if (!Number.isFinite(monthlyKwh) || monthlyKwh <= 0) {
+    throw new Error("Enter a valid monthly consumption greater than zero.");
+  }
+  const rawKwp = monthlyKwh / F.templateMonthlyYieldKwhPerKwp;
+  const sizes = F.pvSizesKwp;
+  const maxSize = sizes[sizes.length - 1];
+  // Snap UP to the next standard size; loads marginally above the largest
+  // package (<=2% over) still receive the 300 kWp deck (observed: MVM at
+  // 300.2 exact size was quoted 300 kWp). Beyond that is multi-system.
+  const snapped = snapUp(rawKwp, sizes);
+  const outOfStandardRange = snapped === null && rawKwp > maxSize * 1.02;
+  const pvKwp = snapped ?? maxSize;
+  const baselineBessKwh = snapUp(pvKwp, F.bessBlocksKwh) ?? F.bessBlocksKwh[F.bessBlocksKwh.length - 1];
+  const touStorageAdderApplied = input.tariffStructure === "time-of-use";
+  const bessKwh = baselineBessKwh + (touStorageAdderApplied ? F.touStorageAdderKwh : 0);
+  const pcsKw = baselineBessKwh;
+  const basePackage = pvKwp * funderCapexPerKwp(pvKwp);
+  const incrementalStorageCost = Math.max(0, bessKwh - baselineBessKwh) * F.storageAdderRandPerKwh;
+  const capex = basePackage + incrementalStorageCost;
+  const ufmsMonthly = capex * F.ufmsMonthlyRateFactor;
+  return {
+    pvKwp,
+    pcsKw,
+    bessKwh,
+    baselineBessKwh,
+    touStorageAdderApplied,
+    claimedMonthlyGenerationKwh: round2(pvKwp * F.templateMonthlyYieldKwhPerKwp),
+    capex: Math.round(capex),
+    capexBand: [Math.round(capex * (1 - F.capexBandPct)), Math.round(capex * (1 + F.capexBandPct))],
+    randPerKwp: Math.round(capex / pvKwp),
+    incrementalStorageCost: Math.round(incrementalStorageCost),
+    ufmsMonthly: round2(ufmsMonthly),
+    ufmsMonthlyBand: [
+      round2(ufmsMonthly * (1 - F.capexBandPct)),
+      round2(ufmsMonthly * (1 + F.capexBandPct)),
+    ],
+    ufmsEscalation: F.ufmsEscalation,
+    termMonths: F.termMonths,
+    assetFinanceMonthly: round2(pmtDue(F.assetFinanceRate, F.termMonths, capex)),
+    outOfStandardRange,
+    note: outOfStandardRange
+      ? "Load exceeds the largest single standard package (300 kWp); expect a multi-system funder design outside this calibration."
+      : "Predicted funder paper: location-blind template sizing at 173.375 kWh/kWp/month, capex interpolated between observed deck anchors, monthly charge at 1.5969% of capex over 120 months escalating 6%.",
+  };
+}
+
+export type WheelingPredictionInput = {
+  /** Total monthly bill, R excl VAT. */
+  monthlySpend: number;
+  /** 6-12 bill average monthly consumption, kWh. */
+  monthlyKwh?: number;
+  /** Energy lines as a share of the total bill. Derived from
+   * energyMonthlySpend when supplied; default 0.60 (observed 0.53-0.60). */
+  billEnergyShare?: number;
+  /** Sum of the bill's commodity-energy lines, R (overrides the default share). */
+  energyMonthlySpend?: number;
+  distributor?: WheelingDistributor;
+};
+
+export type WheelingPrediction = {
+  eligible: boolean;
+  eligibilityNote: string;
+  distributor: WheelingDistributor;
+  firmRate: number;
+  rateBand: [number, number];
+  escalation: number;
+  termYears: number;
+  energyShareOfBill: number;
+  wheeledMonthlyKwh: number;
+  wheeledEnergyCost: number;
+  retainedNonEnergyMonthly: number;
+  monthlyCost: number;
+  monthlySaving: number;
+  savingPctOfBill: number;
+};
+
+const WHEELING_ELIGIBLE_DISTRIBUTORS: ReadonlySet<WheelingDistributor> = new Set([
+  "eskom-direct",
+  "city-power",
+  "matjhabeng-lm",
+]);
+
+/**
+ * Predict the Green Share wheeling quote. Wheeling reprices commodity-energy
+ * lines only; network, fixed, demand and service charges survive on the
+ * distributor bill. Eligibility follows the distributor's use-of-system
+ * status with Green Share.
+ */
+export function predictWheelingQuote(input: WheelingPredictionInput): WheelingPrediction {
+  const F = FUNDER_CONSTANTS;
+  const monthlySpend = Number(input.monthlySpend);
+  if (!Number.isFinite(monthlySpend) || monthlySpend <= 0) {
+    throw new Error("Enter a valid monthly electricity spend greater than zero.");
+  }
+  const distributor = input.distributor ?? "eskom-direct";
+  const eligible = WHEELING_ELIGIBLE_DISTRIBUTORS.has(distributor);
+  const energyShareOfBill = finitePositive(input.energyMonthlySpend)
+    ? Math.min(1, input.energyMonthlySpend / monthlySpend)
+    : Math.min(1, Math.max(0, input.billEnergyShare ?? F.defaultBillEnergyShare));
+  const energySpend = monthlySpend * energyShareOfBill;
+  const monthlyKwh = finitePositive(input.monthlyKwh)
+    ? input.monthlyKwh
+    : energySpend / ENGINE_CONSTANTS.defaultBlendedTariff;
+  const wheeledMonthlyKwh = eligible ? monthlyKwh : 0;
+  const wheeledEnergyCost = wheeledMonthlyKwh * F.wheelingFirmRate;
+  const retainedNonEnergyMonthly = monthlySpend - energySpend;
+  const monthlyCost = eligible ? retainedNonEnergyMonthly + wheeledEnergyCost : monthlySpend;
+  const monthlySaving = monthlySpend - monthlyCost;
+  return {
+    eligible,
+    eligibilityNote: eligible
+      ? distributor === "eskom-direct"
+        ? "Eskom-direct supply: Green Share Eskom use-of-system application in progress; deliveries gated by generator COD (Sept 2027 per deck)."
+        : distributor === "city-power"
+          ? "City Power: provisional wheeling approval and use-of-system agreement in place."
+          : "Matjhabeng LM: use-of-system agreement signed."
+      : "No Green Share use-of-system agreement exists with this municipal distributor; wheeling is not currently feasible.",
+    distributor,
+    firmRate: F.wheelingFirmRate,
+    rateBand: [F.wheelingRateBand[0], F.wheelingRateBand[1]],
+    escalation: F.wheelingEscalation,
+    termYears: F.wheelingTermYears,
+    energyShareOfBill: round2(energyShareOfBill),
+    wheeledMonthlyKwh: round2(wheeledMonthlyKwh),
+    wheeledEnergyCost: round2(wheeledEnergyCost),
+    retainedNonEnergyMonthly: round2(retainedNonEnergyMonthly),
+    monthlyCost: round2(monthlyCost),
+    monthlySaving: round2(monthlySaving),
+    savingPctOfBill: round2(monthlySaving / monthlySpend),
+  };
+}
+
+export type CombinedPredictionInput = {
+  monthlySpend: number;
+  monthlyKwh: number;
+  tariffStructure?: TariffStructure;
+  billEnergyShare?: number;
+  energyMonthlySpend?: number;
+  distributor?: WheelingDistributor;
+  /** Residual grid spend as a share of the bill after onsite dispatch;
+   * default 0.10, funder band [0.03, 0.14]. */
+  residualBillShare?: number;
+};
+
+export type CombinedPrediction = {
+  funderQuote: FunderQuote;
+  wheeling: WheelingPrediction;
+  /** Share of load kWh served onsite by the UFMS system. */
+  onsiteServedShare: number;
+  onsiteServedKwh: number;
+  residualGridKwh: number;
+  /** Residual kWh repriced through wheeling (never overlaps onsite kWh). */
+  wheeledResidualKwh: number;
+  eskomResidualKwh: number;
+  wheeledResidualCost: number;
+  eskomResidualCost: number;
+  retainedNonEnergyMonthly: number;
+  monthlyCost: number;
+  monthlySaving: number;
+  savingPctOfBill: number;
+  note: string;
+};
+
+/**
+ * Non-additive combined prediction: the UFMS system serves the onsite share
+ * of load first; wheeling reprices ONLY the residual eligible energy. The
+ * same kWh is never claimed by both products.
+ */
+export function predictCombined(input: CombinedPredictionInput): CombinedPrediction {
+  const F = FUNDER_CONSTANTS;
+  const monthlySpend = Number(input.monthlySpend);
+  const monthlyKwh = Number(input.monthlyKwh);
+  if (!Number.isFinite(monthlySpend) || monthlySpend <= 0) {
+    throw new Error("Enter a valid monthly electricity spend greater than zero.");
+  }
+  if (!Number.isFinite(monthlyKwh) || monthlyKwh <= 0) {
+    throw new Error("Enter a valid monthly consumption greater than zero.");
+  }
+  const funderQuote = predictFunderQuote({
+    monthlyKwh,
+    tariffStructure: input.tariffStructure,
+  });
+  const wheeling = predictWheelingQuote({
+    monthlySpend,
+    monthlyKwh,
+    billEnergyShare: input.billEnergyShare,
+    energyMonthlySpend: input.energyMonthlySpend,
+    distributor: input.distributor,
+  });
+  const residualBillShare = clamp(
+    input.residualBillShare ?? F.defaultResidualBillShare,
+    F.residualBillShareBand[0],
+    F.residualBillShareBand[1],
+  );
+  const energyShareOfBill = wheeling.energyShareOfBill;
+  const blendedEnergyRate = monthlyKwh > 0
+    ? (monthlySpend * energyShareOfBill) / monthlyKwh
+    : ENGINE_CONSTANTS.defaultBlendedTariff;
+  // Residual energy after onsite dispatch, expressed through the funder's
+  // own residual-bill assumption so the combined path reconciles with the
+  // funder's UFMS arithmetic rather than double-counting kWh.
+  const residualEnergySpend = monthlySpend * residualBillShare * energyShareOfBill;
+  const residualGridKwh = blendedEnergyRate > 0 ? residualEnergySpend / blendedEnergyRate : 0;
+  const onsiteServedKwh = Math.max(0, monthlyKwh - residualGridKwh);
+  const wheeledResidualKwh = wheeling.eligible ? residualGridKwh : 0;
+  const eskomResidualKwh = residualGridKwh - wheeledResidualKwh;
+  const wheeledResidualCost = wheeledResidualKwh * F.wheelingFirmRate;
+  const eskomResidualCost = eskomResidualKwh * blendedEnergyRate;
+  const retainedNonEnergyMonthly = monthlySpend * residualBillShare * (1 - energyShareOfBill);
+  const monthlyCost =
+    funderQuote.ufmsMonthly + wheeledResidualCost + eskomResidualCost + retainedNonEnergyMonthly;
+  const monthlySaving = monthlySpend - monthlyCost;
+  return {
+    funderQuote,
+    wheeling,
+    onsiteServedShare: round2(onsiteServedKwh / monthlyKwh),
+    onsiteServedKwh: round2(onsiteServedKwh),
+    residualGridKwh: round2(residualGridKwh),
+    wheeledResidualKwh: round2(wheeledResidualKwh),
+    eskomResidualKwh: round2(eskomResidualKwh),
+    wheeledResidualCost: round2(wheeledResidualCost),
+    eskomResidualCost: round2(eskomResidualCost),
+    retainedNonEnergyMonthly: round2(retainedNonEnergyMonthly),
+    monthlyCost: round2(monthlyCost),
+    monthlySaving: round2(monthlySaving),
+    savingPctOfBill: round2(monthlySaving / monthlySpend),
+    note: "Combined prediction is non-additive: onsite UFMS generation serves load first and wheeling reprices only the residual eligible grid energy. Network, fixed and service charges within the residual remain on the distributor bill.",
+  };
+}
+
+export type TenYearSeriesInput = {
+  monthlySpend: number;
+  monthlyKwh: number;
+  tariffStructure?: TariffStructure;
+  billEnergyShare?: number;
+  energyMonthlySpend?: number;
+  distributor?: WheelingDistributor;
+  /** Residual grid spend share of the bill under UFMS; band [0.03, 0.14]. */
+  residualBillShare?: number;
+  /** Override the predicted UFMS monthly charge (e.g. a real quote). */
+  ufmsMonthly?: number;
+  /** Override the wheeling rate (e.g. a negotiated tariff). */
+  wheelingRate?: number;
+  eskomEscalation?: number;
+  ufmsEscalation?: number;
+  wheelingEscalation?: number;
+};
+
+export type TenYearSeries = {
+  years: number[];
+  /** Cumulative annual utility cost, funder-style 8.74% escalation. */
+  eskom: number[];
+  /** Cumulative UFMS path: charge stream @6% + residual grid @8.74%. */
+  ufms: number[];
+  /** Cumulative wheeling path: wheeled energy @6% + retained non-energy @8.74%. */
+  wheeling: number[];
+  /** Cumulative combined path (non-additive kWh waterfall). */
+  combined: number[];
+  assumptions: {
+    eskomEscalation: number;
+    ufmsEscalation: number;
+    wheelingEscalation: number;
+    residualBillShare: number;
+    billEnergyShare: number;
+    wheelingRate: number;
+    ufmsMonthly: number;
+    wheelingEligible: boolean;
+  };
+};
+
+function cumulativeEscalating(yearOneAnnual: number, escalation: number, years: number) {
+  const series: number[] = [];
+  let total = 0;
+  for (let year = 0; year < years; year += 1) {
+    total += yearOneAnnual * (1 + escalation) ** year;
+    series.push(total);
+  }
+  return series;
+}
+
+function addSeries(...series: number[][]): number[] {
+  const length = series[0].length;
+  return Array.from({ length }, (_unused, index) =>
+    Math.round(series.reduce((total, current) => total + current[index], 0)));
+}
+
+/**
+ * Ten-year cumulative cost series in the funder's own presentation format.
+ * Defaults reproduce the decomposition verified against the funder decks:
+ * the Eskom baseline escalates at 8.74%/yr (10-yr factor x15.0057), the
+ * UFMS path is the 6%-escalating charge stream plus residual grid spend at
+ * 8.74%, and wheeling escalates the wheeled energy at ~6% while retained
+ * non-energy lines track the 8.74% grid escalation.
+ */
+export function tenYearSeries(input: TenYearSeriesInput): TenYearSeries {
+  const F = FUNDER_CONSTANTS;
+  const years = 10;
+  const monthlySpend = Number(input.monthlySpend);
+  const monthlyKwh = Number(input.monthlyKwh);
+  if (!Number.isFinite(monthlySpend) || monthlySpend <= 0) {
+    throw new Error("Enter a valid monthly electricity spend greater than zero.");
+  }
+  if (!Number.isFinite(monthlyKwh) || monthlyKwh <= 0) {
+    throw new Error("Enter a valid monthly consumption greater than zero.");
+  }
+  const eskomEscalation = input.eskomEscalation ?? F.funderUtilityEscalation;
+  const ufmsEscalation = input.ufmsEscalation ?? F.ufmsEscalation;
+  const wheelingEscalation = input.wheelingEscalation ?? F.wheelingEscalation;
+  const residualBillShare = clamp(
+    input.residualBillShare ?? F.defaultResidualBillShare,
+    F.residualBillShareBand[0],
+    F.residualBillShareBand[1],
+  );
+  const wheelingRate = finitePositive(input.wheelingRate) ? input.wheelingRate : F.wheelingFirmRate;
+  const funderQuote = predictFunderQuote({
+    monthlyKwh,
+    tariffStructure: input.tariffStructure,
+  });
+  const ufmsMonthly = finitePositive(input.ufmsMonthly) ? input.ufmsMonthly : funderQuote.ufmsMonthly;
+  const wheelingPrediction = predictWheelingQuote({
+    monthlySpend,
+    monthlyKwh,
+    billEnergyShare: input.billEnergyShare,
+    energyMonthlySpend: input.energyMonthlySpend,
+    distributor: input.distributor,
+  });
+  const billEnergyShare = wheelingPrediction.energyShareOfBill;
+  const eligible = wheelingPrediction.eligible;
+
+  const eskom = cumulativeEscalating(monthlySpend * 12, eskomEscalation, years)
+    .map((value) => Math.round(value));
+
+  const ufms = addSeries(
+    cumulativeEscalating(ufmsMonthly * 12, ufmsEscalation, years),
+    cumulativeEscalating(monthlySpend * residualBillShare * 12, eskomEscalation, years),
+  );
+
+  const wheeledAnnual = eligible ? monthlyKwh * 12 * wheelingRate : monthlySpend * billEnergyShare * 12;
+  const wheeling = addSeries(
+    cumulativeEscalating(wheeledAnnual, eligible ? wheelingEscalation : eskomEscalation, years),
+    cumulativeEscalating(monthlySpend * (1 - billEnergyShare) * 12, eskomEscalation, years),
+  );
+
+  const combinedPrediction = predictCombined({
+    monthlySpend,
+    monthlyKwh,
+    tariffStructure: input.tariffStructure,
+    billEnergyShare: input.billEnergyShare,
+    energyMonthlySpend: input.energyMonthlySpend,
+    distributor: input.distributor,
+    residualBillShare,
+  });
+  const combined = addSeries(
+    cumulativeEscalating(ufmsMonthly * 12, ufmsEscalation, years),
+    cumulativeEscalating(combinedPrediction.wheeledResidualCost * 12, wheelingEscalation, years),
+    cumulativeEscalating(combinedPrediction.eskomResidualCost * 12, eskomEscalation, years),
+    cumulativeEscalating(combinedPrediction.retainedNonEnergyMonthly * 12, eskomEscalation, years),
+  );
+
+  return {
+    years: Array.from({ length: years }, (_unused, index) => index + 1),
+    eskom,
+    ufms,
+    wheeling,
+    combined,
+    assumptions: {
+      eskomEscalation,
+      ufmsEscalation,
+      wheelingEscalation,
+      residualBillShare,
+      billEnergyShare,
+      wheelingRate,
+      ufmsMonthly: round2(ufmsMonthly),
+      wheelingEligible: eligible,
+    },
+  };
+}

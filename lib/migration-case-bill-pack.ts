@@ -21,6 +21,10 @@ import {
 } from "@/lib/utility-bill-analysis";
 import { analyseUtilityBillFile } from "@/lib/utility-bill-pdf";
 import {
+  analyseBillPackFileWithReader,
+  isDocumentReaderEnabled,
+} from "@/lib/document-reader";
+import {
   isOperatorAssessmentMode,
   isSimulatedBillExtractionEnabled,
   simulateUtilityBillAnalysis,
@@ -226,7 +230,16 @@ async function uploadAndAnalyse(
     if (uploadError) throw new Error(`Could not store ${item.file.name}: ${uploadError.message}`);
 
     const stableBytes = Uint8Array.from(item.bytes);
-    const analysis = isSimulatedBillExtractionEnabled()
+    // DOCUMENT_READER_MODE=1: machine-read first (classify → text layer →
+    // OCR/vision chain), verified by the existing ±0.2% reconciliation before
+    // anything is called "verified". Off by default — behaviour unchanged.
+    const analysis = isDocumentReaderEnabled()
+      ? await analyseBillPackFileWithReader({
+          name: item.file.name,
+          bytes: stableBytes,
+          sourceHash: item.sha256,
+        })
+      : isSimulatedBillExtractionEnabled()
       ? simulateUtilityBillAnalysis({
           fileName: item.file.name,
           sourceHash: item.sha256,

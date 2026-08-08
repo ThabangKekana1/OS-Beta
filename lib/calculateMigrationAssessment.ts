@@ -1,12 +1,21 @@
 import { CALCULATION_CONFIG, MIGRATION_DISCLAIMER } from "@/lib/calculation-config";
 import {
+  predictCombined,
+  predictFunderQuote,
+  predictWheelingQuote,
   runPricingEngine,
   round2,
+  tenYearSeries,
   type BillChargeBreakdown,
   type BusinessLoadProfile,
+  type CombinedPrediction,
   type EngineResult,
+  type FunderQuote,
   type IntervalLoadPoint,
   type TariffStructure,
+  type TenYearSeries,
+  type WheelingDistributor,
+  type WheelingPrediction,
   type WheelingQuote,
 } from "@/lib/pricing-engine";
 
@@ -70,6 +79,27 @@ export type MigrationAssessmentInput = {
   allowIntervalDemandSavings?: boolean;
   wheelingEligibleShare?: number;
   wheelingLossFactor?: number;
+  /** Distributor gate for wheeling predictions ('other-municipal' is ineligible). */
+  distributor?: WheelingDistributor;
+  /** Energy lines as a share of the total bill; default 0.60. */
+  billEnergyShare?: number;
+  /** Sum of the bill's commodity-energy lines, R (overrides billEnergyShare). */
+  energyMonthlySpend?: number;
+  /** Residual grid spend share of the bill under UFMS; funder band [0.03, 0.14]. */
+  residualBillShare?: number;
+};
+
+/** Predicted funder paper: what Nedbank/Eqstra and Green Share will most
+ * likely quote for this load. These are the headline proposal numbers. */
+export type FunderPrediction = {
+  /** Predicted Nedbank/Eqstra UFMS quote (headline sizing, capex, charge). */
+  quote: FunderQuote;
+  /** Predicted Green Share wheeling quote with distributor eligibility. */
+  wheeling: WheelingPrediction;
+  /** Non-additive combined path (UFMS onsite + wheeled residual energy). */
+  combined: CombinedPrediction;
+  /** Ten-year cumulative cost series in the funder presentation format. */
+  tenYearSeries: TenYearSeries;
 };
 
 export type UfmsScenarioResult = {
@@ -136,6 +166,9 @@ export type MigrationAssessmentResult = {
   recommendedPathway: string;
   disclaimer: string;
   proposal: EngineResult;
+  /** Additive: predicted funder quotes (UFMS, wheeling, combined, 10-year
+   * series). Headline proposal numbers come from funderPrediction.quote. */
+  funderPrediction: FunderPrediction;
 };
 
 function compoundedAnnualSpendFactor(years: number, annualEscalationRate: number) {
@@ -194,6 +227,27 @@ export function calculateMigrationAssessment(
     wheelingEligibleShare: input.wheelingEligibleShare,
     wheelingLossFactor: input.wheelingLossFactor,
   });
+
+  // Predicted funder paper. The client-facing estimate must match what the
+  // funders will most likely produce, so the headline proposal numbers
+  // (sizing, capex, monthly charge) come from predictFunderQuote.
+  const funderShared = {
+    monthlySpend: monthlyElectricitySpend,
+    monthlyKwh: engine.input.monthlyKwh,
+    tariffStructure: input.tariffStructure,
+    billEnergyShare: input.billEnergyShare,
+    energyMonthlySpend: input.energyMonthlySpend,
+    distributor: input.distributor,
+  };
+  const funderPrediction: FunderPrediction = {
+    quote: predictFunderQuote({
+      monthlyKwh: engine.input.monthlyKwh,
+      tariffStructure: input.tariffStructure,
+    }),
+    wheeling: predictWheelingQuote(funderShared),
+    combined: predictCombined({ ...funderShared, residualBillShare: input.residualBillShare }),
+    tenYearSeries: tenYearSeries({ ...funderShared, residualBillShare: input.residualBillShare }),
+  };
 
   const currentAnnualSpend = monthlyElectricitySpend * 12;
   const tenYearFactor = compoundedAnnualSpendFactor(
@@ -276,5 +330,6 @@ export function calculateMigrationAssessment(
         : "Upload utility bills and interval data where available",
     disclaimer: MIGRATION_DISCLAIMER,
     proposal: engine,
+    funderPrediction,
   };
 }

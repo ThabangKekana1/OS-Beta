@@ -1,11 +1,15 @@
-import type { Metadata } from "next";
-import { PublicClientRegistrationRoute } from "@/components/registration/PublicClientRegistrationRoute";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "Client Registration | 1OS",
-  description: "Complete your 1OS client onboarding registration form.",
-};
+export const dynamic = "force-dynamic";
 
+const WEBSITE = process.env.NEXT_PUBLIC_WEBSITE_ORIGIN ?? "https://foundation-1.co.za";
+
+/**
+ * Legacy public registration link. The 16-screen typeform is retired: the
+ * assessment funnel lives on the Foundation-1 website, so this route forwards
+ * to /pricing with the link id preserved as attribution (same pattern as
+ * app/estimate/[linkId]/page.tsx).
+ */
 export default async function PublicRegistrationPage({
   params,
 }: {
@@ -13,5 +17,11 @@ export default async function PublicRegistrationPage({
 }) {
   const { linkId } = await params;
 
-  return <PublicClientRegistrationRoute linkId={linkId} />;
+  if (linkId) {
+    redirect(
+      `${WEBSITE}/pricing?utm_source=register-link&utm_campaign=register-${encodeURIComponent(linkId)}`,
+    );
+  }
+
+  redirect(`${WEBSITE}/pricing`);
 }

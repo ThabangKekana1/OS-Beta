@@ -231,6 +231,7 @@ export type MigrationCaseEoiRow = {
   declarations_version: string;
   pdf_storage_path: string | null;
   pdf_sha256: string | null;
+  reviewed_proposal_sha256?: string | null;
 };
 
 export type MigrationCaseNdaRow = {

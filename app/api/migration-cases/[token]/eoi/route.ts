@@ -116,6 +116,11 @@ export async function POST(
     const signatureId = randomUUID();
     const signedAt = new Date().toISOString();
     const proposal = relations.proposal;
+    // Provenance: record the hash of the proposal version that existed when
+    // the EOI was signed (operator document hash, else hash of the engine
+    // proposal snapshot). Works regardless of when the proposal is released.
+    const reviewedProposalHash = proposal.document_sha256
+      || createHash("sha256").update(JSON.stringify(proposal.proposal_snapshot ?? {})).digest("hex");
     const pdf = buildMigrationCaseEoiPdf({
       signatureId,
       caseReference: caseRow.public_reference,
@@ -162,6 +167,7 @@ export async function POST(
         user_agent: cleanString(request.headers.get("user-agent"), 500) || null,
         pdf_storage_path: storagePath,
         pdf_sha256: pdfHash,
+        reviewed_proposal_sha256: reviewedProposalHash,
       })
       .select("*")
       .single();
@@ -185,6 +191,7 @@ export async function POST(
       metadata: {
         signatureId,
         proposalId: proposal.id,
+        reviewedProposalHash,
         declarationsVersion: MIGRATION_CASE_EOI_DECLARATIONS_VERSION,
       },
     }).catch(() => undefined);
