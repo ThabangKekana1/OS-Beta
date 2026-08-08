@@ -117,6 +117,18 @@ export async function POST(
       metadata: { partnerProposalId: proposal.id, sha256 },
     }).catch(() => undefined);
 
+    // Funder-report pipeline: read the returned funder paper, cross-check it
+    // against the bill-audited engine prediction and publish (or hold for
+    // operator confirmation) ONE report explaining both proposals.
+    // Fire-and-forget: the upload must succeed even if the report generation
+    // needs the operator desk.
+    void import("@/lib/funder-report-pipeline")
+      .then((pipeline) => pipeline.runFunderReportPipeline({
+        caseRow: { ...caseRow, active_partner_proposal_id: proposal.id },
+        triggeredBy: session.email ?? session.name ?? "admin",
+      }))
+      .catch(() => undefined);
+
     return NextResponse.json({ ok: true, partnerProposalId: proposal.id, issuedAt });
   } catch (error) {
     return NextResponse.json(

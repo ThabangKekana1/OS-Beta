@@ -66,6 +66,15 @@ export async function POST(request: NextRequest) {
   const placeContext = placeContextRaw === "metro" || placeContextRaw === "town" || placeContextRaw === "rural"
     ? placeContextRaw
     : null;
+  // Additive: the website derives the wheeling distributor gate from the
+  // billing-route radio + resolved municipality. Older payloads omit it.
+  const distributorRaw = cleanString(body.distributor, 32);
+  const distributor = distributorRaw === "eskom-direct"
+    || distributorRaw === "city-power"
+    || distributorRaw === "matjhabeng-lm"
+    || distributorRaw === "other-municipal"
+    ? distributorRaw
+    : null;
   const termsAccepted = body.termsAccepted === true;
   let partnerAttribution: ReturnType<typeof parsePartnerAttribution>;
   try {
@@ -208,6 +217,8 @@ export async function POST(request: NextRequest) {
         contactEmail,
         monthlySpendExVat,
         preliminaryFit: result.report.preliminaryFit,
+        supplyType,
+        distributor,
       },
     });
 
@@ -222,6 +233,8 @@ export async function POST(request: NextRequest) {
       metadata: {
         reference: result.caseRow.public_reference,
         attributed: Boolean(resolvedAttribution?.referralId),
+        supplyType,
+        distributor,
       },
     }).catch(() => undefined);
 

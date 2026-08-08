@@ -42,6 +42,15 @@ export type MigrationCaseOpsData = {
     issuedAt: string | null;
     signedAt: string | null;
   };
+  /** In-platform signing audit state (migration_case_document_signatures). */
+  documentSigning: null | {
+    statusLabel: string;
+    status: "awaiting_signature" | "signed" | "submitted_by_client";
+    signedAt: string | null;
+    submittedAt: string | null;
+    signedSha256: string | null;
+    downloadable: boolean;
+  };
   kyc: {
     packCompleteAt: string | null;
     verifiedAt: string | null;
@@ -451,6 +460,7 @@ export function MigrationCaseOps({ data }: { data: MigrationCaseOpsData }) {
           issuedAt={data.partnerProposal?.issuedAt ?? null}
           signedAt={data.partnerProposal?.signedAt ?? null}
           confirmedAt={null}
+          signing={data.documentSigning}
         />
       ) : null}
       {showKyc ? <KycReviewControl data={data} /> : null}

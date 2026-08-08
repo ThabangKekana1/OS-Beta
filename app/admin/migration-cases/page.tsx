@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { MigrationCaseOps, type MigrationCaseOpsData } from "@/components/admin/MigrationCaseOps";
 import { KYC_DOCUMENT_TYPES } from "@/lib/migration-case-kyc";
+import { documentSignatureStatusLabel, type DocumentSignatureRow } from "@/lib/document-signing";
+import { listDocumentSignaturesForCases } from "@/lib/document-signing-store";
 import {
   kycPackStatus,
   listMigrationCasesForAdmin,
@@ -105,11 +107,12 @@ export default async function AdminMigrationCasesPage() {
       ])
     : [{ data: [], error: null }, { data: [], error: null }, { data: [], error: null }];
 
-  const [readinessRows, kycDocumentRows, submissionRows, termSheetRows] = await Promise.all([
+  const [readinessRows, kycDocumentRows, submissionRows, termSheetRows, signatureRows] = await Promise.all([
     tolerantIn<MigrationCaseKycReadinessRow>("migration_case_kyc_readiness", "case_id", caseIds),
     tolerantIn<MigrationCaseKycDocumentRow>("migration_case_kyc_documents", "case_id", caseIds),
     tolerantIn<MigrationCaseSubmissionRow>("migration_case_submissions", "case_id", caseIds),
     tolerantIn<MigrationCaseTermSheetRow>("migration_case_term_sheets", "case_id", caseIds),
+    listDocumentSignaturesForCases(caseIds).catch(() => [] as DocumentSignatureRow[]),
   ]);
 
   const packs = new Map((packResult.data ?? []).map((item) => [item.id, item]));
@@ -132,6 +135,11 @@ export default async function AdminMigrationCasesPage() {
     const list = termSheetsByCase.get(row.case_id) ?? [];
     list.push(row);
     termSheetsByCase.set(row.case_id, list);
+  }
+  // Latest in-platform signing record per case (rows arrive newest-first).
+  const signaturesByCase = new Map<string, DocumentSignatureRow>();
+  for (const row of signatureRows) {
+    if (!signaturesByCase.has(row.case_id)) signaturesByCase.set(row.case_id, row);
   }
 
   // Server component, rendered once per request: a clock read here is stable
@@ -321,6 +329,19 @@ export default async function AdminMigrationCasesPage() {
                     signedAt: partnerProposal.signed_at,
                   }
                 : null,
+              documentSigning: (() => {
+                const signature = signaturesByCase.get(item.id);
+                return signature
+                  ? {
+                      statusLabel: documentSignatureStatusLabel(signature.status),
+                      status: signature.status,
+                      signedAt: signature.signed_at,
+                      submittedAt: signature.submitted_at,
+                      signedSha256: signature.signed_sha256,
+                      downloadable: Boolean(signature.signed_storage_path),
+                    }
+                  : null;
+              })(),
               kyc: {
                 packCompleteAt: item.kyc_pack_complete_at,
                 verifiedAt: item.kyc_verified_at,

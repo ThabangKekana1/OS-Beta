@@ -11,6 +11,15 @@ type PartnerProposalIssueControlProps = {
   issuedAt?: string | null;
   signedAt?: string | null;
   confirmedAt?: string | null;
+  /** In-platform signing state: awaiting signature → signed → client submitted. */
+  signing?: null | {
+    statusLabel: string;
+    status: "awaiting_signature" | "signed" | "submitted_by_client";
+    signedAt: string | null;
+    submittedAt: string | null;
+    signedSha256: string | null;
+    downloadable: boolean;
+  };
 };
 
 function date(value?: string | null) {
@@ -28,6 +37,7 @@ export function PartnerProposalIssueControl({
   issuedAt,
   signedAt,
   confirmedAt,
+  signing,
 }: PartnerProposalIssueControlProps) {
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -71,6 +81,23 @@ export function PartnerProposalIssueControl({
               : `Issued ${date(issuedAt)}.`}
         </p>
         {confirmedAt ? <p className="mt-2 text-[0.66rem] leading-5 text-emerald-200/62">Follow up with UFMS on receipt. No bank KYC is held by Foundation-1.</p> : null}
+        {signing ? (
+          <p className={`mt-2 text-[0.66rem] leading-5 ${
+            signing.status === "submitted_by_client" ? "text-emerald-200/72" : signing.status === "signed" ? "text-amber-200/72" : "text-white/40"
+          }`}>
+            In-platform signing: {signing.statusLabel}
+            {signing.submittedAt ? ` · ${date(signing.submittedAt)}` : signing.signedAt ? ` · ${date(signing.signedAt)}` : ""}
+            {signing.signedSha256 ? ` · SHA-256 ${signing.signedSha256.slice(0, 12)}…` : ""}
+          </p>
+        ) : null}
+        {signing?.downloadable ? (
+          <a
+            href={`/api/admin/migration-cases/${encodeURIComponent(caseId)}/signed-document`}
+            className="mt-2 inline-flex items-center gap-1.5 text-[0.66rem] text-white/72 underline underline-offset-4"
+          >
+            Download platform-signed PDF (with certificate)
+          </a>
+        ) : null}
       </div>
     );
   }
