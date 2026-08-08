@@ -150,9 +150,7 @@ export async function POST(
       });
     if (uploadError) throw new Error(uploadError.message);
 
-    const { data: inserted, error: insertError } = await client
-      .from("migration_case_eois")
-      .insert({
+    const eoiInsertPayload = {
         id: signatureId,
         case_id: caseRow.id,
         proposal_id: proposal.id,
@@ -168,15 +166,36 @@ export async function POST(
         pdf_storage_path: storagePath,
         pdf_sha256: pdfHash,
         reviewed_proposal_sha256: reviewedProposalHash,
-      })
+    };
+    const { data: inserted, error: insertError } = await client
+      .from("migration_case_eois")
+      .insert(eoiInsertPayload)
       .select("*")
       .single();
-    if (insertError || !inserted) {
-      if (insertError?.code === "23505") {
+    let insertedRow = inserted;
+    let finalInsertError = insertError;
+    if (
+      finalInsertError &&
+      (finalInsertError.code === "PGRST204" || finalInsertError.code === "42703") &&
+      String(finalInsertError.message ?? "").includes("reviewed_proposal_sha256")
+    ) {
+      // The provenance column migration has not been applied yet; record the EOI
+      // without it rather than blocking the client's signature.
+      const { reviewed_proposal_sha256: _omitted, ...withoutHash } = eoiInsertPayload;
+      const retry = await client
+        .from("migration_case_eois")
+        .insert(withoutHash)
+        .select("*")
+        .single();
+      insertedRow = retry.data;
+      finalInsertError = retry.error;
+    }
+    if (finalInsertError || !insertedRow) {
+      if (finalInsertError?.code === "23505") {
         relations = await getMigrationCaseRelations(caseRow);
         return NextResponse.json(publicMigrationCaseState(caseRow, relations));
       }
-      throw new Error(insertError?.message ?? "Unable to record the Expression of Interest.");
+      throw new Error(finalInsertError?.message ?? "Unable to record the Expression of Interest.");
     }
 
     const updatedCase = await updateMigrationCase(caseRow.id, {
