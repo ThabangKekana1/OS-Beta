@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const SITE_URL = "https://www.1os.co.za";
+const SITE_URL = "https://admin.foundation-1.co.za";
 
 export default function robots(): MetadataRoute.Robots {
   return {

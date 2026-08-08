@@ -17,7 +17,7 @@ const orbitron = Orbitron({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://www.1os.co.za"),
+  metadataBase: new URL("https://admin.foundation-1.co.za"),
   title: "1OS | Energy-as-a-Service and Commercial Solar in South Africa",
   description:
     "1OS builds energy infrastructure for South Africa through commercial solar, energy-as-a-service, and guided business migration workflows.",

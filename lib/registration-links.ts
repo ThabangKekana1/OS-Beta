@@ -1,7 +1,7 @@
 import type { RegistrationSourceRole } from "@/lib/admin-types";
 import { normalizeOrigin } from "@/lib/url";
 
-const PUBLIC_MIGRATION_LINK_ORIGIN = "https://www.1os.co.za";
+const PUBLIC_MIGRATION_LINK_ORIGIN = "https://admin.foundation-1.co.za";
 
 export type RegistrationProfile = {
   email: string;

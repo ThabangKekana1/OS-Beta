@@ -50,9 +50,18 @@ function applySecurityHeaders(response: NextResponse) {
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const hostname = request.headers.get("host") ?? "";
+
+  // 1os.co.za is retired — every request there moves to admin.foundation-1.co.za.
+  if (hostname === "1os.co.za" || hostname === "www.1os.co.za") {
+    const url = request.nextUrl.clone();
+    url.protocol = "https";
+    url.hostname = "admin.foundation-1.co.za";
+    url.port = "";
+    return NextResponse.redirect(url, { status: 301 });
+  }
 
   // Subdomain routing: 1os.foundation-1.co.za → /migration
-  const hostname = request.headers.get("host") ?? "";
   if (hostname.startsWith("1os.") && pathname === "/") {
     const url = request.nextUrl.clone();
     url.pathname = "/migration";
