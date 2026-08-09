@@ -22,6 +22,8 @@ console.log("avg monthly kWh:", Math.round(portfolio.averageMonthlyKwh ?? 0), "|
 const proposal = buildF1Proposal({
   businessName: "Metasapien (Pty) Ltd",
   contactName: "Karman Kekana",
+  // The bills ARE the site: this pack is the Vredefort (Free State) Eskom
+  // account, so the design uses the bills' true location — founder confirmed.
   province: "Free State",
   siteCity: "Vredefort",
   monthlySpend: portfolio.averageMonthlySpendExVat ?? undefined,
