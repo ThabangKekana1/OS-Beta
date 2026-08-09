@@ -48,11 +48,10 @@ function consentSnapshot(): ConsentState {
   };
   if (navigatorWithPrivacy.globalPrivacyControl) return "declined";
   const stored = window.localStorage.getItem(CONSENT_KEY);
-  return stored === "accepted"
-    ? "accepted"
-    : stored === "declined"
-      ? "declined"
-      : "unknown";
+  // Founder decision 2026-08-09: anonymous first-party signals are on by
+  // default (notice-based, POPIA legitimate interest s11(1)(f)). An explicit
+  // stored decline and Global Privacy Control are still honoured.
+  return stored === "declined" ? "declined" : "accepted";
 }
 
 function subscribeToConsent(callback: () => void) {
@@ -145,7 +144,7 @@ export default function ClientBehaviorTelemetry({
               visitorId,
               sessionId,
               consentBasis:
-                environment === "test" ? "test" : "analytics_consent",
+                environment === "test" ? "test" : "legitimate_interest_notice",
               properties,
               schemaVersion: SCHEMA_VERSION,
             },

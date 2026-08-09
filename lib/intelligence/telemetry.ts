@@ -18,7 +18,7 @@ export type TelemetryEnvironment =
   | "development"
   | "test";
 export type TelemetrySurface = "public_website" | "migration_workspace";
-export type TelemetryConsentBasis = "analytics_consent" | "test";
+export type TelemetryConsentBasis = "analytics_consent" | "legitimate_interest_notice" | "test";
 
 export type RawTelemetryEvent = {
   id?: unknown;
@@ -59,7 +59,11 @@ const allowedSurfaces = new Set<string>([
   "public_website",
   "migration_workspace",
 ]);
-const allowedConsentBases = new Set<string>(["analytics_consent", "test"]);
+const allowedConsentBases = new Set<string>([
+	"analytics_consent",
+	"legitimate_interest_notice",
+	"test",
+]);
 const tokenParentSegments = new Set([
   "case",
   "dealroom",
@@ -196,7 +200,12 @@ export function sanitizeTelemetryBatch(input: {
     if (!allowedEnvironments.has(environment)) continue;
     if (!allowedSurfaces.has(surface)) continue;
     if (!allowedConsentBases.has(consentBasis)) continue;
-    if (environment !== "test" && consentBasis !== "analytics_consent") continue;
+    if (
+      environment !== "test" &&
+      consentBasis !== "analytics_consent" &&
+      consentBasis !== "legitimate_interest_notice"
+    )
+      continue;
 
     accepted.push({
       id,
