@@ -195,6 +195,7 @@ export default async function AdminMigrationCasesPage({
       newToday: new Date(item.created_at).getTime() >= todayStart.getTime(),
       selectable: classified && classified.tier !== "blocked" ? classified.tier : null,
       lastActivityAt: item.updated_at ?? item.created_at,
+      createdAt: item.created_at,
     } satisfies CaseBoardRow;
   });
 

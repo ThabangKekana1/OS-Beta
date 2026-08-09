@@ -40,6 +40,7 @@ export type CaseBoardRow = {
   /** Selectable for the submission batch: readiness tier, when unsubmitted. */
   selectable: "signed_ready" | "bankable" | null;
   lastActivityAt: string;
+  createdAt: string;
 };
 
 export type CaseBoardInitialFilters = {
@@ -51,7 +52,7 @@ export type CaseBoardInitialFilters = {
 };
 
 type QuickFilter = "needs_me" | "new_today" | "sla_risk" | "blocked" | null;
-type SortKey = "priority" | "reference" | "name" | "stage" | "days" | "owner" | "activity";
+type SortKey = "newest" | "priority" | "reference" | "name" | "stage" | "days" | "owner" | "activity";
 
 type BatchResult = {
   batchReference: string;
@@ -113,7 +114,8 @@ export function MigrationCaseBoard({
       ? (initialFilters?.quick as QuickFilter)
       : null,
   );
-  const [sortKey, setSortKey] = useState<SortKey>((initialFilters?.sort as SortKey) || "priority");
+  // Founder rule 2026-08-09: the latest migrations always sit on top.
+  const [sortKey, setSortKey] = useState<SortKey>((initialFilters?.sort as SortKey) || "newest");
   const [sortDir, setSortDir] = useState<1 | -1>(initialFilters?.dir === "desc" ? -1 : 1);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [channel, setChannel] = useState("eden_ufms");
@@ -144,7 +146,7 @@ export function MigrationCaseBoard({
     if (q) params.set("q", q);
     if (stage !== "all") params.set("stage", stage);
     if (quickValue) params.set("quick", quickValue);
-    if (sort !== "priority") params.set("sort", sort);
+    if (sort !== "newest") params.set("sort", sort);
     if (dir === -1) params.set("dir", "desc");
     return params.toString();
   }
@@ -179,7 +181,8 @@ export function MigrationCaseBoard({
         case "days": return a.daysInStage - b.daysInStage;
         case "owner": return a.owner.localeCompare(b.owner);
         case "activity": return a.lastActivityAt.localeCompare(b.lastActivityAt);
-        default: return a.priority - b.priority;
+        case "priority": return a.priority - b.priority;
+        default: return b.createdAt.localeCompare(a.createdAt);
       }
     };
     filtered.sort((a, b) => sortDir * compare(a, b) || a.priority - b.priority);
