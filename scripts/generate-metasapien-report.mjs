@@ -31,6 +31,87 @@ const proposal = buildF1Proposal({
   billPortfolio: portfolio,
   businessLoadProfile: "continuous",
 });
+// ---- FUNDER PREDICTION (engine v3): the numbers Nedbank / Green Share would
+// actually issue for this case. Founder directive: the client-facing pathway
+// figures must be exactly these, not the internal design-basis economics.
+const { predictFunderQuote, predictWheelingQuote, predictCombined, tenYearSeries } = await import("../lib/pricing-engine.ts");
+const fpMonthlyKwh = portfolio.averageMonthlyKwh;
+const fpMonthlySpend = portfolio.averageMonthlySpendExVat ?? portfolio.averageMonthlySpend;
+const fpInput = {
+  monthlySpend: fpMonthlySpend,
+  monthlyKwh: fpMonthlyKwh,
+  tariffStructure: "time-of-use", // Ruraflex is a time-of-use tariff
+  distributor: "eskom-direct",
+};
+const fpQuote = predictFunderQuote({ monthlyKwh: fpMonthlyKwh, tariffStructure: fpInput.tariffStructure });
+const fpWheeling = predictWheelingQuote(fpInput);
+const fpCombined = predictCombined(fpInput);
+const fpSeries = tenYearSeries(fpInput);
+
+// Founder-directive comparison series (cumulative annual rand, 10 years):
+// Eskom baseline at 13%/yr increases, and Nightshade (asset finance) as the
+// flat funder AF payment plus retained grid charges escalating at 13%.
+const ESKOM_13 = 0.13;
+const cumul13 = (yearOneAnnual) => {
+  const out = [];
+  let total = 0;
+  for (let year = 0; year < 10; year += 1) {
+    total += yearOneAnnual * (1 + ESKOM_13) ** year;
+    out.push(Math.round(total));
+  }
+  return out;
+};
+const fpEskom13 = cumul13(fpMonthlySpend * 12);
+const fpRetainedMonthly = fpMonthlySpend * fpSeries.assumptions.residualBillShare;
+const fpRetained13 = cumul13(fpRetainedMonthly * 12);
+const fpNightshade = fpRetained13.map((retained, index) =>
+  Math.round(fpQuote.assetFinanceMonthly * 12 * (index + 1) + retained));
+
+// The exact display figures the report headlines ("as the funding partners
+// would issue it"), so downstream mappers project rather than recompute.
+const round2 = (value) => Math.round(value * 100) / 100;
+const ufmsAllIn = fpQuote.ufmsMonthly + fpRetainedMonthly;
+const afAllIn = fpQuote.assetFinanceMonthly + fpRetainedMonthly;
+proposal.funderPrediction = {
+  quote: fpQuote,
+  wheeling: fpWheeling,
+  combined: fpCombined,
+  tenYearSeries: fpSeries,
+  eskom13: fpEskom13,
+  nightshade: fpNightshade,
+  eskom13Escalation: ESKOM_13,
+  issued: {
+    sizing: { pvKwp: fpQuote.pvKwp, pcsKw: fpQuote.pcsKw, bessKwh: fpQuote.bessKwh },
+    ufmsMonthly: fpQuote.ufmsMonthly,
+    ufmsMonthlyBand: fpQuote.ufmsMonthlyBand,
+    ufmsEscalation: fpQuote.ufmsEscalation,
+    termMonths: fpQuote.termMonths,
+    retainedGridMonthly: round2(fpRetainedMonthly),
+    ufmsAllInMonthly: round2(ufmsAllIn),
+    ufmsMonthlySaving: round2(fpMonthlySpend - ufmsAllIn),
+    ufmsSavingPct: round2((fpMonthlySpend - ufmsAllIn) / fpMonthlySpend),
+    ufmsTenYearMovement: fpEskom13[9] - fpSeries.ufms[9],
+    wheelingTenYearMovement: fpEskom13[9] - fpSeries.wheeling[9],
+    combinedTenYearMovement: fpEskom13[9] - fpSeries.combined[9],
+    assetFinanceMonthly: fpQuote.assetFinanceMonthly,
+    assetFinanceAllInMonthly: round2(afAllIn),
+    assetFinanceMonthlySaving: round2(fpMonthlySpend - afAllIn),
+    assetFinanceSavingPct: round2((fpMonthlySpend - afAllIn) / fpMonthlySpend),
+    nightshadeTenYearMovement: fpEskom13[9] - fpNightshade[9],
+  },
+};
+console.log("funder prediction:", JSON.stringify({
+  sizing: proposal.funderPrediction.issued.sizing,
+  ufmsMonthly: fpQuote.ufmsMonthly,
+  assetFinanceMonthly: fpQuote.assetFinanceMonthly,
+  wheelingMonthly: fpWheeling.monthlyCost,
+  combinedMonthly: fpCombined.monthlyCost,
+  tenYearTotals: {
+    eskom13: fpEskom13[9], ufms: fpSeries.ufms[9], wheeling: fpSeries.wheeling[9],
+    nightshade: fpNightshade[9], combined: fpSeries.combined[9],
+  },
+}));
+
 const summary = {
   currentMonthlyCostExVat: proposal.summary?.currentMonthlyCostExVat,
   solutionMonthlyCostExVat: proposal.summary?.solutionMonthlyCostExVat,
@@ -40,6 +121,8 @@ const summary = {
 console.log("summary:", JSON.stringify(summary));
 console.log("top-level keys:", Object.keys(proposal).join(", "));
 
+writeFileSync("/tmp/metasapien_proposal.json", JSON.stringify(proposal, null, 1));
+console.log("proposal JSON: /tmp/metasapien_proposal.json");
 const rendered = buildMigrationProposalPdf(proposal);
 const out = "/Users/straylight/Desktop/Metasapien_Migration_Report_DRAFT.pdf";
 writeFileSync(out, Buffer.from(rendered.bytes));
