@@ -123,7 +123,7 @@ function ActionButton({ busy, onClick, children, tone = "light" }: {
   );
 }
 
-function SubmissionControl({ data }: { data: MigrationCaseOpsData }) {
+export function SubmissionControl({ data }: { data: MigrationCaseOpsData }) {
   const [channel, setChannel] = useState("eden_ufms");
   const [batchReference, setBatchReference] = useState("");
   const [busy, setBusy] = useState(false);
@@ -245,7 +245,7 @@ function SubmissionControl({ data }: { data: MigrationCaseOpsData }) {
   );
 }
 
-function KycReviewControl({ data }: { data: MigrationCaseOpsData }) {
+export function KycReviewControl({ data }: { data: MigrationCaseOpsData }) {
   const [busyId, setBusyId] = useState("");
   const [error, setError] = useState("");
   const [rejecting, setRejecting] = useState<string | null>(null);
@@ -368,7 +368,7 @@ function KycReviewControl({ data }: { data: MigrationCaseOpsData }) {
   );
 }
 
-function TermSheetControl({ data }: { data: MigrationCaseOpsData }) {
+export function TermSheetControl({ data }: { data: MigrationCaseOpsData }) {
   const [pathway, setPathway] = useState("eden");
   const [source, setSource] = useState("funder_direct");
   const [value, setValue] = useState("");
@@ -494,7 +494,7 @@ function TermSheetControl({ data }: { data: MigrationCaseOpsData }) {
  * A pack that fails recognition used to have no way out: no route and no
  * button, so the case sat until the client happened to re-upload everything.
  */
-function BillPackReviewControl({ data }: { data: MigrationCaseOpsData }) {
+export function BillPackReviewControl({ data }: { data: MigrationCaseOpsData }) {
   const [busy, setBusy] = useState<"rerun" | "reopen" | null>(null);
   const [note, setNote] = useState("");
   const [error, setError] = useState("");

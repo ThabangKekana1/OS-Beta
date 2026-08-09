@@ -95,7 +95,7 @@ function DraftPanel({ label, draft, tone }: { label: string; draft: EscalationDr
   );
 }
 
-function SlaRow({ item }: { item: SubmissionSlaItem }) {
+export function SlaRow({ item }: { item: SubmissionSlaItem }) {
   const [ackDate, setAckDate] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
