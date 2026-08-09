@@ -27,7 +27,7 @@ export function buildMigrationCaseEoiLetterParagraphs(input: MigrationCaseEoiLet
   return [...shared, intent, nonBinding];
 }
 
-export const MIGRATION_CASE_NDA_VERSION = "2026-08-01.2";
+export const MIGRATION_CASE_NDA_VERSION = "2026-08-09.1";
 
 export const FOUNDATION_NDA_SIGNATORY = {
   name: "Karman Kekana",
@@ -39,7 +39,7 @@ export const FOUNDATION_NDA_PARTY = {
   registrationNumber: "2026/138664/07",
   contactName: "Karman Kekana",
   email: "karman@foundation-1.co.za",
-  phone: "+27 69 036 8243",
+  phone: "+27 69 811 7112", // business support line — never a personal number
 };
 
 /**
@@ -63,7 +63,7 @@ export function buildMigrationCaseNdaClauses(companyName: string): { title: stri
     },
     {
       title: "4. Non-circumvention",
-      body: `For 24 months from signature, ${companyName} will not circumvent, avoid or bypass Foundation-1 in order to contract directly or indirectly with any bank, supplier, installer, wheeling provider or other counterparty first introduced by Foundation-1 for this opportunity, nor procure a substantially similar energy solution through them, without Foundation-1's written consent. Introductions, pricing structures, commercial routes and counterparty relationships disclosed by Foundation-1 are its confidential business assets. This clause does not restrict any relationship that demonstrably pre-dates this agreement, and does not oblige ${companyName} to transact.`,
+      body: `For 24 months from signature, ${companyName} will not conclude an energy-related transaction directly or indirectly with Foundation-1's banking partner in respect of the zero-capex energy product, or with Foundation-1's wheeling provider in respect of wheeled energy, bypassing Foundation-1, without Foundation-1's prior written consent. These introductions and commercial routes are Foundation-1's confidential business assets. This clause does not restrict any relationship that demonstrably pre-dates this agreement, and does not oblige ${companyName} to transact.`,
     },
     {
       title: "5. No obligation to transact",
