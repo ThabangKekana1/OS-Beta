@@ -265,6 +265,56 @@ function coverPage(pdf: Pdf, proposal: F1Proposal) {
   pdf.setFontSize(8);
   pdf.setTextColor(185, 194, 188);
   pdf.text("Not a formal credit offer. Engineering validates yield, dispatch and final terms.", MARGIN + 7, 236);
+  coverKeyFigures(pdf, proposal);
+}
+
+/**
+ * KEY FIGURES on page one — mirrors the operator upload form field-for-field
+ * (founder direction 2026-08-09): read the numbers off page 1, type them in,
+ * upload, submit. Also a clean client-facing decision summary.
+ */
+function coverKeyFigures(pdf: Pdf, proposal: F1Proposal) {
+  const audit = proposal.billAudit;
+  const current = audit?.averageMonthlySpendExVat ?? null;
+  const yearOne = proposal.ufmsOption?.monthlySaving ?? null;
+  const solution = current !== null && yearOne !== null ? current - yearOne : null;
+  const tenYear = proposal.tenYearComparison?.ufmsSaving ?? null;
+  const rows: [string, string][] = [
+    ["Current monthly cost ex VAT", current !== null ? rand0(current) : "—"],
+    ["Solution monthly cost ex VAT", solution !== null ? rand0(solution) : "—"],
+    ["Year-one monthly movement", yearOne !== null ? rand0(yearOne) : "—"],
+    ["Ten-year movement", tenYear !== null ? rand0(tenYear) : "—"],
+    ["Utility provider", audit?.provider ?? "—"],
+    ["Tariff names", (audit?.tariffNames ?? []).join(", ") || "—"],
+    ["Billing periods audited", audit ? String(audit.uniquePeriodCount) : "—"],
+    ["Days covered", audit ? String(audit.coveredDays) : "—"],
+  ];
+  const top = 257;
+  const colW = CONTENT_W / 4;
+  pdf.setTextColor(185, 255, 145);
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(7);
+  pdf.text("KEY FIGURES", MARGIN, top - 5);
+  for (let index = 0; index < rows.length; index += 1) {
+    const col = index % 4;
+    const line = Math.floor(index / 4);
+    const x = MARGIN + col * colW;
+    const y = top + line * 13;
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(5.6);
+    pdf.setTextColor(150, 162, 154);
+    pdf.text(rows[index][0].toUpperCase(), x, y);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(8.6);
+    pdf.setTextColor(244, 247, 244);
+    const value = rows[index][1];
+    pdf.text(value.length > 24 ? `${value.slice(0, 23)}…` : value, x, y + 4.8);
+  }
+}
+
+function rand0(value: number) {
+  const sign = value < 0 ? "-" : "";
+  return `${sign}R${Math.round(Math.abs(value)).toLocaleString("en-ZA").replace(/,/g, " ")}`;
 }
 
 function executivePage(pdf: Pdf, proposal: F1Proposal) {
