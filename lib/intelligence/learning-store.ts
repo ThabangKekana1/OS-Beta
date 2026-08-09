@@ -182,10 +182,11 @@ type MigrationCaseFunnelRow = {
 
 /**
  * Official launch date for the six-month deal-book ramp (doc 06 §8).
- * Set by the founder: platform go-live Monday 2026-08-10.
- * Override with FUNNEL_RAMP_START (YYYY-MM-DD) without a code change.
+ * Set by the founder: platform go-live Tuesday 2026-08-11 (the Monday is a
+ * public holiday). Override with FUNNEL_RAMP_START (YYYY-MM-DD) without a
+ * code change.
  */
-export const FUNNEL_RAMP_START = process.env.FUNNEL_RAMP_START?.trim() || "2026-08-10";
+export const FUNNEL_RAMP_START = process.env.FUNNEL_RAMP_START?.trim() || "2026-08-11";
 
 export async function readFunnelMetrics(input?: {
   windowDays?: number;
