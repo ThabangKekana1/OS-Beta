@@ -21,6 +21,12 @@ import {
   migrationCaseStageLabel,
   migrationCaseStageTone,
 } from "@/components/admin/migration-case-presentation";
+import {
+  buildChargeTreatmentMatrix,
+  type ChargeTreatmentMatrix,
+  type OnsiteTreatment,
+  type WheelingTreatment,
+} from "@/lib/charge-treatment";
 import { documentSignatureStatusLabel, type DocumentSignatureRow } from "@/lib/document-signing";
 import { listDocumentSignaturesForCases } from "@/lib/document-signing-store";
 import { getStoredFunderReport } from "@/lib/funder-report-pipeline";
@@ -29,10 +35,12 @@ import {
   getMigrationCaseRelations,
   kycPackStatus,
   MIGRATION_CASE_DOCUMENT_BUCKET,
+  type MigrationCaseBillPackRow,
   type MigrationCaseRow,
   type MigrationCaseSubmissionRow,
 } from "@/lib/migration-case-store";
 import { buildSlaEscalationDraft, slaClock } from "@/lib/submission-queue";
+import { isUtilityBillDocumentAnalysis } from "@/lib/utility-bill-analysis";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import { buildDailyWorklist, type WorklistCaseInput } from "@/lib/worklist";
 
@@ -158,6 +166,120 @@ function StatusChip({ tone, children }: { tone: string; children: React.ReactNod
 const CHIP_DONE = "border-emerald-300/40 bg-emerald-300/10 text-emerald-200";
 const CHIP_WAIT = "border-white/14 bg-white/[0.04] text-white/40";
 const CHIP_WARN = "border-amber-300/40 bg-amber-300/10 text-amber-200";
+
+/**
+ * Charge-treatment matrix off the audited bill pack. Returns null whenever the
+ * pack holds no parsed charge lines, so the section renders nothing rather
+ * than an empty table.
+ */
+function chargeTreatmentFromBillPack(billPack: MigrationCaseBillPackRow | null): ChargeTreatmentMatrix | null {
+  const periods = (billPack?.portfolio as { periods?: unknown } | undefined)?.periods;
+  if (!Array.isArray(periods)) return null;
+  const analyses = periods.filter(isUtilityBillDocumentAnalysis);
+  const lines = analyses.flatMap((analysis) => analysis.chargeLines ?? []);
+  if (lines.length === 0) return null;
+  return buildChargeTreatmentMatrix(lines, { periodCount: analyses.length });
+}
+
+const ONSITE_TREATMENT_LABEL: Record<OnsiteTreatment, string> = {
+  "removed-pro-rata": "Removed pro-rata",
+  conditional: "Conditional",
+  retained: "Stays",
+};
+
+const WHEELING_TREATMENT_LABEL: Record<WheelingTreatment, string> = {
+  replaced: "Replaced",
+  retained: "Stays",
+  conditional: "Conditional",
+};
+
+function treatmentTone(treatment: OnsiteTreatment | WheelingTreatment) {
+  if (treatment === "removed-pro-rata" || treatment === "replaced") return "text-emerald-200/85";
+  if (treatment === "conditional") return "text-amber-200/85";
+  return "text-white/34";
+}
+
+/**
+ * The answer to the question that stalls every client meeting: line by line,
+ * which charge does the on-site system take away and which does wheeling take
+ * away. Read directly off the client's own audited invoices.
+ */
+function ChargeTreatmentTable({ matrix }: { matrix: ChargeTreatmentMatrix }) {
+  const { totals, perKwh } = matrix;
+  const share = (value: number) => `${(value * 100).toFixed(1)}%`;
+  const rate = (value: number) => `R${value.toFixed(4)}`;
+  const buckets = (["peak", "standard", "off-peak"] as const)
+    .map((bucket) => ({ bucket, data: perKwh.buckets[bucket] }))
+    .filter((entry) => entry.data);
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+      <p className="text-[0.56rem] uppercase tracking-[0.14em] text-white/30">What each product removes</p>
+      <p className="mt-1 text-[0.66rem] leading-5 text-white/44">
+        Per month across {matrix.lines.reduce((sum, line) => sum + line.sourceLineCount, 0)} audited invoice lines.
+        On-site removes every charge billed per kWh; wheeling replaces the energy commodity only.
+      </p>
+      <table className="mt-2.5 w-full border-collapse text-[0.66rem]">
+        <thead>
+          <tr className="text-[0.56rem] uppercase tracking-[0.12em] text-white/28">
+            <th className="border-b border-white/8 py-1 text-left font-normal">Charge</th>
+            <th className="border-b border-white/8 py-1 text-right font-normal">R/month</th>
+            <th className="border-b border-white/8 py-1 pl-3 text-left font-normal">On-site</th>
+            <th className="border-b border-white/8 py-1 pl-3 text-left font-normal">Wheeling</th>
+          </tr>
+        </thead>
+        <tbody>
+          {matrix.lines.map((line) => (
+            <tr key={`${line.category}-${line.touBucket ?? "all"}`} className="align-top">
+              <td className="border-b border-white/5 py-1 pr-2 text-white/62">{line.label}</td>
+              <td className="border-b border-white/5 py-1 text-right tabular-nums text-white/62">
+                {migrationCaseMoney(line.monthlyAmount)}
+              </td>
+              <td className={`border-b border-white/5 py-1 pl-3 ${treatmentTone(line.onsite.treatment)}`}>
+                {ONSITE_TREATMENT_LABEL[line.onsite.treatment]}
+              </td>
+              <td className={`border-b border-white/5 py-1 pl-3 ${treatmentTone(line.wheeling.treatment)}`}>
+                {WHEELING_TREATMENT_LABEL[line.wheeling.treatment]}
+              </td>
+            </tr>
+          ))}
+          <tr className="text-white/72">
+            <td className="py-1.5 pr-2 font-medium">Bill total</td>
+            <td className="py-1.5 text-right tabular-nums font-medium">{migrationCaseMoney(totals.billMonthly)}</td>
+            <td className="py-1.5 pl-3 tabular-nums">
+              {migrationCaseMoney(totals.onsiteReachable)} · {share(totals.onsiteReachableShare)}
+            </td>
+            <td className="py-1.5 pl-3 tabular-nums">
+              {migrationCaseMoney(totals.wheelingReachable)} · {share(totals.wheelingReachableShare)}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p className="mt-2 text-[0.66rem] leading-5 text-white/44">
+        Neither product removes {migrationCaseMoney(totals.neverReachable)}/month ({share(totals.neverReachableShare)})
+        {totals.conditionalNmd > 0
+          ? `, of which ${migrationCaseMoney(totals.conditionalNmd)} is capacity charge that only falls on a formal notified-maximum-demand reduction.`
+          : "."}
+      </p>
+      {buckets.length > 0 ? (
+        <p className="mt-1.5 text-[0.66rem] leading-5 text-white/44">
+          Avoided cost per kWh displaced on site —{" "}
+          {buckets.map((entry, index) => (
+            <span key={entry.bucket}>
+              {index > 0 ? " · " : ""}
+              {entry.bucket} {rate(entry.data!.onsiteAvoidedRate)}
+            </span>
+          ))}
+          . Energy {rate(perKwh.blendedEnergyRate)}/kWh blended plus a {rate(perKwh.rider)}/kWh network, levy and
+          ancillary rider that wheeling does not touch.
+        </p>
+      ) : null}
+      {matrix.warnings.map((warning) => (
+        <p key={warning} className="mt-1.5 text-[0.66rem] leading-5 text-amber-100/64">{warning}</p>
+      ))}
+    </div>
+  );
+}
 
 /**
  * LEVEL 2 — THE CASE FILE. Everything about one case, in journey order:
@@ -296,6 +418,7 @@ export default async function AdminMigrationCaseFilePage({
 
   const proposal = relations.proposal;
   const billPack = relations.billPack;
+  const chargeTreatment = chargeTreatmentFromBillPack(billPack);
   const partnerProposal = relations.partnerProposal;
   const opsData: MigrationCaseOpsData = {
     caseId: caseRow.id,
@@ -479,6 +602,7 @@ export default async function AdminMigrationCaseFilePage({
             </div>
           ) : null}
           {caseRow.stage === "bill_pack_review" ? <BillPackReviewControl data={opsData} /> : null}
+          {chargeTreatment ? <ChargeTreatmentTable matrix={chargeTreatment} /> : null}
           <CaseFilesPanel caseId={caseRow.id} groups={["utility_bill"]} emptyLabel="No utility bills uploaded yet." />
           <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
             <AssessmentPublishControl
