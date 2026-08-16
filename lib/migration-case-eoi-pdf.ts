@@ -11,8 +11,8 @@ export const MIGRATION_CASE_EOI_DECLARATIONS_VERSION = "2026-08-01.1";
 export type MigrationCaseEoiCertificate = {
   signatureId: string;
   caseReference: string;
-  proposalId: string;
-  proposalGeneratedAt: string;
+  proposalId: string | null;
+  proposalGeneratedAt: string | null;
   companyName: string;
   companyRegistrationNumber: string | null;
   vatNumber: string | null;
@@ -20,9 +20,9 @@ export type MigrationCaseEoiCertificate = {
   signerName: string;
   signerPosition: string;
   signedAt: string;
-  economicallyPositive: boolean;
-  yearOneMonthlyDifference: number;
-  tenYearDifference: number;
+  economicallyPositive: boolean | null;
+  yearOneMonthlyDifference: number | null;
+  tenYearDifference: number | null;
 };
 
 export function migrationCaseEoiPdfFilename(record: Pick<MigrationCaseEoiCertificate, "companyName" | "caseReference">) {
@@ -77,7 +77,7 @@ export function buildMigrationCaseEoiPdf(record: MigrationCaseEoiCertificate) {
   pdf.text(MIGRATION_CASE_EOI_LETTER_RECIPIENT, 24 + labelWidth, y);
   y += 11;
 
-  for (const paragraph of buildMigrationCaseEoiLetterParagraphs(record)) {
+  for (const paragraph of buildMigrationCaseEoiLetterParagraphs({ companyName: record.companyName, economicallyPositive: record.economicallyPositive ?? true })) {
     pdf.setTextColor(31, 43, 36);
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(9.6);
@@ -132,7 +132,7 @@ export function buildMigrationCaseEoiPdf(record: MigrationCaseEoiCertificate) {
   pdf.setTextColor(72, 88, 80);
   pdf.text([
     `Signed ${signedAt} by ${record.signerName} (${record.signerPosition}) · authority and non-binding terms confirmed`,
-    `Case ${record.caseReference} · Proposal ${record.proposalId} · Signature ${record.signatureId}`,
+    `Case ${record.caseReference} · ${record.proposalId ? `Proposal ${record.proposalId}` : "Signed on bill upload, ahead of the audited proposal"} · Signature ${record.signatureId}`,
   ], 30, 264.5, { lineHeightFactor: 1.45 });
 
   pdf.setDrawColor(214, 225, 218);

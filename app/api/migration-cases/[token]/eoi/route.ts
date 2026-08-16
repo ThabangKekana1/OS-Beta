@@ -88,14 +88,13 @@ export async function POST(
           });
       return NextResponse.json(publicMigrationCaseState(repairedCase, relations));
     }
-    if (
-      (caseRow.stage !== "proposal_ready" && caseRow.stage !== "proposal_not_recommended")
-      || !relations.proposal
-    ) {
+    const billsFirstStage = caseRow.stage === "bill_pack_processing" || caseRow.stage === "bill_pack_review";
+    const proposalStage = (caseRow.stage === "proposal_ready" || caseRow.stage === "proposal_not_recommended") && Boolean(relations.proposal);
+    if (!billsFirstStage && !proposalStage) {
       return NextResponse.json(
         {
           ok: false,
-          error: "The Expression of Interest becomes available only after the bill-audited proposal is completed.",
+          error: "The Expression of Interest becomes available once your utility bills are uploaded.",
         },
         { status: 409 },
       );
@@ -115,17 +114,19 @@ export async function POST(
     if (!client) throw new Error("Supabase admin configuration is unavailable.");
     const signatureId = randomUUID();
     const signedAt = new Date().toISOString();
-    const proposal = relations.proposal;
-    // Provenance: record the hash of the proposal version that existed when
-    // the EOI was signed (operator document hash, else hash of the engine
-    // proposal snapshot). Works regardless of when the proposal is released.
-    const reviewedProposalHash = proposal.document_sha256
-      || createHash("sha256").update(JSON.stringify(proposal.proposal_snapshot ?? {})).digest("hex");
+    const proposal = relations.proposal ?? null;
+    // Provenance: when a proposal exists, record the hash of the version that
+    // existed at signing. In the bills-first flow the EOI precedes the audit,
+    // so no proposal reference is recorded yet.
+    const reviewedProposalHash = proposal
+      ? (proposal.document_sha256
+        || createHash("sha256").update(JSON.stringify(proposal.proposal_snapshot ?? {})).digest("hex"))
+      : null;
     const pdf = buildMigrationCaseEoiPdf({
       signatureId,
       caseReference: caseRow.public_reference,
-      proposalId: proposal.id,
-      proposalGeneratedAt: proposal.created_at,
+      proposalId: proposal?.id ?? null,
+      proposalGeneratedAt: proposal?.created_at ?? null,
       companyName: caseRow.business_name,
       companyRegistrationNumber,
       vatNumber: profile?.vatNumber ?? null,
@@ -133,9 +134,9 @@ export async function POST(
       signerName,
       signerPosition,
       signedAt,
-      economicallyPositive: proposal.economically_positive,
-      yearOneMonthlyDifference: proposal.year_one_monthly_difference,
-      tenYearDifference: proposal.ten_year_difference,
+      economicallyPositive: proposal?.economically_positive ?? null,
+      yearOneMonthlyDifference: proposal?.year_one_monthly_difference ?? null,
+      tenYearDifference: proposal?.ten_year_difference ?? null,
     });
     const pdfHash = createHash("sha256").update(pdf.bytes).digest("hex");
     const storage = await ensurePrivateBucket(MIGRATION_CASE_DOCUMENT_BUCKET);
@@ -153,7 +154,7 @@ export async function POST(
     const eoiInsertPayload = {
         id: signatureId,
         case_id: caseRow.id,
-        proposal_id: proposal.id,
+        proposal_id: proposal?.id ?? null,
         signed_at: signedAt,
         signer_name: signerName,
         signer_position: signerPosition,
@@ -206,10 +207,12 @@ export async function POST(
       caseId: caseRow.id,
       eventType: "post_proposal_eoi_signed",
       actorType: "client",
-      detail: `${signerName} signed the non-binding Expression of Interest after the proposal was completed.`,
+      detail: proposal
+        ? `${signerName} signed the non-binding Expression of Interest after the proposal was completed.`
+        : `${signerName} signed the non-binding Expression of Interest on bill upload, ahead of the audited proposal.`,
       metadata: {
         signatureId,
-        proposalId: proposal.id,
+        proposalId: proposal?.id ?? null,
         reviewedProposalHash,
         declarationsVersion: MIGRATION_CASE_EOI_DECLARATIONS_VERSION,
       },
@@ -222,7 +225,7 @@ export async function POST(
       province: caseRow.province,
       metadata: {
         reference: caseRow.public_reference,
-        economicallyPositive: proposal.economically_positive,
+        economicallyPositive: proposal?.economically_positive ?? null,
       },
     }).catch(() => undefined);
 
@@ -263,7 +266,7 @@ export async function POST(
       metadata: {
         migrationCaseId: caseRow.id,
         publicReference: caseRow.public_reference,
-        proposalId: proposal.id,
+        proposalId: proposal?.id ?? null,
         signatureId,
       },
     });
