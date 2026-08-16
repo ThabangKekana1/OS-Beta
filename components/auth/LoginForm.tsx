@@ -1,5 +1,7 @@
 "use client";
 
+import { resolveDefaultRouteForRole, type UserRole } from "@/lib/auth";
+
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -118,9 +120,23 @@ export function LoginForm({
         }).catch((auditError) => {
           console.error("[auth] login audit failed", auditError);
         });
-        router.replace(
-          nextPath ?? (variant === "partner" ? "/partner" : "/"),
-        );
+        let destination = nextPath;
+        if (!destination) {
+          if (variant === "partner") {
+            destination = "/partner";
+          } else {
+            try {
+              const meResponse = await fetch("/api/auth/me", {
+                headers: { Authorization: `Bearer ${supabaseData.session.access_token}` },
+              });
+              const mePayload = (await meResponse.json()) as { session?: { role?: string } | null };
+              destination = resolveDefaultRouteForRole((mePayload.session?.role as UserRole) ?? "client");
+            } catch {
+              destination = "/migration/dashboard";
+            }
+          }
+        }
+        router.replace(destination);
         router.refresh();
         return;
       }
