@@ -811,10 +811,10 @@ export function publicMigrationCaseState(
       canSignNda: profileCompleted && !ndaSigned,
       canUploadCompleteBillPack: ndaSigned && !eoiSigned,
       canSignEoi:
-        // Bills-first flow: the Expression of Interest opens the moment the bill
-        // pack is received. When a proposal already exists it is referenced.
-        ((caseRow.stage === "bill_pack_processing" || caseRow.stage === "bill_pack_review")
-          || ((caseRow.stage === "proposal_ready" || caseRow.stage === "proposal_not_recommended") && Boolean(proposal)))
+        // The Expression of Interest opens once the Foundation-1 Migration
+        // Report has been published to the client.
+        (caseRow.stage === "proposal_ready" || caseRow.stage === "proposal_not_recommended")
+        && Boolean(proposal)
         && ndaSigned
         && !eoiSigned,
       canDownloadProposal: proposalReleased && Boolean(proposal),

@@ -88,13 +88,14 @@ export async function POST(
           });
       return NextResponse.json(publicMigrationCaseState(repairedCase, relations));
     }
-    const billsFirstStage = caseRow.stage === "bill_pack_processing" || caseRow.stage === "bill_pack_review";
-    const proposalStage = (caseRow.stage === "proposal_ready" || caseRow.stage === "proposal_not_recommended") && Boolean(relations.proposal);
-    if (!billsFirstStage && !proposalStage) {
+    if (
+      (caseRow.stage !== "proposal_ready" && caseRow.stage !== "proposal_not_recommended")
+      || !relations.proposal
+    ) {
       return NextResponse.json(
         {
           ok: false,
-          error: "The Expression of Interest becomes available once your utility bills are uploaded.",
+          error: "The Expression of Interest becomes available once your Foundation-1 Migration Report is ready.",
         },
         { status: 409 },
       );
