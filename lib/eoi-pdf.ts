@@ -1,6 +1,32 @@
 import { jsPDF } from "jspdf";
 import { sanitizeFileSegment } from "@/lib/download-utils";
 import type { EoiTemplateLead } from "@/lib/eoi-template";
+import {
+  KIT_COLORS,
+  KIT_INK,
+  KIT_PAGE,
+  blend,
+  brandLockup,
+  coverGridTexture,
+  drawText,
+  eyebrow,
+  footerBand,
+  hairline,
+  inkTint,
+  kitLongDate,
+  monoLabel,
+  paintPaper,
+  panel,
+  accentBar,
+  paragraph,
+} from "@/lib/document-kit";
+
+// =============================================================================
+// Foundation-1 signed Expression of Interest (assessment journey), print
+// layer. House document design system: the letter as the centrepiece under
+// the NON-BINDING EXPRESSION OF INTEREST header treatment, with the digital
+// signature record. Client-facing: no funder or partner is ever named.
+// =============================================================================
 
 export type SignedEoiRecord = EoiTemplateLead & {
   eoiSignatureId: string;
@@ -26,78 +52,105 @@ export function signedEoiPdfFilename(company: string) {
 export function buildSignedEoiPdf(record: SignedEoiRecord) {
   const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait", compress: true });
   pdf.setProperties({
-    title: `Signed Expression of Interest — ${record.company}`,
+    title: `Signed Expression of Interest: ${record.company}`,
     subject: "Non-binding renewable-energy supply Expression of Interest",
     author: "Foundation-1 (Pty) Ltd",
     creator: "Foundation-1 1OS Digital Signature",
   });
+  const signedDate = kitLongDate(record.eoiSignedAt);
+  const context = `PROFILE ${record.clientProfileId}`;
 
-  pdf.setFillColor(4, 12, 8);
-  pdf.rect(0, 0, 210, 48, "F");
-  pdf.setFillColor(185, 255, 145);
-  pdf.circle(183, 22, 11, "F");
-  pdf.setFillColor(4, 12, 8);
-  pdf.circle(183, 22, 5, "F");
-  pdf.setTextColor(185, 255, 145);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(8);
-  pdf.text("FOUNDATION-1 / DIGITAL AGREEMENTS", 18, 17);
-  pdf.setTextColor(245, 248, 246);
-  pdf.setFontSize(22);
-  pdf.text("Expression of Interest", 18, 31);
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(9);
-  pdf.setTextColor(182, 195, 187);
-  pdf.text("Renewable energy supply · non-binding", 18, 39);
+  paintPaper(pdf);
+  coverGridTexture(pdf, { fadeBottomY: 58 });
+  brandLockup(pdf, KIT_PAGE.margin, 10.2);
+  monoLabel(pdf, `${context} \u00b7 ${signedDate}`, KIT_PAGE.width - KIT_PAGE.margin, 14.8, {
+    size: 6.2,
+    alpha: KIT_INK.faint,
+    trackingEm: 0.14,
+    align: "right",
+  });
 
-  let y = 62;
-  pdf.setTextColor(20, 31, 25);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(11);
-  pdf.text("To: Foundation-1 (Pty) Ltd", 18, y);
-  y += 8;
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(9);
-  pdf.setTextColor(84, 98, 90);
-  pdf.text(`Profile ${record.clientProfileId} · ${record.company}`, 18, y);
-  y += 14;
+  eyebrow(pdf, "NON-BINDING EXPRESSION OF INTEREST", KIT_PAGE.margin, 32);
+  drawText(pdf, "Expression of Interest.", KIT_PAGE.margin, 43, { weight: "bold", size: 24 });
+  drawText(pdf, "Renewable energy supply.", KIT_PAGE.margin, 53, { weight: "bold", size: 24, color: inkTint(KIT_INK.faint) });
+  monoLabel(pdf, "NON-BINDING \u00b7 SUBJECT TO CONTRACT \u00b7 RECORDED DIGITALLY", KIT_PAGE.margin, 60.5, {
+    size: 6.2,
+    alpha: KIT_INK.dim,
+    trackingEm: 0.13,
+  });
 
-  for (const paragraph of bodyText(record)) {
-    const lines = pdf.splitTextToSize(paragraph, 174) as string[];
-    pdf.setTextColor(31, 42, 36);
-    pdf.setFontSize(9.5);
-    pdf.text(lines, 18, y, { lineHeightFactor: 1.45 });
-    y += lines.length * 5.5 + 5;
+  // The business letterhead, populated from the assessment profile.
+  let y = 68;
+  const letterheadLines = [
+    record.businessRegistrationNumber ? `Registration ${record.businessRegistrationNumber}` : "Registration number not supplied",
+    record.physicalAddress || null,
+  ].filter((line): line is string => Boolean(line));
+  const letterheadHeight = 15.4 + Math.max(1, letterheadLines.length) * 4.1;
+  panel(pdf, KIT_PAGE.margin, y, KIT_PAGE.contentWidth, letterheadHeight);
+  monoLabel(pdf, "FROM \u00b7 THE AUTHORISED BUSINESS", KIT_PAGE.margin + 5.6, y + 6, {
+    size: 5.6,
+    alpha: KIT_INK.ghost,
+    trackingEm: 0.12,
+    base: KIT_COLORS.panel,
+  });
+  drawText(pdf, record.company, KIT_PAGE.margin + 5.6, y + 12.6, { weight: "bold", size: 11 });
+  letterheadLines.forEach((line, index) => {
+    drawText(pdf, line, KIT_PAGE.margin + 5.6, y + 18.2 + index * 4.1, { size: 6.8, color: inkTint(KIT_INK.dim, KIT_COLORS.panel) });
+  });
+  y += letterheadHeight + 9;
+
+  // The letter, set directly on the paper.
+  monoLabel(pdf, "TO \u00b7 FOUNDATION-1 (PTY) LTD", KIT_PAGE.margin, y, { alpha: KIT_INK.dim, size: 6.4 });
+  y += 8.5;
+  const letterStyle = { size: 9.6, color: inkTint(0.86) } as const;
+  for (const letterParagraph of bodyText(record)) {
+    y = paragraph(pdf, letterParagraph, KIT_PAGE.margin, y, letterStyle, KIT_PAGE.contentWidth, { lineHeight: 5.2 });
+    y += 3.4;
   }
+  y += 2;
+  drawText(pdf, "Kind regards,", KIT_PAGE.margin, y, letterStyle);
 
-  y = Math.max(y + 4, 188);
-  pdf.setFillColor(239, 247, 242);
-  pdf.roundedRect(18, y, 174, 48, 4, 4, "F");
-  pdf.setTextColor(35, 155, 102);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(7.5);
-  pdf.text("DIGITAL SIGNATURE CERTIFICATE", 25, y + 10);
-  pdf.setTextColor(20, 31, 25);
-  pdf.setFontSize(17);
-  pdf.text(record.eoiSignedBy, 25, y + 22);
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(8);
-  pdf.setTextColor(84, 98, 90);
-  const signedAt = new Date(record.eoiSignedAt).toLocaleString("en-ZA", { dateStyle: "long", timeStyle: "short" });
-  pdf.text([
-    record.userProfile.role || "Authorised representative",
-    `${record.company} · ${record.businessRegistrationNumber || "Registration number not supplied"}`,
-    `Signed ${signedAt} · Terms accepted`,
-    `Signature record ${record.eoiSignatureId}`,
-  ], 25, y + 30, { lineHeightFactor: 1.35 });
+  // Signature block.
+  y = Math.max(y + 15, 208);
+  drawText(pdf, record.eoiSignedBy, KIT_PAGE.margin + 2, y, { font: "times", weight: "italic", size: 15 });
+  hairline(pdf, KIT_PAGE.margin, y + 3, KIT_PAGE.margin + 72, y + 3, { alpha: 0.3 });
+  monoLabel(pdf, "SIGNATURE \u00b7 DIGITALLY RECORDED", KIT_PAGE.margin, y + 7.6, { size: 5.6, alpha: KIT_INK.faint, trackingEm: 0.12 });
+  drawText(pdf, record.eoiSignedBy, KIT_PAGE.margin + 108, y, { weight: "bold", size: 9.4 });
+  hairline(pdf, KIT_PAGE.margin + 108, y + 3, KIT_PAGE.width - KIT_PAGE.margin, y + 3, { alpha: 0.3 });
+  monoLabel(pdf, record.userProfile.role ? `NAME \u00b7 ${record.userProfile.role.toUpperCase()}` : "NAME \u00b7 AUTHORISED REPRESENTATIVE", KIT_PAGE.margin + 108, y + 7.6, {
+    size: 5.6,
+    alpha: KIT_INK.faint,
+    trackingEm: 0.12,
+  });
 
-  pdf.setDrawColor(215, 225, 219);
-  pdf.line(18, 278, 192, 278);
-  pdf.setFontSize(6.5);
-  pdf.setTextColor(101, 115, 107);
-  pdf.text("Foundation-1 (Pty) Ltd · Digitally executed non-binding EOI", 18, 284);
-  pdf.text(record.clientProfileId, 192, 284, { align: "right" });
+  // Digital signature record.
+  const signedAtText = new Date(record.eoiSignedAt).toLocaleString("en-ZA", { dateStyle: "long", timeStyle: "short" });
+  const recordY = 245;
+  const recordHeight = 25;
+  panel(pdf, KIT_PAGE.margin, recordY, KIT_PAGE.contentWidth, recordHeight);
+  accentBar(pdf, KIT_PAGE.margin, recordY, recordHeight, KIT_COLORS.green);
+  monoLabel(pdf, "DIGITAL SIGNATURE RECORD", KIT_PAGE.margin + 5.6, recordY + 6, {
+    size: 5.8,
+    color: blend(KIT_COLORS.green, 0.85, KIT_COLORS.panel),
+    trackingEm: 0.14,
+  });
+  drawText(pdf, record.eoiSignedBy, KIT_PAGE.margin + 5.6, recordY + 12.4, { weight: "bold", size: 11 });
+  drawText(
+    pdf,
+    `${record.userProfile.role || "Authorised representative"} \u00b7 ${record.company} \u00b7 ${record.businessRegistrationNumber || "Registration number not supplied"}`,
+    KIT_PAGE.margin + 5.6,
+    recordY + 17,
+    { size: 7, color: inkTint(KIT_INK.dim, KIT_COLORS.panel) },
+  );
+  drawText(
+    pdf,
+    `Signed ${signedAtText} \u00b7 Terms accepted \u00b7 Signature record ${record.eoiSignatureId}`,
+    KIT_PAGE.margin + 5.6,
+    recordY + 21.2,
+    { size: 6.4, color: inkTint(KIT_INK.faint, KIT_COLORS.panel) },
+  );
 
+  footerBand(pdf, "Expression of Interest", context);
   return {
     bytes: new Uint8Array(pdf.output("arraybuffer")),
     filename: signedEoiPdfFilename(record.company),

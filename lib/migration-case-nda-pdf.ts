@@ -8,6 +8,34 @@ import {
   FOUNDATION_NDA_SIGNATORY,
   MIGRATION_CASE_NDA_VERSION,
 } from "@/lib/migration-case-agreements";
+import {
+  KIT_COLORS,
+  KIT_INK,
+  KIT_PAGE,
+  addKitPage,
+  blend,
+  brandLockup,
+  coverGridTexture,
+  drawText,
+  eyebrow,
+  footerBand,
+  hairline,
+  inkTint,
+  kitLongDate,
+  monoLabel,
+  paintPaper,
+  panel,
+  accentBar,
+  paragraph,
+  wrapText,
+} from "@/lib/document-kit";
+
+// =============================================================================
+// Foundation-1 non-disclosure and consent agreement, print layer. House
+// document design system: cover feel on page one, numbered clauses with
+// breathing room, twin signature panels, a digital execution record.
+// Client-facing: no funder or partner is ever named.
+// =============================================================================
 
 let signatureDataUrl: string | null | undefined;
 
@@ -50,137 +78,155 @@ export function buildMigrationCaseNdaPdf(record: MigrationCaseNdaRecord) {
     author: "Foundation-1 (Pty) Ltd",
     creator: "Foundation-1 Migration Case Pipeline",
   });
+  const signedDate = kitLongDate(record.signedAt);
+  const context = `CASE ${record.caseReference}`;
 
-  pdf.setFillColor(255, 255, 255);
-  pdf.rect(0, 0, 210, 297, "F");
-  pdf.setFillColor(4, 12, 8);
-  pdf.rect(0, 0, 210, 46, "F");
-  pdf.setTextColor(185, 255, 145);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(8);
-  pdf.text("FOUNDATION-1 / CONFIDENTIALITY & POPIA", 18, 16);
-  pdf.setTextColor(246, 248, 247);
-  pdf.setFontSize(19);
-  pdf.text("Non-Disclosure & Consent Agreement", 18, 29);
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(8);
-  pdf.setTextColor(181, 193, 186);
-  pdf.text("Mutual confidentiality · POPIA processing · limited sharing consent", 18, 38);
+  // ------------------------------------------------------ page one, cover feel
+  paintPaper(pdf);
+  coverGridTexture(pdf, { fadeBottomY: 58 });
+  brandLockup(pdf, KIT_PAGE.margin, 10.2);
+  monoLabel(pdf, `${context} \u00b7 ${signedDate}`, KIT_PAGE.width - KIT_PAGE.margin, 14.8, {
+    size: 6.2,
+    alpha: KIT_INK.faint,
+    trackingEm: 0.14,
+    align: "right",
+  });
 
-  let y = 58;
-  pdf.setTextColor(22, 34, 27);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(9);
-  pdf.text("THE PARTIES", 18, y);
-  y += 6;
+  eyebrow(pdf, "FOUNDATION-1 \u00b7 CONFIDENTIALITY \u00b7 POPIA", KIT_PAGE.margin, 32);
+  drawText(pdf, "Non-disclosure and", KIT_PAGE.margin, 43, { weight: "bold", size: 24 });
+  drawText(pdf, "consent agreement.", KIT_PAGE.margin, 53, { weight: "bold", size: 24, color: inkTint(KIT_INK.faint) });
+  monoLabel(pdf, "MUTUAL CONFIDENTIALITY \u00b7 POPIA PROCESSING \u00b7 LIMITED SHARING CONSENT", KIT_PAGE.margin, 60.5, {
+    size: 6.2,
+    alpha: KIT_INK.dim,
+    trackingEm: 0.13,
+  });
 
-  // Two party columns, each carrying the full contact record.
-  const columnWidth = 84;
-  const rightX = 108;
-  pdf.setFillColor(246, 248, 247);
-  pdf.roundedRect(18, y - 4, columnWidth, 34, 2, 2, "F");
-  pdf.roundedRect(rightX, y - 4, columnWidth, 34, 2, 2, "F");
-
-  pdf.setFontSize(8.4);
-  pdf.setTextColor(20, 31, 25);
-  pdf.text(FOUNDATION_NDA_PARTY.name, 23, y + 2);
-  pdf.text(record.companyName.slice(0, 40), rightX + 5, y + 2);
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(7);
-  pdf.setTextColor(86, 99, 91);
-  pdf.text([
-    `Reg ${FOUNDATION_NDA_PARTY.registrationNumber}`,
+  // The parties: two panels carrying the full contact records.
+  let y = 69;
+  monoLabel(pdf, "THE PARTIES", KIT_PAGE.margin, y);
+  y += 3;
+  const columnWidth = (KIT_PAGE.contentWidth - 4) / 2;
+  const rightX = KIT_PAGE.margin + columnWidth + 4;
+  const partyPanelHeight = 41;
+  panel(pdf, KIT_PAGE.margin, y, columnWidth, partyPanelHeight);
+  panel(pdf, rightX, y, columnWidth, partyPanelHeight);
+  const partyLabel = { size: 5.6, alpha: KIT_INK.ghost, trackingEm: 0.12, base: KIT_COLORS.panel } as const;
+  monoLabel(pdf, "DISCLOSING AND RECEIVING PARTY", KIT_PAGE.margin + 5, y + 6, partyLabel);
+  monoLabel(pdf, "DISCLOSING AND RECEIVING PARTY", rightX + 5, y + 6, partyLabel);
+  drawText(pdf, FOUNDATION_NDA_PARTY.name, KIT_PAGE.margin + 5, y + 12.4, { weight: "bold", size: 9 });
+  drawText(pdf, record.companyName.slice(0, 44), rightX + 5, y + 12.4, { weight: "bold", size: 9 });
+  const detailStyle = { size: 6.8, color: inkTint(KIT_INK.dim, KIT_COLORS.panel) } as const;
+  const foundationLines = [
+    `Registration ${FOUNDATION_NDA_PARTY.registrationNumber}`,
     FOUNDATION_NDA_PARTY.contactName,
     FOUNDATION_NDA_PARTY.email,
     FOUNDATION_NDA_PARTY.phone,
-  ], 23, y + 8, { lineHeightFactor: 1.5 });
-  pdf.text([
-    record.companyRegistrationNumber ? `Reg ${record.companyRegistrationNumber}` : "Registration number not supplied",
-    `${record.clientContactName} (${record.signerPosition})`.slice(0, 46),
+  ];
+  foundationLines.forEach((line, index) => {
+    drawText(pdf, line, KIT_PAGE.margin + 5, y + 18.6 + index * 4.1, detailStyle);
+  });
+  const clientLines = [
+    record.companyRegistrationNumber ? `Registration ${record.companyRegistrationNumber}` : "Registration number not supplied",
+    `${record.clientContactName} (${record.signerPosition})`.slice(0, 48),
     record.clientEmail,
     record.clientPhone,
-    ...(record.physicalAddress ? (pdf.splitTextToSize(record.physicalAddress, columnWidth - 10) as string[]).slice(0, 2) : []),
-  ], rightX + 5, y + 8, { lineHeightFactor: 1.5 });
-  y += 38;
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(7.6);
-  pdf.setTextColor(86, 99, 91);
-  pdf.text(`Case ${record.caseReference}`, 18, y);
-  y += 8;
-
-  for (const clause of buildMigrationCaseNdaClauses(record.companyName)) {
-    pdf.setTextColor(22, 34, 27);
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(8.4);
-    pdf.text(clause.title, 18, y);
-    y += 4.6;
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(8.2);
-    pdf.setTextColor(45, 58, 51);
-    const lines = pdf.splitTextToSize(clause.body, 174) as string[];
-    pdf.text(lines, 18, y, { lineHeightFactor: 1.4 });
-    y += lines.length * 4.3 + 5;
-  }
-
-  // Two signature columns: Foundation-1 (pre-signed) and the client.
-  const signedAt = new Date(record.signedAt).toLocaleString("en-ZA", {
-    dateStyle: "long",
-    timeStyle: "short",
+    ...(record.physicalAddress ? wrapText(pdf, record.physicalAddress, { size: 6.8 }, columnWidth - 10).slice(0, 1) : []),
+  ];
+  clientLines.forEach((line, index) => {
+    drawText(pdf, line, rightX + 5, y + 18.6 + index * 4.1, detailStyle);
   });
-  // Signatures never collide with the footer: overflow onto a clean page.
-  if (y + 4 > 222) {
-    pdf.addPage();
-    pdf.setFillColor(255, 255, 255);
-    pdf.rect(0, 0, 210, 297, "F");
-    y = 40;
+  y += partyPanelHeight + 9;
+
+  // ------------------------------------------------- clauses, breathing room
+  const clauses = buildMigrationCaseNdaClauses(record.companyName);
+  monoLabel(pdf, "THE AGREEMENT \u00b7 SIX CLAUSES, PLAIN LANGUAGE", KIT_PAGE.margin, y);
+  y += 7.5;
+  const bodyStyle = { size: 8.2, color: inkTint(KIT_INK.body) } as const;
+  const bodyWidth = KIT_PAGE.contentWidth - 12.7;
+  clauses.forEach((clause, index) => {
+    const title = clause.title.replace(/^\d+\.\s*/, "");
+    const bodyLines = wrapText(pdf, clause.body, bodyStyle, bodyWidth);
+    const blockHeight = 6.4 + bodyLines.length * 4.3;
+    if (y + blockHeight > KIT_PAGE.bodyLimitY) {
+      y = addKitPage(pdf, {
+        eyebrow: "FOUNDATION-1 \u00b7 CONFIDENTIALITY \u00b7 POPIA",
+        title: "The agreement, continued.",
+        context: `${context} \u00b7 ${signedDate.toUpperCase()}`,
+      });
+      y += 2;
+    }
+    drawText(pdf, String(index + 1).padStart(2, "0"), KIT_PAGE.margin, y, {
+      font: "courier",
+      size: 8.5,
+      color: blend(KIT_COLORS.amber, 0.9),
+      trackingEm: 0.08,
+    });
+    drawText(pdf, title, KIT_PAGE.margin + 12.7, y, { weight: "bold", size: 9.5 });
+    paragraph(pdf, clause.body, KIT_PAGE.margin + 12.7, y + 5.6, bodyStyle, bodyWidth, { lineHeight: 4.3 });
+    y += blockHeight + 6.2;
+  });
+
+  // ------------------------------------------------------- signature panels
+  const signatureBlockHeight = 46 + 8 + 17 + 6;
+  if (y + signatureBlockHeight > KIT_PAGE.bodyLimitY) {
+    y = addKitPage(pdf, {
+      eyebrow: "FOUNDATION-1 \u00b7 CONFIDENTIALITY \u00b7 POPIA",
+      title: "Execution.",
+      context: `${context} \u00b7 ${signedDate.toUpperCase()}`,
+    });
+    y += 2;
   } else {
-    y = Math.max(y + 4, 214);
+    y = Math.max(y + 2, KIT_PAGE.bodyLimitY - signatureBlockHeight);
   }
-  pdf.setFillColor(246, 248, 247);
-  pdf.roundedRect(18, y, 84, 44, 3, 3, "F");
-  pdf.roundedRect(108, y, 84, 44, 3, 3, "F");
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(6.4);
-  pdf.setTextColor(90, 102, 95);
-  pdf.text("SIGNED FOR FOUNDATION-1 (PTY) LTD", 23, y + 7);
-  pdf.text(`SIGNED FOR ${record.companyName.toUpperCase().slice(0, 30)}`, 113, y + 7);
+  const signedAtText = new Date(record.signedAt).toLocaleString("en-ZA", { dateStyle: "long", timeStyle: "short" });
+  const signaturePanelHeight = 46;
+  panel(pdf, KIT_PAGE.margin, y, columnWidth, signaturePanelHeight);
+  panel(pdf, rightX, y, columnWidth, signaturePanelHeight);
+  monoLabel(pdf, "SIGNED FOR FOUNDATION-1 (PTY) LTD", KIT_PAGE.margin + 5, y + 6.4, partyLabel);
+  monoLabel(pdf, `SIGNED FOR ${record.companyName.toUpperCase().slice(0, 30)}`, rightX + 5, y + 6.4, partyLabel);
 
   const signature = foundationSignature();
   if (signature) {
-    pdf.addImage(signature, "PNG", 23, y + 9, 40, 26.5, undefined, "FAST");
+    pdf.addImage(signature, "PNG", KIT_PAGE.margin + 5, y + 8.5, 36, 23.9, undefined, "FAST");
   } else {
-    pdf.setFont("times", "italic");
-    pdf.setFontSize(13);
-    pdf.setTextColor(24, 36, 30);
-    pdf.text(FOUNDATION_NDA_SIGNATORY.name, 23, y + 22);
+    drawText(pdf, FOUNDATION_NDA_SIGNATORY.name, KIT_PAGE.margin + 5, y + 24, { font: "times", weight: "italic", size: 13 });
   }
-  pdf.setFont("times", "italic");
-  pdf.setFontSize(12.5);
-  pdf.setTextColor(24, 36, 30);
-  pdf.text(record.signerName, 113, y + 24);
+  drawText(pdf, record.signerName, rightX + 5, y + 26, { font: "times", weight: "italic", size: 12.5 });
 
-  pdf.setDrawColor(150, 160, 154);
-  pdf.line(23, y + 30, 97, y + 30);
-  pdf.line(113, y + 30, 187, y + 30);
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(6.6);
-  pdf.setTextColor(72, 88, 80);
-  pdf.text([
-    `${FOUNDATION_NDA_SIGNATORY.name} · ${FOUNDATION_NDA_SIGNATORY.position}`,
-    "Signed in advance of client execution",
-  ], 23, y + 34.5, { lineHeightFactor: 1.5 });
-  pdf.text([
-    `${record.signerName} · ${record.signerPosition}`.slice(0, 52),
-    `Signed ${signedAt}`,
-  ], 113, y + 34.5, { lineHeightFactor: 1.5 });
+  hairline(pdf, KIT_PAGE.margin + 5, y + 33, KIT_PAGE.margin + columnWidth - 5, y + 33, { alpha: 0.3, base: KIT_COLORS.panel });
+  hairline(pdf, rightX + 5, y + 33, rightX + columnWidth - 5, y + 33, { alpha: 0.3, base: KIT_COLORS.panel });
+  const signMeta = { size: 6.6, color: inkTint(KIT_INK.dim, KIT_COLORS.panel) } as const;
+  drawText(pdf, `${FOUNDATION_NDA_SIGNATORY.name} \u00b7 ${FOUNDATION_NDA_SIGNATORY.position}`, KIT_PAGE.margin + 5, y + 37.6, signMeta);
+  drawText(pdf, "Signed in advance of client execution", KIT_PAGE.margin + 5, y + 41.6, signMeta);
+  drawText(pdf, `${record.signerName} \u00b7 ${record.signerPosition}`.slice(0, 54), rightX + 5, y + 37.6, signMeta);
+  drawText(pdf, `Signed ${signedAtText}`, rightX + 5, y + 41.6, signMeta);
+  y += signaturePanelHeight + 5;
 
-  pdf.setDrawColor(214, 225, 218);
-  pdf.line(18, 281, 192, 281);
-  pdf.setFontSize(6.2);
-  pdf.setTextColor(101, 114, 107);
-  pdf.text(`Foundation-1 (Pty) Ltd · agreement version ${MIGRATION_CASE_NDA_VERSION} · ${record.ndaId}`, 18, 286);
-  pdf.text(record.caseReference, 192, 286, { align: "right" });
+  // Digital execution record.
+  const recordHeight = 17;
+  panel(pdf, KIT_PAGE.margin, y, KIT_PAGE.contentWidth, recordHeight);
+  accentBar(pdf, KIT_PAGE.margin, y, recordHeight, KIT_COLORS.green);
+  monoLabel(pdf, "DIGITAL EXECUTION RECORD", KIT_PAGE.margin + 5.6, y + 6, {
+    size: 5.8,
+    color: blend(KIT_COLORS.green, 0.85, KIT_COLORS.panel),
+    trackingEm: 0.14,
+  });
+  drawText(
+    pdf,
+    `Agreement version ${MIGRATION_CASE_NDA_VERSION} \u00b7 Record ${record.ndaId} \u00b7 ${context}`,
+    KIT_PAGE.margin + 5.6,
+    y + 10.8,
+    { size: 7, color: inkTint(KIT_INK.dim, KIT_COLORS.panel) },
+  );
+  drawText(
+    pdf,
+    "Both parties receive this executed copy inside the secure migration case.",
+    KIT_PAGE.margin + 5.6,
+    y + 14.4,
+    { size: 6.6, color: inkTint(KIT_INK.faint, KIT_COLORS.panel) },
+  );
 
+  footerBand(pdf, "Non-disclosure and consent", context);
   return {
     bytes: new Uint8Array(pdf.output("arraybuffer")),
     filename: migrationCaseNdaPdfFilename(record),

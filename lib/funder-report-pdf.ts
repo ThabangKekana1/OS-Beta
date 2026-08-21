@@ -1,219 +1,120 @@
 /**
- * FOUNDATION-1 FUNDER-REPORT PDF — server-rendered report artifact (v1).
+ * FOUNDATION-1 FUNDER-REPORT PDF, server-rendered report artifact (v2).
  *
- * jsPDF A4 in the house print style of `lib/migration-proposal-pdf.ts`, so
- * the report ships in production without the presentations worker. The full
- * R3F migration-path deck is generated offline from the same
- * ClientSavingsData JSON (see `lib/funder-report-pipeline.ts` for the three
- * commands).
+ * jsPDF A4 on the house document design system (lib/document-kit.ts), so the
+ * report ships in production without the presentations worker. The full R3F
+ * migration-path deck is generated offline from the same ClientSavingsData
+ * JSON (see lib/funder-report-pipeline.ts for the three commands).
  *
- * CONFIDENTIALITY: this document is client-facing. It contains ONLY
- * bill-derived and funder-stated figures. No clone-engine constants,
- * cross-check reasoning or prediction internals may be rendered here.
+ * AUDIENCE: internal, travels with the case to the funder. It may name the
+ * funding partners, so partner-neutral copy is switched off for this build
+ * and restored afterwards. It still contains ONLY bill-derived and
+ * funder-stated figures: no clone-engine constants, cross-check reasoning or
+ * prediction internals may be rendered here.
  */
 import { jsPDF } from "jspdf";
 import { sanitizeFileSegment } from "@/lib/download-utils";
 import type { FunderReport } from "@/lib/funder-report";
-
-const PAGE_W = 210;
-const MARGIN = 16;
-const CONTENT_W = PAGE_W - MARGIN * 2;
-const FOOTER_Y = 286;
-const INK: [number, number, number] = [16, 28, 22];
-const MUTED: [number, number, number] = [94, 108, 100];
-const GREEN: [number, number, number] = [35, 155, 102];
-const PALE: [number, number, number] = [238, 247, 241];
-const RULE: [number, number, number] = [216, 226, 220];
-const AMBER: [number, number, number] = [176, 122, 30];
-const BLUE: [number, number, number] = [52, 96, 160];
+import {
+  KIT_COLORS,
+  KIT_INK,
+  KIT_PAGE,
+  addKitPage,
+  blend,
+  coverPage,
+  darkCallout,
+  dataTable,
+  drawText,
+  footerBand,
+  hairline,
+  inkTint,
+  keyValueRows,
+  kitLongDate,
+  monoLabel,
+  panel,
+  accentBar,
+  paragraph,
+  setPartnerNeutralCopy,
+  sourceNote,
+  stageJourney,
+  statStrip,
+  type KitKeyValueRow,
+} from "@/lib/document-kit";
 
 type Pdf = jsPDF;
 
 function money(value: number) {
-  return `R${Math.round(value).toLocaleString("en-ZA")}`;
+  const absolute = Math.abs(Math.round(value)).toLocaleString("en-US");
+  return `${value < 0 ? "-" : ""}R${absolute}`;
 }
 
-function addPage(pdf: Pdf, title?: string) {
-  pdf.addPage();
-  if (title) {
-    pdf.setTextColor(...GREEN);
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(8);
-    pdf.text(title.toUpperCase(), MARGIN, 16);
-    pdf.setDrawColor(...RULE);
-    pdf.line(MARGIN, 21, PAGE_W - MARGIN, 21);
-  }
+function compactMoney(value: number) {
+  const sign = value < 0 ? "-" : "";
+  const absolute = Math.abs(value);
+  if (absolute >= 1_000_000) return `${sign}R${(absolute / 1_000_000).toFixed(2)}m`;
+  if (absolute >= 100_000) return `${sign}R${Math.round(absolute / 1_000).toLocaleString("en-US")}k`;
+  return `${sign}R${Math.round(absolute).toLocaleString("en-US")}`;
 }
 
-function sectionTitle(pdf: Pdf, eyebrow: string, title: string, y: number) {
-  pdf.setTextColor(...GREEN);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(7.5);
-  pdf.text(eyebrow.toUpperCase(), MARGIN, y);
-  pdf.setTextColor(...INK);
-  pdf.setFontSize(19);
-  pdf.text(title, MARGIN, y + 9);
-  return y + 17;
-}
-
-function paragraph(
-  pdf: Pdf,
-  text: string,
-  x: number,
-  y: number,
-  width: number,
-  options: { size?: number; color?: [number, number, number] } = {},
-) {
-  const size = options.size ?? 9;
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(size);
-  pdf.setTextColor(...(options.color ?? MUTED));
-  const lines = pdf.splitTextToSize(text, width) as string[];
-  pdf.text(lines, x, y, { lineHeightFactor: 1.35 });
-  return y + Math.max(1, lines.length) * size * 0.5;
-}
-
-function metric(pdf: Pdf, x: number, y: number, w: number, label: string, value: string, note?: string) {
-  pdf.setFillColor(...PALE);
-  pdf.roundedRect(x, y, w, 34, 3, 3, "F");
-  pdf.setTextColor(...MUTED);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(6.8);
-  pdf.text(label.toUpperCase(), x + 5, y + 7);
-  pdf.setTextColor(...INK);
-  pdf.setFontSize(15);
-  pdf.text(value, x + 5, y + 18);
-  if (note) {
-    pdf.setTextColor(...MUTED);
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(6.7);
-    const lines = pdf.splitTextToSize(note, w - 10) as string[];
-    pdf.text(lines.slice(0, 2), x + 5, y + 25, { lineHeightFactor: 1.2 });
-  }
-}
-
-type Row = { label: string; detail?: string; amount: string; bold?: boolean };
-
-function chargeTable(pdf: Pdf, y: number, title: string, rows: Row[]) {
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(9.5);
-  pdf.setTextColor(...INK);
-  pdf.text(title, MARGIN, y);
-  y += 4;
-  pdf.setFillColor(...INK);
-  pdf.rect(MARGIN, y, CONTENT_W, 8, "F");
-  pdf.setTextColor(255, 255, 255);
-  pdf.setFontSize(7);
-  pdf.text("ITEM", MARGIN + 2.5, y + 5.4);
-  pdf.text("MONTHLY (R, EX VAT)", PAGE_W - MARGIN - 2.5, y + 5.4, { align: "right" });
-  y += 8;
-  for (const row of rows) {
-    const height = row.detail ? 11 : 8;
-    pdf.setDrawColor(...RULE);
-    pdf.line(MARGIN, y + height, PAGE_W - MARGIN, y + height);
-    pdf.setTextColor(...INK);
-    pdf.setFont("helvetica", row.bold ? "bold" : "normal");
-    pdf.setFontSize(8.2);
-    pdf.text(row.label, MARGIN + 2.5, y + 5.4);
-    pdf.text(row.amount, PAGE_W - MARGIN - 2.5, y + 5.4, { align: "right" });
-    if (row.detail) {
-      pdf.setTextColor(...MUTED);
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(6.6);
-      pdf.text(row.detail, MARGIN + 2.5, y + 9);
-    }
-    y += height;
-  }
-  return y + 6;
+function units(value: number) {
+  return Math.round(value).toLocaleString("en-US");
 }
 
 /* ---------------------------------------------------------------- pages */
 
-function coverPage(pdf: Pdf, report: FunderReport) {
+function buildCover(pdf: Pdf, report: FunderReport) {
   const facts = report.billFacts;
-  pdf.setFillColor(...PALE);
-  pdf.rect(0, 0, PAGE_W, 92, "F");
-  pdf.setTextColor(...GREEN);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(9);
-  pdf.text("FOUNDATION-1 (PTY) LTD", MARGIN, 24);
-  pdf.setTextColor(...INK);
-  pdf.setFontSize(26);
-  pdf.text("Funder Proposal Report", MARGIN, 40);
-  pdf.setFontSize(13);
-  pdf.setFont("helvetica", "normal");
-  pdf.text(report.businessName, MARGIN, 50);
-  pdf.setTextColor(...MUTED);
-  pdf.setFontSize(9);
-  pdf.text(
-    `Case ${report.caseReference} - generated ${report.generatedAt.slice(0, 10)} - built from ${facts.billsCount} audited utility bills and the funder proposals issued for this site.`,
-    MARGIN,
-    58,
-    { maxWidth: CONTENT_W },
-  );
-
-  let y = 104;
-  y = sectionTitle(pdf, "The one-page answer", "Both proposals, one report", y);
-  y = paragraph(
-    pdf,
-    "The funders have returned their paper for your site. This report reads each proposal, checks it against your own audited Eskom bills, and shows what each option costs you per month and over ten years - individually and combined.",
-    MARGIN,
-    y,
-    CONTENT_W,
-  );
-  y += 8;
-
-  const cardW = (CONTENT_W - 12) / 4;
-  metric(pdf, MARGIN, y, cardW, "Eskom today", money(report.options.eskomMonthly), "Average monthly bill, ex VAT");
-  const cards: Array<{ label: string; option: typeof report.options.ufms }> = [
-    { label: "Nedbank UFMS", option: report.options.ufms },
-    { label: "Green Share wheeling", option: report.options.wheeling },
-    { label: "Combined", option: report.options.combined },
-  ];
-  cards.forEach((card, index) => {
-    const x = MARGIN + (cardW + 4) * (index + 1);
-    if (card.option.present && card.option.monthlyCost !== null) {
-      const saving = card.option.monthlySaving ?? 0;
-      metric(
-        pdf,
-        x,
-        y,
-        cardW,
-        card.label,
-        money(card.option.monthlyCost),
-        `${saving >= 0 ? "Saves" : "Adds"} ${money(Math.abs(saving))}/month vs Eskom`,
-      );
-    } else {
-      metric(pdf, x, y, cardW, card.label, "-", "No proposal on file for this option yet");
+  const generatedDate = kitLongDate(report.generatedAt);
+  const optionCell = (label: string, option: { present: boolean; monthlyCost: number | null; monthlySaving: number | null }) => {
+    if (option.present && option.monthlyCost !== null) {
+      return { value: money(option.monthlyCost), label };
     }
+    return { value: "\u00b7", label: `${label} \u00b7 no proposal on file` };
+  };
+  coverPage(pdf, {
+    contextRight: `CASE ${report.caseReference} \u00b7 ${generatedDate.toUpperCase()}`,
+    eyebrow: "FOUNDATION-1 \u00b7 FUNDER PROPOSAL REPORT",
+    titleLine1: "Both proposals,",
+    titleLine2: "one baseline.",
+    lead: `The funders have returned their paper for this site. This report reads each proposal, checks it against the ${facts.billsCount} audited utility bills, and prices what each option costs per month and over ten years, individually and combined.`,
+    subject: report.businessName,
+    subjectDetail: `CASE ${report.caseReference} \u00b7 ${facts.provider} \u00b7 ${generatedDate}`,
+    chips: [
+      { text: `${facts.billsCount} audited utility bills`, tone: "cyan" },
+      { text: "Funder paper reconciled", tone: "neutral" },
+    ],
+    stats: [
+      { value: money(report.options.eskomMonthly), label: "Eskom today \u00b7 monthly ex VAT" },
+      optionCell("Nedbank UFMS \u00b7 monthly position", report.options.ufms),
+      optionCell("Green Share wheeling \u00b7 monthly position", report.options.wheeling),
+      { ...optionCell("Combined \u00b7 monthly position", report.options.combined), accent: KIT_COLORS.amber },
+    ],
+    sourceNote: `Generated ${generatedDate} \u00b7 Every figure in this report is either read directly from the utility bills or stated on the funder's own paper. Where a proposal leaves a number out, the gap is filled from the bill audit, never the other way around.`,
   });
-  y += 44;
-
-  y = paragraph(
-    pdf,
-    "Every figure in this report is either read directly from your utility bills or stated on the funder's own paper. Where a proposal leaves a number out, the gap is filled from your bill audit - never the other way around.",
-    MARGIN,
-    y,
-    CONTENT_W,
-    { size: 8.4 },
-  );
 }
 
-function billPage(pdf: Pdf, report: FunderReport) {
+type ChargeRowSource = { label: string; detail?: string; amount: string; bold?: boolean };
+
+function chargeRows(rows: ChargeRowSource[]): KitKeyValueRow[] {
+  return rows.map((row) => ({ label: row.label, value: row.amount, note: row.detail, strong: row.bold }));
+}
+
+function billPage(pdf: Pdf, report: FunderReport, context: string) {
   const facts = report.billFacts;
-  addPage(pdf, "Your bill today");
-  let y = sectionTitle(pdf, "Section 01", "Your bill today", 30);
+  let y = addKitPage(pdf, { eyebrow: "SECTION 01 \u00b7 THE AUDITED BASELINE", title: "The bill today.", context });
   y = paragraph(
     pdf,
-    `Averaged across ${facts.billsCount} billing periods on ${facts.provider} (${facts.tariffNames.join(", ") || "tariff on file"}), your site takes ${Math.round(facts.monthlyKwh).toLocaleString("en-ZA")} kWh a month and pays ${money(facts.monthlySpendExVat)} ex VAT. That total is made of three different kinds of charge:`,
-    MARGIN,
+    `Averaged across ${facts.billsCount} billing periods on ${facts.provider} (${facts.tariffNames.join(", ") || "tariff on file"}), the site takes ${units(facts.monthlyKwh)} kWh a month and pays ${money(facts.monthlySpendExVat)} ex VAT. That total is made of three different kinds of charge.`,
+    KIT_PAGE.margin,
     y,
-    CONTENT_W,
+    { size: 8.8, color: inkTint(KIT_INK.body) },
+    KIT_PAGE.contentWidth,
+    { lineHeight: 4.6 },
   );
-  y += 6;
+  y += 5;
 
   const tou = facts.tou;
-  const touRows: Row[] = [];
+  const touRows: ChargeRowSource[] = [];
   const touDefs = [
     ["Peak energy", tou.peak, "Weekday mornings and early evenings"],
     ["Standard energy", tou.standard, "The rest of the working day"],
@@ -222,125 +123,129 @@ function billPage(pdf: Pdf, report: FunderReport) {
   for (const [label, period, when] of touDefs) {
     if (period.spend === 0 && period.kwh === 0) continue;
     touRows.push({
-      label: `${label} - ${Math.round(period.kwh).toLocaleString("en-ZA")} kWh @ ~R${period.rate.toFixed(2)}/kWh`,
+      label: `${label} \u00b7 ${units(period.kwh)} kWh at about R${period.rate.toFixed(2)} per kWh`,
       detail: when,
       amount: money(period.spend),
     });
   }
   const energyTotal = tou.peak.spend + tou.standard.spend + tou.offpeak.spend;
   touRows.push({ label: "Electricity subtotal", amount: money(energyTotal), bold: true });
-  y = chargeTable(pdf, y, "1. The electricity itself", touRows);
+  monoLabel(pdf, "1 \u00b7 THE ELECTRICITY ITSELF", KIT_PAGE.margin, y);
+  y = keyValueRows(pdf, y + 2.4, chargeRows(touRows));
+  y += 7;
 
-  const meterRows: Row[] = facts.meterCharges.map((line) => ({
-    label: line.label,
-    amount: money(line.amount),
-  }));
+  const meterRows: ChargeRowSource[] = facts.meterCharges.map((line) => ({ label: line.label, amount: money(line.amount) }));
   const meterTotal = facts.meterCharges.reduce((total, line) => total + line.amount, 0);
   meterRows.push({ label: "Meter charges subtotal", amount: money(meterTotal), bold: true });
-  y = chargeTable(pdf, y, "2. Charges for pulling power through your Eskom meter", meterRows);
+  monoLabel(pdf, "2 \u00b7 CHARGES FOR PULLING POWER THROUGH THE ESKOM METER", KIT_PAGE.margin, y);
+  y = keyValueRows(pdf, y + 2.4, chargeRows(meterRows));
+  y += 7;
 
-  const connRows: Row[] = facts.connectionCharges.map((line) => ({
-    label: line.label,
-    amount: money(line.amount),
-  }));
+  const connRows: ChargeRowSource[] = facts.connectionCharges.map((line) => ({ label: line.label, amount: money(line.amount) }));
   const connTotal = facts.connectionCharges.reduce((total, line) => total + line.amount, 0);
   connRows.push({ label: "Connection subtotal", amount: money(connTotal), bold: true });
-  y = chargeTable(pdf, y, "3. Charges for being connected at all", connRows);
+  monoLabel(pdf, "3 \u00b7 CHARGES FOR BEING CONNECTED AT ALL", KIT_PAGE.margin, y);
+  y = keyValueRows(pdf, y + 2.4, chargeRows(connRows));
+  y += 8;
 
-  chargeTable(pdf, y, "Total", [
-    { label: "Your average monthly bill (ex VAT)", amount: money(report.options.eskomMonthly), bold: true },
-  ]);
+  statStrip(pdf, y, 20, [
+    { value: money(report.options.eskomMonthly), label: "Average monthly bill ex VAT", accent: KIT_COLORS.amber },
+    { value: units(facts.monthlyKwh), label: "kWh taken in an average month" },
+    { value: String(facts.billsCount), label: "Billing periods reconciled" },
+  ], { valueSize: 11 });
 }
 
-function ufmsPage(pdf: Pdf, report: FunderReport) {
-  addPage(pdf, "What Nedbank proposes");
-  let y = sectionTitle(pdf, "Section 02", "What Nedbank proposes: UFMS", 30);
+function ufmsPage(pdf: Pdf, report: FunderReport, context: string) {
+  let y = addKitPage(pdf, { eyebrow: "SECTION 02 \u00b7 THE ON-SITE PROPOSAL", title: "What Nedbank proposes: UFMS.", context });
   const ex = report.ufmsExtraction;
   const data = report.clientSavingsData;
   const opt = report.options.ufms;
   if (!opt.present || !ex) {
-    paragraph(pdf, "No UFMS proposal has been returned for this site yet.", MARGIN, y, CONTENT_W);
+    paragraph(pdf, "No UFMS proposal has been returned for this site yet.", KIT_PAGE.margin, y, { size: 8.8, color: inkTint(KIT_INK.body) }, KIT_PAGE.contentWidth, { lineHeight: 4.6 });
     return;
   }
   y = paragraph(
     pdf,
-    `Nedbank/Eqstra's Utility Full Maintenance Service puts a ${data.system.solarKwp} kWp solar system with a ${data.system.batteryKwh} kWh battery on your own site, fully maintained and insured, for one monthly charge. Their proposal (${opt.sourceFileName ?? "on file"}) states:`,
-    MARGIN,
+    `Nedbank and Eqstra's Utility Full Maintenance Service puts a ${data.system.solarKwp} kWp solar system with a ${data.system.batteryKwh} kWh battery on the site, fully maintained and insured, for one monthly charge. Their proposal (${opt.sourceFileName ?? "on file"}) states:`,
+    KIT_PAGE.margin,
     y,
-    CONTENT_W,
+    { size: 8.8, color: inkTint(KIT_INK.body) },
+    KIT_PAGE.contentWidth,
+    { lineHeight: 4.6 },
   );
-  y += 6;
-
-  const cardW = (CONTENT_W - 8) / 3;
-  metric(pdf, MARGIN, y, cardW, "Monthly charge", money(data.ufms.monthlyCharge), `Escalates ${data.ufms.escalationPct}% a year, fixed for ${data.ufms.termYears} years`);
-  metric(pdf, MARGIN + cardW + 4, y, cardW, "System", `${data.system.solarKwp} kWp + ${data.system.batteryKwh} kWh`, `Up to ${Math.round(data.system.monthlyGenerationKwh).toLocaleString("en-ZA")} kWh generated per month`);
-  metric(pdf, MARGIN + (cardW + 4) * 2, y, cardW, "Your bill after", money(opt.monthlyCost ?? 0), `${(opt.monthlySaving ?? 0) >= 0 ? "Saves" : "Adds"} ${money(Math.abs(opt.monthlySaving ?? 0))}/month vs Eskom today`);
-  y += 42;
+  y += 5;
+  y = statStrip(pdf, y, 23.3, [
+    { value: money(data.ufms.monthlyCharge), label: `Monthly charge \u00b7 escalates ${data.ufms.escalationPct}% for ${data.ufms.termYears} years` },
+    { value: `${data.system.solarKwp} kWp + ${data.system.batteryKwh} kWh`, label: `System \u00b7 up to ${units(data.system.monthlyGenerationKwh)} kWh a month` },
+    { value: money(opt.monthlyCost ?? 0), label: `Bill after \u00b7 ${(opt.monthlySaving ?? 0) >= 0 ? "saves" : "adds"} ${money(Math.abs(opt.monthlySaving ?? 0))} a month`, accent: (opt.monthlySaving ?? 0) >= 0 ? KIT_COLORS.green : KIT_COLORS.red },
+  ]);
+  y += 9;
 
   const facts = report.billFacts;
   const energyTotal = facts.tou.peak.spend + facts.tou.standard.spend + facts.tou.offpeak.spend;
   const meterTotal = facts.meterCharges.reduce((total, line) => total + line.amount, 0);
   const connTotal = facts.connectionCharges.reduce((total, line) => total + line.amount, 0);
-  y = chargeTable(pdf, y, "What stops, what starts", [
+  monoLabel(pdf, "WHAT STOPS, WHAT STARTS", KIT_PAGE.margin, y);
+  y = keyValueRows(pdf, y + 2.4, chargeRows([
     {
-      label: "You stop paying Eskom for electricity and meter charges",
-      detail: "Units are made on your roof, so they never come through the Eskom meter.",
+      label: "Eskom electricity and meter charges stop",
+      detail: "Units are made on the roof, so they never come through the Eskom meter.",
       amount: `- ${money(energyTotal + meterTotal)}`,
     },
     {
-      label: "You start paying the Bank one monthly charge",
+      label: "One monthly charge to the bank starts",
       detail: "System, insurance and maintenance included, as stated on the proposal.",
       amount: `+ ${money(data.ufms.monthlyCharge)}`,
     },
     {
-      label: "You keep paying Eskom for the connection",
-      detail: "Eskom stays as your backup supply.",
+      label: "The Eskom connection stays",
+      detail: "Eskom remains the backup supply.",
       amount: `+ ${money(connTotal)}`,
     },
-    { label: "Your new monthly position", amount: money(opt.monthlyCost ?? 0), bold: true },
-  ]);
+    { label: "New monthly position", amount: money(opt.monthlyCost ?? 0), bold: true },
+  ]));
+  y += 6;
 
   if (report.funderClaims.ufmsTenYearSavingClaim !== null) {
-    y = paragraph(
+    sourceNote(
       pdf,
-      `The funder's own paper estimates a ten-year saving of ${money(report.funderClaims.ufmsTenYearSavingClaim)} for this option. Section 05 shows the ten-year picture computed from your audited bills alongside that claim.`,
-      MARGIN,
-      y + 2,
-      CONTENT_W,
-      { size: 8.4 },
+      `The funder's own paper estimates a ten-year saving of ${money(report.funderClaims.ufmsTenYearSavingClaim)} for this option. Section 05 shows the ten-year picture computed from the audited bills alongside that claim.`,
+      y,
     );
   }
 }
 
-function wheelingPage(pdf: Pdf, report: FunderReport) {
-  addPage(pdf, "What Green Share proposes");
-  let y = sectionTitle(pdf, "Section 03", "What Green Share proposes: wheeling", 30);
+function wheelingPage(pdf: Pdf, report: FunderReport, context: string) {
+  let y = addKitPage(pdf, { eyebrow: "SECTION 03 \u00b7 THE WHEELED PROPOSAL", title: "What Green Share proposes: wheeling.", context, tone: KIT_COLORS.cyan });
   const data = report.clientSavingsData;
   const opt = report.options.wheeling;
   if (!opt.present) {
-    paragraph(pdf, "No wheeling proposal has been returned for this site yet.", MARGIN, y, CONTENT_W);
+    paragraph(pdf, "No wheeling proposal has been returned for this site yet.", KIT_PAGE.margin, y, { size: 8.8, color: inkTint(KIT_INK.body) }, KIT_PAGE.contentWidth, { lineHeight: 4.6 });
     return;
   }
   const facts = report.billFacts;
   y = paragraph(
     pdf,
-    `Green Share delivers solar energy from their own plant to your existing meter through the grid. No equipment on your site, no capital, no credit check - your electricity units are simply repriced at a fixed R${data.wheeling.ratePerKwh.toFixed(2)}/kWh (escalation capped at ${data.wheeling.escalationPct}% a year for ${data.wheeling.termYears} years, as stated on their proposal).`,
-    MARGIN,
+    `Green Share delivers solar energy from their own plant to the existing meter through the grid. No equipment on site, no capital, no credit check: the electricity units are simply repriced at a fixed R${data.wheeling.ratePerKwh.toFixed(2)} per kWh, with escalation capped at ${data.wheeling.escalationPct}% a year for ${data.wheeling.termYears} years, as stated on their proposal.`,
+    KIT_PAGE.margin,
     y,
-    CONTENT_W,
+    { size: 8.8, color: inkTint(KIT_INK.body) },
+    KIT_PAGE.contentWidth,
+    { lineHeight: 4.6 },
   );
-  y += 6;
+  y += 5;
+  y = statStrip(pdf, y, 23.3, [
+    { value: `R${data.wheeling.ratePerKwh.toFixed(2)}/kWh`, label: `Wheeled rate \u00b7 capped at ${data.wheeling.escalationPct}% escalation`, accent: KIT_COLORS.cyan },
+    { value: money(facts.energyMonthlySpend), label: "What it reprices \u00b7 energy lines only" },
+    { value: money(opt.monthlyCost ?? 0), label: `Bill after \u00b7 ${(opt.monthlySaving ?? 0) >= 0 ? "saves" : "adds"} ${money(Math.abs(opt.monthlySaving ?? 0))} a month`, accent: (opt.monthlySaving ?? 0) >= 0 ? KIT_COLORS.green : KIT_COLORS.red },
+  ]);
+  y += 9;
 
-  const cardW = (CONTENT_W - 8) / 3;
-  metric(pdf, MARGIN, y, cardW, "Wheeled rate", `R${data.wheeling.ratePerKwh.toFixed(2)}/kWh`, `Fixed price, capped at ${data.wheeling.escalationPct}% escalation`);
-  metric(pdf, MARGIN + cardW + 4, y, cardW, "What it reprices", money(facts.energyMonthlySpend), "Your monthly electricity lines only");
-  metric(pdf, MARGIN + (cardW + 4) * 2, y, cardW, "Your bill after", money(opt.monthlyCost ?? 0), `${(opt.monthlySaving ?? 0) >= 0 ? "Saves" : "Adds"} ${money(Math.abs(opt.monthlySaving ?? 0))}/month vs Eskom today`);
-  y += 42;
-
-  chargeTable(pdf, y, "What changes, what stays", [
+  monoLabel(pdf, "WHAT CHANGES, WHAT STAYS", KIT_PAGE.margin, y);
+  keyValueRows(pdf, y + 2.4, chargeRows([
     {
-      label: "Your electricity units, repriced",
-      detail: `${Math.round(facts.monthlyKwh).toLocaleString("en-ZA")} kWh x R${data.wheeling.ratePerKwh.toFixed(2)}/kWh instead of ${money(facts.energyMonthlySpend)} on Eskom's energy rates.`,
+      label: "The electricity units, repriced",
+      detail: `${units(facts.monthlyKwh)} kWh at R${data.wheeling.ratePerKwh.toFixed(2)} per kWh instead of ${money(facts.energyMonthlySpend)} on Eskom's energy rates.`,
       amount: money(facts.monthlyKwh * data.wheeling.ratePerKwh),
     },
     {
@@ -348,139 +253,122 @@ function wheelingPage(pdf: Pdf, report: FunderReport) {
       detail: "Wheeling reprices energy only; network and connection charges survive on the Eskom bill.",
       amount: `+ ${money(facts.monthlySpendExVat - facts.energyMonthlySpend)}`,
     },
-    { label: "Your new monthly position", amount: money(opt.monthlyCost ?? 0), bold: true },
-  ]);
+    { label: "New monthly position", amount: money(opt.monthlyCost ?? 0), bold: true },
+  ]));
 }
 
-function combinedPage(pdf: Pdf, report: FunderReport) {
-  addPage(pdf, "Both together");
-  let y = sectionTitle(pdf, "Section 04", "Both options together", 30);
+function combinedPage(pdf: Pdf, report: FunderReport, context: string) {
+  let y = addKitPage(pdf, { eyebrow: "SECTION 04 \u00b7 BOTH TOGETHER", title: "Both options, one waterfall.", context, tone: KIT_COLORS.green });
   const opt = report.options.combined;
   if (!opt.present || opt.monthlyCost === null) {
-    paragraph(
-      pdf,
-      "The combined picture becomes available once both funder proposals are on file for this site.",
-      MARGIN,
-      y,
-      CONTENT_W,
-    );
+    paragraph(pdf, "The combined picture becomes available once both funder proposals are on file for this site.", KIT_PAGE.margin, y, { size: 8.8, color: inkTint(KIT_INK.body) }, KIT_PAGE.contentWidth, { lineHeight: 4.6 });
     return;
   }
   y = paragraph(
     pdf,
-    "The two options are not rivals - they cover different parts of your bill. The on-site UFMS system serves your load first; wheeling then reprices only the residual units the system cannot reach. The same unit of electricity is never paid for twice.",
-    MARGIN,
+    "The two options are not rivals: they cover different parts of the bill. The on-site UFMS system serves the load first; wheeling then reprices only the residual units the system cannot reach. The same unit of electricity is never paid for twice.",
+    KIT_PAGE.margin,
     y,
-    CONTENT_W,
+    { size: 8.8, color: inkTint(KIT_INK.body) },
+    KIT_PAGE.contentWidth,
+    { lineHeight: 4.6 },
   );
-  y += 6;
-
-  const cardW = (CONTENT_W - 8) / 3;
-  metric(pdf, MARGIN, y, cardW, "Eskom today", money(report.options.eskomMonthly), "Average monthly bill, ex VAT");
-  metric(pdf, MARGIN + cardW + 4, y, cardW, "Combined position", money(opt.monthlyCost), "UFMS charge + wheeled residual + retained Eskom charges");
-  metric(pdf, MARGIN + (cardW + 4) * 2, y, cardW, "Monthly movement", `${(opt.monthlySaving ?? 0) >= 0 ? "-" : "+"} ${money(Math.abs(opt.monthlySaving ?? 0))}`, `${(opt.monthlySaving ?? 0) >= 0 ? "Kept in your business" : "Above today's bill"} every month`);
-  y += 42;
+  y += 5;
+  y = statStrip(pdf, y, 23.3, [
+    { value: money(report.options.eskomMonthly), label: "Eskom today \u00b7 monthly ex VAT" },
+    { value: money(opt.monthlyCost), label: "Combined position \u00b7 funded charge + wheeled residual + retained Eskom" },
+    { value: `${(opt.monthlySaving ?? 0) >= 0 ? "-" : "+"} ${money(Math.abs(opt.monthlySaving ?? 0))}`, label: (opt.monthlySaving ?? 0) >= 0 ? "Kept in the business every month" : "Above today's bill every month", accent: (opt.monthlySaving ?? 0) >= 0 ? KIT_COLORS.green : KIT_COLORS.red },
+  ]);
+  y += 9;
 
   const ufmsSaving = report.options.ufms.monthlySaving ?? 0;
   const wheelingSaving = report.options.wheeling.monthlySaving ?? 0;
+  const cautionHeight = 26;
+  panel(pdf, KIT_PAGE.margin, y, KIT_PAGE.contentWidth, cautionHeight);
+  accentBar(pdf, KIT_PAGE.margin, y, cautionHeight, KIT_COLORS.amber);
+  monoLabel(pdf, "READ THE COMBINED NUMBER CAREFULLY", KIT_PAGE.margin + 5.6, y + 6.4, {
+    size: 6,
+    color: blend(KIT_COLORS.amber, 0.85, KIT_COLORS.panel),
+    trackingEm: 0.14,
+  });
   paragraph(
     pdf,
-    `Read the combined number carefully: it is deliberately NOT the two savings added together (${money(ufmsSaving)} + ${money(wheelingSaving)}). Once the on-site system is serving your load, far fewer units are left for wheeling to reprice - the combined saving is computed on that honest waterfall.`,
-    MARGIN,
-    y,
-    CONTENT_W,
-    { size: 8.4, color: AMBER },
+    `It is deliberately NOT the two savings added together (${money(ufmsSaving)} + ${money(wheelingSaving)}). Once the on-site system is serving the load, far fewer units are left for wheeling to reprice: the combined saving is computed on that honest waterfall.`,
+    KIT_PAGE.margin + 5.6,
+    y + 11.6,
+    { size: 8.2, color: inkTint(KIT_INK.body, KIT_COLORS.panel) },
+    KIT_PAGE.contentWidth - 11.2,
+    { lineHeight: 4.1 },
   );
 }
 
-function tenYearPage(pdf: Pdf, report: FunderReport) {
-  addPage(pdf, "Ten years side by side");
-  let y = sectionTitle(pdf, "Section 05", "Ten years side by side", 30);
+function tenYearPage(pdf: Pdf, report: FunderReport, context: string) {
+  let y = addKitPage(pdf, { eyebrow: "SECTION 05 \u00b7 TEN YEARS SIDE BY SIDE", title: "Cumulative cost of each path.", context });
   const ten = report.clientSavingsData.tenYear;
   if (ten.eskom.length === 0) {
-    paragraph(pdf, "Ten-year projection unavailable without the verified bill audit.", MARGIN, y, CONTENT_W);
+    paragraph(pdf, "The ten-year projection is unavailable without the verified bill audit.", KIT_PAGE.margin, y, { size: 8.8, color: inkTint(KIT_INK.body) }, KIT_PAGE.contentWidth, { lineHeight: 4.6 });
     return;
   }
   y = paragraph(
     pdf,
-    "Cumulative cost of each path, anchored to the funder-quoted monthly charge and wheeling rate and to your audited bill. Eskom's path follows the escalation the funders themselves apply to your baseline.",
-    MARGIN,
+    "Cumulative cost of each path, lower is better: anchored to the funder-quoted monthly charge and wheeling rate and to the audited bill. Eskom's path follows the escalation the funders themselves apply to the baseline.",
+    KIT_PAGE.margin,
     y,
-    CONTENT_W,
+    { size: 8.8, color: inkTint(KIT_INK.body) },
+    KIT_PAGE.contentWidth,
+    { lineHeight: 4.6 },
   );
-  y += 4;
+  y += 8;
 
-  // Chart.
-  const chartX = MARGIN;
-  const chartY = y;
-  const chartW = CONTENT_W;
-  const chartH = 62;
+  const chartX = KIT_PAGE.margin;
+  const chartH = 52;
+  const chartW = KIT_PAGE.contentWidth;
   const seriesDefs = [
-    { name: "Eskom", values: ten.eskom, color: INK },
-    { name: "UFMS", values: ten.ufms, color: GREEN },
-    { name: "Wheeling", values: ten.wheeling, color: BLUE },
-    { name: "Combined", values: ten.combined, color: AMBER },
-  ].filter((s) => s.values.length === 10);
+    { name: "Eskom", values: ten.eskom, color: KIT_COLORS.ink },
+    { name: "UFMS", values: ten.ufms, color: KIT_COLORS.green },
+    { name: "Wheeling", values: ten.wheeling, color: KIT_COLORS.cyan },
+    { name: "Combined", values: ten.combined, color: KIT_COLORS.amber },
+  ].filter((series) => series.values.length === 10);
   const maxValue = ten.chartMaxRands || Math.max(...ten.eskom);
-  pdf.setDrawColor(...RULE);
   for (let grid = 0; grid <= 4; grid += 1) {
-    const gy = chartY + (chartH * grid) / 4;
-    pdf.line(chartX, gy, chartX + chartW, gy);
-    pdf.setTextColor(...MUTED);
-    pdf.setFontSize(6);
-    pdf.text(money(maxValue * (1 - grid / 4)), chartX + 1, gy - 1);
+    const gy = y + (chartH * grid) / 4;
+    hairline(pdf, chartX, gy, chartX + chartW, gy, { alpha: KIT_INK.softLine });
+    monoLabel(pdf, compactMoney(maxValue * (1 - grid / 4)), chartX, gy - 1.2, { size: 5.4, alpha: KIT_INK.ghost, trackingEm: 0.05 });
   }
   for (const series of seriesDefs) {
-    pdf.setDrawColor(...series.color);
-    pdf.setLineWidth(0.7);
-    let prevX: number | null = null;
-    let prevY: number | null = null;
+    pdf.setDrawColor(series.color[0], series.color[1], series.color[2]);
+    pdf.setLineWidth(0.55);
+    let previousX: number | null = null;
+    let previousY: number | null = null;
     series.values.forEach((value, index) => {
       const px = chartX + (chartW * index) / 9;
-      const py = chartY + chartH - (chartH * value) / maxValue;
-      if (prevX !== null && prevY !== null) pdf.line(prevX, prevY, px, py);
-      prevX = px;
-      prevY = py;
+      const py = y + chartH - (chartH * value) / maxValue;
+      if (previousX !== null && previousY !== null) pdf.line(previousX, previousY, px, py);
+      previousX = px;
+      previousY = py;
     });
   }
-  pdf.setLineWidth(0.2);
   let legendX = chartX;
-  const legendY = chartY + chartH + 6;
+  const legendY = y + chartH + 5.4;
   for (const series of seriesDefs) {
-    pdf.setFillColor(...series.color);
-    pdf.rect(legendX, legendY - 2.4, 3, 3, "F");
-    pdf.setTextColor(...INK);
-    pdf.setFontSize(7);
-    pdf.text(series.name, legendX + 4.5, legendY);
-    legendX += pdf.getTextWidth(series.name) + 14;
+    pdf.setFillColor(series.color[0], series.color[1], series.color[2]);
+    pdf.rect(legendX, legendY - 2.2, 3.4, 1.1, "F");
+    monoLabel(pdf, series.name, legendX + 4.6, legendY - 1, { size: 5.6, alpha: KIT_INK.dim, trackingEm: 0.06 });
+    legendX += 34;
   }
-  y = legendY + 8;
+  y = legendY + 7;
 
-  // Table: years 1, 3, 5, 7, 10 to keep it readable.
   const pickYears = [0, 2, 4, 6, 9];
-  pdf.setFillColor(...INK);
-  pdf.rect(MARGIN, y, CONTENT_W, 8, "F");
-  pdf.setTextColor(255, 255, 255);
-  pdf.setFontSize(7);
-  const colW = (CONTENT_W - 30) / seriesDefs.length;
-  pdf.text("YEAR", MARGIN + 2.5, y + 5.4);
-  seriesDefs.forEach((series, index) => {
-    pdf.text(series.name.toUpperCase(), MARGIN + 30 + colW * index + colW - 2.5, y + 5.4, { align: "right" });
-  });
-  y += 8;
-  for (const yearIndex of pickYears) {
-    pdf.setDrawColor(...RULE);
-    pdf.line(MARGIN, y + 8, PAGE_W - MARGIN, y + 8);
-    pdf.setTextColor(...INK);
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(7.6);
-    pdf.text(`Year ${yearIndex + 1}`, MARGIN + 2.5, y + 5.4);
-    seriesDefs.forEach((series, index) => {
-      pdf.text(money(series.values[yearIndex]), MARGIN + 30 + colW * index + colW - 2.5, y + 5.4, { align: "right" });
-    });
-    y += 8;
-  }
-  y += 6;
+  y = dataTable(pdf, y, pickYears, [
+    { label: "Year", width: 34, strong: true, value: (index) => `Year ${index + 1}` },
+    ...seriesDefs.map((series, seriesIndex) => ({
+      label: series.name,
+      width: (KIT_PAGE.contentWidth - 34) / seriesDefs.length,
+      align: "right" as const,
+      value: (index: number) => money(series.values[index]),
+    })),
+  ], { fontSize: 7.6 });
+  y += 7;
 
   const eskomTotal = ten.eskom[9];
   const bestSeries = seriesDefs
@@ -489,64 +377,36 @@ function tenYearPage(pdf: Pdf, report: FunderReport) {
   if (bestSeries) {
     paragraph(
       pdf,
-      `Over ten years the ${bestSeries.name} path keeps ${money(eskomTotal - bestSeries.values[9])} in your business relative to staying on Eskom's path${report.funderClaims.ufmsTenYearSavingClaim !== null ? ` (the funder's own paper claims ${money(report.funderClaims.ufmsTenYearSavingClaim)} for the UFMS option on their assumptions)` : ""}.`,
-      MARGIN,
+      `Over ten years the ${bestSeries.name} path keeps ${money(eskomTotal - bestSeries.values[9])} in the business relative to staying on Eskom's path${report.funderClaims.ufmsTenYearSavingClaim !== null ? ` (the funder's own paper claims ${money(report.funderClaims.ufmsTenYearSavingClaim)} for the UFMS option on their assumptions)` : ""}.`,
+      KIT_PAGE.margin,
       y,
-      CONTENT_W,
-      { size: 8.6, color: INK },
+      { size: 8.8, color: inkTint(0.86) },
+      KIT_PAGE.contentWidth,
+      { lineHeight: 4.6 },
     );
   }
 }
 
-function nextStepsPage(pdf: Pdf, report: FunderReport) {
-  addPage(pdf, "Next steps");
-  let y = sectionTitle(pdf, "Section 06", "Next steps", 30);
-  const steps = [
-    ["01", "Review this report", "Compare the monthly positions and the ten-year paths. Every number traces to your bills or the funders' own paper."],
-    ["02", "Choose your path", "UFMS, wheeling, or both together - your Foundation-1 contact will walk you through the trade-offs for your operation."],
-    ["03", "Sign the returned proposal", "The funder's formal proposal is on your dashboard ready for signature. Signing starts the contracting clock."],
-    ["04", "Site and contracting", "Site verification, final contracting and installation scheduling follow - Foundation-1 manages the process end to end."],
-  ];
-  for (const [num, title, body] of steps) {
-    pdf.setFillColor(...PALE);
-    pdf.roundedRect(MARGIN, y, CONTENT_W, 22, 3, 3, "F");
-    pdf.setTextColor(...GREEN);
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(13);
-    pdf.text(num, MARGIN + 5, y + 10);
-    pdf.setTextColor(...INK);
-    pdf.setFontSize(10);
-    pdf.text(title, MARGIN + 18, y + 8);
-    pdf.setTextColor(...MUTED);
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(8);
-    pdf.text(pdf.splitTextToSize(body, CONTENT_W - 24) as string[], MARGIN + 18, y + 13.5, { lineHeightFactor: 1.3 });
-    y += 26;
-  }
-  y += 4;
+function nextStepsPage(pdf: Pdf, report: FunderReport, context: string) {
+  let y = addKitPage(pdf, { eyebrow: "SECTION 06 \u00b7 THE JOURNEY FROM HERE", title: "From proposals to savings from day one.", context });
+  y = stageJourney(pdf, y + 2, [
+    { title: "Screen", state: "done" },
+    { title: "Evidence", state: "done" },
+    { title: "Foundation-1 Migration Report", state: "done" },
+    { title: "Non-binding Expression of Interest", state: "done" },
+    { title: "Formal proposals", detail: "This report: both funder proposals read, checked against the audited bills and priced side by side.", state: "current" },
+    { title: "Verification", detail: "Foundation-1 confirms the verification documents and hands the case to the chosen funder or funders.", state: "ahead" },
+    { title: "Term sheet", detail: "The funder issues formal terms on their own paper. Signing starts the contracting clock.", state: "ahead" },
+    { title: "Migration", detail: "Site verification, final contracting, installation or switch-on. Foundation-1 manages the process end to end.", state: "ahead" },
+    { title: "Savings from day one", detail: "The new monthly position applies from the first billing cycle after go-live.", state: "final" },
+  ]);
+  y += 2;
   const contact = report.clientSavingsData.contact;
-  pdf.setTextColor(...INK);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(10);
-  pdf.text(`${contact.name} - Foundation-1 (Pty) Ltd`, MARGIN, y);
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(9);
-  pdf.setTextColor(...MUTED);
-  pdf.text(`${contact.email} - ${contact.phone}`, MARGIN, y + 6);
-}
-
-function addFooters(pdf: Pdf, report: FunderReport) {
-  const pages = pdf.getNumberOfPages();
-  for (let page = 1; page <= pages; page += 1) {
-    pdf.setPage(page);
-    pdf.setDrawColor(...RULE);
-    pdf.line(MARGIN, FOOTER_Y - 4, PAGE_W - MARGIN, FOOTER_Y - 4);
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(6.6);
-    pdf.setTextColor(...MUTED);
-    pdf.text("FOUNDATION-1 (PTY) LTD - CONFIDENTIAL CLIENT REPORT", MARGIN, FOOTER_Y);
-    pdf.text(`${report.caseReference} - ${page} / ${pages}`, PAGE_W - MARGIN, FOOTER_Y, { align: "right" });
-  }
+  darkCallout(pdf, y, 24, {
+    eyebrow: "The desk that owns this case",
+    title: `${contact.name} \u00b7 Foundation-1 (Pty) Ltd`,
+    body: `${contact.email} \u00b7 ${contact.phone} \u00b7 Every number in this report traces to the audited bills or to the funders' own paper.`,
+  });
 }
 
 export function funderReportPdfFilename(report: FunderReport) {
@@ -554,27 +414,33 @@ export function funderReportPdfFilename(report: FunderReport) {
   return `foundation-1-funder-report-${company}-${sanitizeFileSegment(report.caseReference)}.pdf`;
 }
 
-/** Render the funder report to PDF bytes (A4, house print style). */
+/** Render the funder report to PDF bytes (A4, house document design system). */
 export function buildFunderReportPdf(report: FunderReport) {
-  const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait", compress: true });
-  pdf.setProperties({
-    title: `Foundation-1 Funder Proposal Report: ${report.businessName}`,
-    subject: "Returned funder proposals explained against the audited Eskom baseline",
-    author: "Foundation-1 (Pty) Ltd",
-    creator: "Foundation-1 1OS",
-    keywords: "renewable energy, UFMS, wheeling, funder proposal, savings report",
-  });
-  coverPage(pdf, report);
-  billPage(pdf, report);
-  ufmsPage(pdf, report);
-  wheelingPage(pdf, report);
-  combinedPage(pdf, report);
-  tenYearPage(pdf, report);
-  nextStepsPage(pdf, report);
-  addFooters(pdf, report);
-  return {
-    bytes: new Uint8Array(pdf.output("arraybuffer")),
-    filename: funderReportPdfFilename(report),
-    pageCount: pdf.getNumberOfPages(),
-  };
+  setPartnerNeutralCopy(false);
+  try {
+    const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait", compress: true });
+    pdf.setProperties({
+      title: `Foundation-1 Funder Proposal Report: ${report.businessName}`,
+      subject: "Returned funder proposals explained against the audited Eskom baseline",
+      author: "Foundation-1 (Pty) Ltd",
+      creator: "Foundation-1 1OS",
+      keywords: "renewable energy, UFMS, wheeling, funder proposal, savings report",
+    });
+    const context = `CASE ${report.caseReference}`;
+    buildCover(pdf, report);
+    billPage(pdf, report, context);
+    ufmsPage(pdf, report, context);
+    wheelingPage(pdf, report, context);
+    combinedPage(pdf, report, context);
+    tenYearPage(pdf, report, context);
+    nextStepsPage(pdf, report, context);
+    footerBand(pdf, "Funder proposal report", context);
+    return {
+      bytes: new Uint8Array(pdf.output("arraybuffer")),
+      filename: funderReportPdfFilename(report),
+      pageCount: pdf.getNumberOfPages(),
+    };
+  } finally {
+    setPartnerNeutralCopy(true);
+  }
 }

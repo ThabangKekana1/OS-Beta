@@ -2,33 +2,62 @@ import { jsPDF } from "jspdf";
 import type { F1Proposal } from "@/lib/f1-proposal";
 import { sanitizeFileSegment } from "@/lib/download-utils";
 import type { UtilityTariffHistoryRow } from "@/lib/proposal-impact-model";
+import {
+  KIT_COLORS,
+  KIT_INK,
+  KIT_PAGE,
+  addKitPage,
+  blend,
+  chipRow,
+  coverPage,
+  darkCallout,
+  dataTable,
+  drawText,
+  footerBand,
+  hairline,
+  inkTint,
+  keyValueRows,
+  kitLongDate,
+  monoLabel,
+  panel,
+  accentBar,
+  paragraph,
+  sourceNote,
+  stageJourney,
+  statStrip,
+  type KitStatCell,
+} from "@/lib/document-kit";
 
-const PAGE_W = 210;
-const PAGE_H = 297;
-const MARGIN = 16;
-const CONTENT_W = PAGE_W - MARGIN * 2;
-const FOOTER_Y = 286;
-const INK: [number, number, number] = [16, 28, 22];
-const MUTED: [number, number, number] = [94, 108, 100];
-const GREEN: [number, number, number] = [35, 155, 102];
-const PALE: [number, number, number] = [238, 247, 241];
-const RULE: [number, number, number] = [216, 226, 220];
+// =============================================================================
+// Foundation-1 migration proposal, print layer. House document design system:
+// every piece of chrome comes from lib/document-kit.ts.
+//
+// Client-facing partner rule: no funder or partner is ever named. The funded
+// system is "the funded system", the capital provider is "the funder", the
+// wheeled supply comes from "the wheeled-energy provider".
+// =============================================================================
 
 type Pdf = jsPDF;
 
-type TableColumn<T> = {
-  label: string;
-  width: number;
-  align?: "left" | "right";
-  value: (row: T) => string;
-};
-
 function money(value: number) {
-  return `R${Math.round(value).toLocaleString("en-ZA")}`;
+  const absolute = Math.abs(Math.round(value)).toLocaleString("en-US");
+  return `${value < 0 ? "-" : ""}R${absolute}`;
+}
+
+function compactMoney(value: number) {
+  const sign = value < 0 ? "-" : "";
+  const absolute = Math.abs(value);
+  if (absolute >= 1_000_000) return `${sign}R${(absolute / 1_000_000).toFixed(2)}m`;
+  if (absolute >= 100_000) return `${sign}R${Math.round(absolute / 1_000).toLocaleString("en-US")}k`;
+  return `${sign}R${Math.round(absolute).toLocaleString("en-US")}`;
+}
+
+function units(value: number) {
+  return Math.round(value).toLocaleString("en-US");
 }
 
 function decimal(value: number, digits = 2) {
-  return value.toLocaleString("en-ZA", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  return value.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 }
 
 function hasPositiveCommercialCase(proposal: F1Proposal) {
@@ -37,116 +66,276 @@ function hasPositiveCommercialCase(proposal: F1Proposal) {
   return monthlyDifference > 0 && proposal.tenYearComparison.ufmsSaving > 0;
 }
 
-function addPage(pdf: Pdf, title?: string) {
-  pdf.addPage();
-  if (title) {
-    pdf.setTextColor(...GREEN);
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(8);
-    pdf.text(title.toUpperCase(), MARGIN, 16);
-    pdf.setDrawColor(...RULE);
-    pdf.line(MARGIN, 21, PAGE_W - MARGIN, 21);
+/** Overflow handler shared by long tables: fresh page, continuation header. */
+function continuation(pdf: Pdf, eyebrowText: string, title: string, context: string) {
+  return () => addKitPage(pdf, { eyebrow: eyebrowText, title, context });
+}
+
+// --------------------------------------------------------------------- cover
+
+function buildCover(pdf: Pdf, proposal: F1Proposal) {
+  const audit = proposal.billAudit;
+  const economics = proposal.billAwareEconomics;
+  const supported = hasPositiveCommercialCase(proposal);
+  const current = audit?.averageMonthlySpendExVat ?? economics?.yearOne.currentUtilityCost ?? proposal.profile.monthlySpend;
+  const yearOne = economics?.yearOne.saving ?? proposal.ufmsOption.monthlySaving;
+  const solution = economics?.yearOne.solutionCost ?? current - yearOne;
+  const tenYear = economics?.tenYear.saving ?? proposal.tenYearComparison.ufmsSaving;
+  const generatedDate = kitLongDate(proposal.generatedAt);
+  const siteLine = [proposal.site.city, proposal.site.province].filter(Boolean).join(", ");
+
+  // KEY FIGURES: page one mirrors the operator upload form field-for-field
+  // (founder direction 2026-08-09): read the numbers, type them in, submit.
+  const keyFigures: KitStatCell[] = [
+    { value: money(current), label: "Current monthly cost ex VAT" },
+    { value: money(solution), label: "Solution monthly cost ex VAT" },
+    { value: money(yearOne), label: "Year-one monthly movement", accent: supported ? KIT_COLORS.amber : KIT_COLORS.red },
+    { value: compactMoney(tenYear), label: "Ten-year movement" },
+  ];
+  const truncate = (value: string, length: number) => (value.length > length ? `${value.slice(0, length - 1)}…` : value);
+  const evidenceFigures: KitStatCell[] = [
+    { value: truncate(audit?.provider ?? "Pending", 22), label: "Utility provider" },
+    { value: truncate((audit?.tariffNames ?? []).join(", ") || "Pending", 22), label: "Tariff names" },
+    { value: audit ? String(audit.uniquePeriodCount) : "Pending", label: "Billing periods audited" },
+    { value: audit ? String(audit.coveredDays) : "Pending", label: "Days covered" },
+  ];
+
+  coverPage(pdf, {
+    contextRight: `BILL-AUDITED · ${generatedDate.toUpperCase()}`,
+    eyebrow: "FOUNDATION-1 · MIGRATION PROPOSAL · BILL-AUDITED",
+    titleLine1: "Audited to the cent,",
+    titleLine2: "ready to decide.",
+    lead: `The formal migration proposal for ${proposal.businessName}, built line by line from the audited utility bills by the Foundation-1 Machine Intelligence. The funded system is engineered and installed at no cost to you: you pay nothing until the new power is live.`,
+    subject: proposal.businessName,
+    subjectDetail: [siteLine || null, proposal.clientProfileId ? `Profile ${proposal.clientProfileId}` : null, generatedDate]
+      .filter(Boolean)
+      .join(" · "),
+    chips: [
+      { text: audit ? `${audit.uniquePeriodCount} billing periods audited` : "Bill audit pending", tone: "cyan" },
+      { text: supported ? "Commercial case supported" : "Commercial gaps identified", tone: "neutral" },
+    ],
+    stats: keyFigures,
+    statsSecondary: evidenceFigures,
+    sourceNote: `Generated ${generatedDate} · Bill-audited pre-engineering assessment, not a formal credit offer. Interval engineering validates yield, dispatch and final terms before the term sheet. All figures exclude VAT unless stated.`,
+  });
+}
+
+// ------------------------------------------------------------ decision brief
+
+function decisionPage(pdf: Pdf, proposal: F1Proposal, context: string) {
+  let y = addKitPage(pdf, { eyebrow: "DECISION BRIEF · WHAT THE BILLS SUPPORT", title: "The case at a glance.", context });
+  const economics = proposal.billAwareEconomics;
+  const current = economics?.yearOne.currentUtilityCost ?? proposal.profile.monthlySpend;
+  const solution = economics?.yearOne.solutionCost ?? current - proposal.ufmsOption.monthlySaving;
+  const saving = economics?.yearOne.saving ?? proposal.ufmsOption.monthlySaving;
+  const supported = hasPositiveCommercialCase(proposal);
+
+  y = statStrip(pdf, y, 23.3, [
+    { value: money(current), label: "Current utility path · monthly" },
+    { value: money(solution), label: "Complete solution path · monthly" },
+    { value: money(Math.abs(saving)), label: supported ? "Modelled monthly reduction" : "Modelled monthly premium", accent: supported ? KIT_COLORS.green : KIT_COLORS.red },
+    { value: compactMoney(Math.abs(proposal.tenYearComparison.ufmsSaving)), label: supported ? "Ten-year reduction" : "Ten-year premium", accent: KIT_COLORS.amber },
+  ]);
+  y += 7;
+
+  const verdict = supported
+    ? `The bill pack and the dispatch model support a ${money(saving)} monthly reduction on the selected design period, ${decimal(Math.abs((saving / Math.max(1, current)) * 100), 1)} percent of the current bill. Interval engineering must validate generation, battery dispatch and imported-energy displacement before this becomes a formal offer.`
+    : `The completed bill audit identifies a ${money(Math.abs(saving))} monthly premium on the selected design period. The proposal remains complete as a gap report; the recorded Expression of Interest keeps the case open for reassessment without accepting this configuration.`;
+  y = darkCallout(pdf, y, 30, { eyebrow: "Foundation-1 view", title: supported ? "The commercial case is supported." : "A commercial gap is identified.", body: verdict });
+  y += 9;
+
+  monoLabel(pdf, "PROPOSED ARCHITECTURE · DESIGNED FOR THE HIGH-LOAD MONTH", KIT_PAGE.margin, y);
+  y += 3;
+  y = keyValueRows(pdf, y, [
+    { label: "Solar array", value: `${proposal.ufmsOption.sizing.pvKwp} kWp` },
+    { label: "Power conversion", value: `${proposal.ufmsOption.sizing.pcsKw} kW power conversion system` },
+    { label: "Battery storage", value: `${proposal.ufmsOption.sizing.bessKwh} kWh` },
+    { label: "Planning yield", value: proposal.solarYield ? `${units(proposal.solarYield.averageMonthlyGenerationKwh)} kWh a month` : "Pending" },
+    { label: "Onsite energy to load", value: `${units(proposal.ufmsOption.dispatch.onsiteToLoadKwh)} kWh a month · ${decimal(proposal.ufmsOption.dispatch.onsiteCoveragePct, 1)}%` },
+    { label: "Residual grid import", value: `${units(proposal.ufmsOption.dispatch.residualGridKwh)} kWh a month` },
+  ]);
+  y += 8;
+  sourceNote(pdf, proposal.disclaimer, y);
+}
+
+// ---------------------------------------------------------------- evidence
+
+function evidencePage(pdf: Pdf, proposal: F1Proposal, context: string) {
+  let y = addKitPage(pdf, { eyebrow: "MACHINE INTELLIGENCE · BILL EVIDENCE", title: "What the bills actually say.", context, tone: KIT_COLORS.cyan });
+  if (proposal.calculationBasis) {
+    monoLabel(pdf, "DESIGN BASIS · THE SELECTED PERIOD", KIT_PAGE.margin, y);
+    y += 3;
+    y = keyValueRows(pdf, y, [
+      { label: "Selected period", value: `${proposal.calculationBasis.periodStart} to ${proposal.calculationBasis.periodEnd}` },
+      { label: "Actual period", value: `${money(proposal.calculationBasis.historical.billedSpendExVat)} · ${units(proposal.calculationBasis.historical.billedKwh)} kWh` },
+      { label: "Standard month", value: `${money(proposal.calculationBasis.historical.monthlyEquivalentSpendExVat)} · ${units(proposal.calculationBasis.historical.monthlyEquivalentKwh)} kWh` },
+      { label: "Approved-current baseline", value: proposal.calculationBasis.approvedCurrent?.monthlyEquivalentSpendExVat == null ? "Not available" : money(proposal.calculationBasis.approvedCurrent.monthlyEquivalentSpendExVat) },
+      { label: "Meter evidence", value: `${proposal.calculationBasis.readType} · ${proposal.calculationBasis.billingDays} service days` },
+    ]);
+    y += 4;
+    y = paragraph(pdf, proposal.calculationBasis.explanation, KIT_PAGE.margin, y, { size: 8, color: inkTint(KIT_INK.body) }, KIT_PAGE.contentWidth, { lineHeight: 4.1 });
+    y += 7;
   }
-}
-
-function sectionTitle(pdf: Pdf, eyebrow: string, title: string, y: number) {
-  pdf.setTextColor(...GREEN);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(7.5);
-  pdf.text(eyebrow.toUpperCase(), MARGIN, y);
-  pdf.setTextColor(...INK);
-  pdf.setFontSize(19);
-  pdf.text(title, MARGIN, y + 9);
-  return y + 17;
-}
-
-function paragraph(pdf: Pdf, text: string, x: number, y: number, width: number, options: { size?: number; color?: [number, number, number]; lineHeight?: number } = {}) {
-  const size = options.size ?? 9;
-  const lineHeight = options.lineHeight ?? size * 0.45;
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(size);
-  pdf.setTextColor(...(options.color ?? MUTED));
-  const lines = pdf.splitTextToSize(text, width) as string[];
-  pdf.text(lines, x, y, { lineHeightFactor: 1.35 });
-  return y + Math.max(1, lines.length) * lineHeight;
-}
-
-function metric(pdf: Pdf, x: number, y: number, w: number, label: string, value: string, note?: string) {
-  pdf.setFillColor(...PALE);
-  pdf.roundedRect(x, y, w, 34, 3, 3, "F");
-  pdf.setTextColor(...MUTED);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(6.8);
-  pdf.text(label.toUpperCase(), x + 5, y + 7);
-  pdf.setTextColor(...INK);
-  pdf.setFontSize(15);
-  pdf.text(value, x + 5, y + 18);
-  if (note) {
-    pdf.setTextColor(...MUTED);
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(6.7);
-    const lines = pdf.splitTextToSize(note, w - 10) as string[];
-    pdf.text(lines.slice(0, 2), x + 5, y + 25, { lineHeightFactor: 1.2 });
-  }
-}
-
-function drawTable<T>(pdf: Pdf, y: number, rows: readonly T[], columns: readonly TableColumn<T>[], options: { title?: string; pageTitle?: string; fontSize?: number; minRowHeight?: number; padding?: number } = {}) {
-  const fontSize = options.fontSize ?? 7.5;
-  const headerHeight = 10;
-  const padding = options.padding ?? 2.5;
-  const minRowHeight = options.minRowHeight ?? 9;
-  const drawHeader = (atY: number) => {
-    pdf.setFillColor(...INK);
-    pdf.rect(MARGIN, atY, CONTENT_W, headerHeight, "F");
-    let x = MARGIN;
-    pdf.setTextColor(255, 255, 255);
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(fontSize - 0.5);
-    for (const column of columns) {
-      pdf.text(column.label, column.align === "right" ? x + column.width - padding : x + padding, atY + 6.5, {
-        align: column.align === "right" ? "right" : "left",
-      });
-      x += column.width;
+  if (proposal.billAudit) {
+    monoLabel(pdf, `BILL AUDIT · ${proposal.billAudit.uniquePeriodCount} PERIODS · ${proposal.billAudit.coveredDays} DAYS`, KIT_PAGE.margin, y);
+    y += 3;
+    y = keyValueRows(pdf, y, [
+      { label: "Utility and tariff", value: `${proposal.billAudit.provider} · ${proposal.billAudit.tariffNames.join(", ")}` },
+      { label: "Average usage", value: `${units(proposal.billAudit.averageMonthlyKwh)} kWh a month` },
+      { label: "Historical average", value: `${money(proposal.billAudit.averageMonthlySpendExVat)} a month ex VAT` },
+      { label: "Blended tariff", value: `R${decimal(proposal.billAudit.blendedTariffExVat)} per kWh ex VAT` },
+      { label: "Actual-read share", value: `${Math.round(proposal.billAudit.actualReadShare * 100)}%` },
+      { label: "Analysis confidence", value: proposal.billAudit.confidence },
+    ]);
+    y += 8;
+    if (proposal.billAudit.warnings.length) {
+      monoLabel(pdf, "EVIDENCE NOTICES · WHAT STILL NEEDS ATTENTION", KIT_PAGE.margin, y, { color: blend(KIT_COLORS.amber, 0.78) });
+      y += 5;
+      for (const warning of proposal.billAudit.warnings) {
+        drawText(pdf, "·", KIT_PAGE.margin + 0.7, y, { weight: "bold", size: 8, color: inkTint(KIT_INK.ghost) });
+        y = paragraph(pdf, warning, KIT_PAGE.margin + 4.9, y, { size: 8, color: inkTint(KIT_INK.dim) }, KIT_PAGE.contentWidth - 4.9, { lineHeight: 4 });
+        y += 1.6;
+      }
     }
-    return atY + headerHeight;
-  };
-
-  if (options.title) {
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(10);
-    pdf.setTextColor(...INK);
-    pdf.text(options.title, MARGIN, y);
-    y += 6;
   }
-  y = drawHeader(y);
-
-  for (const row of rows) {
-    const values = columns.map((column) => pdf.splitTextToSize(column.value(row), column.width - padding * 2) as string[]);
-    const maxLines = Math.max(...values.map((lines) => Math.max(1, lines.length)));
-    const rowHeight = Math.max(minRowHeight, maxLines * (fontSize * 0.42) + padding * 2);
-    if (y + rowHeight > FOOTER_Y - 8) {
-      addPage(pdf, options.pageTitle ?? options.title);
-      y = drawHeader(26);
-    }
-    pdf.setDrawColor(...RULE);
-    pdf.line(MARGIN, y + rowHeight, PAGE_W - MARGIN, y + rowHeight);
-    let x = MARGIN;
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(fontSize);
-    pdf.setTextColor(...INK);
-    columns.forEach((column, index) => {
-      pdf.text(values[index], column.align === "right" ? x + column.width - padding : x + padding, y + padding + fontSize * 0.36, {
-        align: column.align === "right" ? "right" : "left",
-        lineHeightFactor: 1.2,
-      });
-      x += column.width;
-    });
-    y += rowHeight;
+  if (!proposal.calculationBasis && !proposal.billAudit) {
+    paragraph(
+      pdf,
+      "No audited bill pack is attached to this case yet. The figures in this proposal are built from the stated monthly spend; the secure bill assessment replaces every assumption with the exact supplier tariff, consumption and charges.",
+      KIT_PAGE.margin,
+      y,
+      { size: 8.8, color: inkTint(KIT_INK.body) },
+      KIT_PAGE.contentWidth,
+      { lineHeight: 4.6 },
+    );
   }
-  return y;
 }
 
-function drawLineChart(
+// ------------------------------------------------------------ commercial fit
+
+function commercialFitPage(pdf: Pdf, proposal: F1Proposal, context: string) {
+  const fit = proposal.commercialFit;
+  if (!fit) return;
+  let y = addKitPage(pdf, { eyebrow: "COMMERCIAL FIT · PACKAGE TEST", title: "Does the load fit a package?", context });
+  const gapTone = fit.belowCommercialMinimum || fit.aboveStandardMaximum;
+  y = statStrip(pdf, y, 23.3, [
+    { value: `${decimal(fit.requiredPvKwp, 1)} kWp`, label: "Load-supported size" },
+    { value: `${fit.selectedPvKwp} kWp`, label: `Selected package · smallest evidenced ${fit.minimumCommercialPvKwp} kWp` },
+    { value: `${fit.sizeVariancePct >= 0 ? "+" : ""}${decimal(fit.sizeVariancePct, 1)}%`, label: gapTone ? "Size variance · commercial gap" : "Size variance · within range", accent: gapTone ? KIT_COLORS.red : KIT_COLORS.green },
+  ]);
+  y += 7;
+  y = keyValueRows(pdf, y, [
+    { label: "Fit status", value: fit.status.replace(/-/g, " ") },
+    { label: "Bill-backed monthly use", value: `${units(fit.monthlyConsumptionKwh)} kWh` },
+    { label: "Selected planning generation", value: `${units(fit.selectedMonthlyGenerationKwh)} kWh a month` },
+    { label: "Generation variance", value: `${fit.generationGapKwh >= 0 ? "+" : ""}${units(fit.generationGapKwh)} kWh a month` },
+    { label: "Planning coverage", value: `${decimal(fit.generationCoveragePct, 1)}%` },
+    { label: "Standard package range", value: `${fit.minimumCommercialPvKwp} to ${fit.maximumStandardPvKwp} kWp` },
+  ]);
+  y += 7;
+
+  const messageLines = Math.max(2, Math.ceil(fit.message.length / 105));
+  const panelHeight = 12 + messageLines * 4.1;
+  panel(pdf, KIT_PAGE.margin, y, KIT_PAGE.contentWidth, panelHeight);
+  accentBar(pdf, KIT_PAGE.margin, y, panelHeight, gapTone ? KIT_COLORS.red : KIT_COLORS.green);
+  monoLabel(pdf, gapTone ? "PACKAGE GAP" : "PACKAGE FIT", KIT_PAGE.margin + 5.6, y + 6.4, { color: blend(gapTone ? KIT_COLORS.red : KIT_COLORS.green, 0.85, KIT_COLORS.panel), size: 6.2 });
+  paragraph(pdf, fit.message, KIT_PAGE.margin + 5.6, y + 11.6, { size: 8.2, color: inkTint(KIT_INK.body, KIT_COLORS.panel) }, KIT_PAGE.contentWidth - 11.2, { lineHeight: 4.1 });
+  y += panelHeight + 9;
+
+  const economics = proposal.billAwareEconomics;
+  if (economics) {
+    monoLabel(pdf, "ECONOMIC TEST · WHAT THE PACKAGE DOES TO THE BILL", KIT_PAGE.margin, y);
+    y += 3;
+    const monthlyDifference = economics.yearOne.saving;
+    const tenYearDifference = economics.tenYear.saving;
+    keyValueRows(pdf, y, [
+      { label: "Approved-current utility path", value: `${money(economics.yearOne.currentUtilityCost)} a month` },
+      { label: "Complete solution path", value: `${money(economics.yearOne.solutionCost)} a month` },
+      { label: monthlyDifference >= 0 ? "Monthly reduction" : "Monthly premium", value: money(Math.abs(monthlyDifference)) },
+      { label: tenYearDifference >= 0 ? "Ten-year reduction" : "Ten-year premium", value: money(Math.abs(tenYearDifference)) },
+      { label: "Proposal disposition", value: hasPositiveCommercialCase(proposal) ? "Proceed to verification and formal terms" : "Retain for gap reassessment", strong: true },
+    ]);
+  }
+}
+
+// -------------------------------------------------------- migration waterfall
+
+function waterfallPage(pdf: Pdf, proposal: F1Proposal, context: string) {
+  let y = addKitPage(pdf, { eyebrow: "MIGRATION WATERFALL · HONEST ACCOUNTING", title: "Every unit is assigned once.", context });
+  const dispatch = proposal.ufmsOption.dispatch;
+  const combined = proposal.lumenCombined;
+  y = statStrip(pdf, y, 23.3, [
+    { value: `${decimal(dispatch.onsiteCoveragePct, 1)}%`, label: "Onsite share · solar and battery", accent: KIT_COLORS.amber },
+    { value: `${units(dispatch.residualGridKwh)} kWh`, label: "Grid residual after onsite dispatch" },
+    { value: combined ? `${units(combined.wheeledResidualKwh)} kWh` : "Screen only", label: "Residual wheeled · never onsite units", accent: KIT_COLORS.cyan },
+  ]);
+  y += 8;
+
+  monoLabel(pdf, "ENERGY WATERFALL · MONTHLY UNITS", KIT_PAGE.margin, y);
+  y += 2;
+  const energyRows: Array<[string, number]> = [
+    ["Business load", dispatch.monthlyLoadKwh],
+    ["Solar generation", dispatch.solarGenerationKwh],
+    ["Direct solar to load", dispatch.directSolarToLoadKwh],
+    ["Battery to load", dispatch.batteryToLoadKwh],
+    ["Onsite energy delivered", dispatch.onsiteToLoadKwh],
+    ["Residual grid import", dispatch.residualGridKwh],
+    ["Residual energy wheeled", combined?.wheeledResidualKwh ?? 0],
+    ["Residual utility commodity energy", combined?.eskomResidualKwh ?? dispatch.residualGridKwh],
+  ];
+  y = dataTable(pdf, y, energyRows, [
+    { label: "Energy step", width: 118, strong: true, value: (row) => row[0] },
+    { label: "Monthly kWh", width: 56, align: "right", value: (row) => units(row[1]) },
+  ], { fontSize: 7.6 });
+  y += 8;
+
+  monoLabel(pdf, "CHARGE WATERFALL · WHAT REMAINS PAYABLE", KIT_PAGE.margin, y);
+  y += 2;
+  const economics = proposal.billAwareEconomics;
+  const baseline = economics?.yearOne.currentUtilityCost ?? proposal.profile.monthlySpend;
+  const chargeRows: Array<[string, number]> = [
+    ["Current utility bill", baseline],
+    ["Funded-system charge", proposal.ufmsOption.monthlyCharge],
+    ["Retained grid charges after onsite supply", proposal.ufmsOption.chargeWaterfall.retainedAfterUfms.total],
+    ["Residual wheeling charge", combined?.wheelingMonthlyCharge ?? 0],
+    ["Complete combined path", combined?.monthlyCost ?? proposal.ufmsOption.monthlyCharge + proposal.ufmsOption.chargeWaterfall.retainedAfterUfms.total],
+  ];
+  y = dataTable(pdf, y, chargeRows, [
+    { label: "Rand step", width: 118, strong: true, value: (row) => row[0] },
+    { label: "Month one · ex VAT", width: 56, align: "right", value: (row) => money(row[1]) },
+  ], { fontSize: 7.6 });
+  y += 6;
+  sourceNote(pdf, combined?.note ?? proposal.wheelingOption.note, y);
+}
+
+// ------------------------------------------------------------------ economics
+
+function economicsPage(pdf: Pdf, proposal: F1Proposal, context: string) {
+  const economics = proposal.billAwareEconomics;
+  if (!economics) return;
+  let y = addKitPage(pdf, { eyebrow: "ECONOMICS · TEN-YEAR COST PATH", title: "Ten years, both paths priced.", context });
+  const rows = economics.tenYear.rows;
+  y = dataTable(pdf, y, rows, [
+    { label: "Year", width: 18, strong: true, value: (row) => String(row.year) },
+    { label: "Utility path", width: 34, align: "right", value: (row) => money(row.utilityCost) },
+    { label: "Funded system", width: 32, align: "right", value: (row) => money(row.ufmsCharge) },
+    { label: "Retained grid", width: 30, align: "right", value: (row) => money(row.residualGridCost) },
+    { label: "Solution path", width: 30, align: "right", value: (row) => money(row.solutionCost) },
+    { label: "Cumulative kept", width: 30, align: "right", value: (row) => money(row.cumulativeSaving) },
+  ], { fontSize: 7.4, onOverflow: continuation(pdf, "ECONOMICS · CONTINUED", "Ten years, both paths priced.", context) });
+  y += 9;
+  y = statStrip(pdf, y, 22, [
+    { value: compactMoney(economics.tenYear.currentUtilityCost), label: "Utility path · ten-year total" },
+    { value: compactMoney(economics.tenYear.solutionCost), label: "Solution path · ten-year total" },
+    { value: compactMoney(economics.tenYear.saving), label: economics.tenYear.saving >= 0 ? "Kept in the business" : "Ten-year premium", accent: economics.tenYear.saving >= 0 ? KIT_COLORS.green : KIT_COLORS.red },
+  ]);
+  y += 7;
+  sourceNote(pdf, economics.methodology, y);
+}
+
+// ------------------------------------------------------- tariff intelligence
+
+function drawTariffChart(
   pdf: Pdf,
   x: number,
   y: number,
@@ -162,473 +351,192 @@ function drawLineChart(
   ];
   const max = Math.max(...values) * 1.12;
   const min = Math.max(0, Math.min(...values) * 0.85);
-  const pxForYear = (year: number) => x + ((year - years[0]) / Math.max(1, years.at(-1)! - years[0])) * w;
+  const px = (year: number) => x + ((year - years[0]) / Math.max(1, years.at(-1)! - years[0])) * w;
   const py = (value: number) => y + h - ((value - min) / Math.max(0.01, max - min)) * h;
-  pdf.setDrawColor(...RULE);
-  pdf.setLineWidth(0.25);
-  for (let i = 0; i <= 4; i += 1) {
-    const gy = y + (i / 4) * h;
-    pdf.line(x, gy, x + w, gy);
+  for (let index = 0; index <= 4; index += 1) {
+    hairline(pdf, x, y + (index / 4) * h, x + w, y + (index / 4) * h, { alpha: KIT_INK.softLine });
   }
-  pdf.setDrawColor(55, 156, 191);
-  pdf.setLineWidth(0.55);
-  pdf.setLineDashPattern([1.5, 1.5], 0);
-  for (let i = 0; i < history.length - 1; i += 1) {
-    pdf.line(
-      pxForYear(history[i].year),
-      py(history[i].utilityTariffRandPerKwh),
-      pxForYear(history[i + 1].year),
-      py(history[i + 1].utilityTariffRandPerKwh),
-    );
+  const historyColor = blend(KIT_COLORS.cyan, 0.8);
+  pdf.setDrawColor(historyColor[0], historyColor[1], historyColor[2]);
+  pdf.setLineWidth(0.35);
+  pdf.setLineDashPattern([1.4, 1.4], 0);
+  for (let index = 0; index < history.length - 1; index += 1) {
+    pdf.line(px(history[index].year), py(history[index].utilityTariffRandPerKwh), px(history[index + 1].year), py(history[index + 1].utilityTariffRandPerKwh));
   }
-  const series: Array<{ key: keyof (typeof rows)[number]; color: [number, number, number]; dash?: number[] }> = [
-    { key: "utilityEffectiveTariff", color: [224, 89, 72] },
-    { key: "ufmsEffectiveTariff", color: [42, 166, 105] },
-    { key: "assetFinanceInstalmentTariff", color: [70, 116, 205], dash: [2, 2] },
+  const series: Array<{ key: keyof (typeof rows)[number]; color: readonly [number, number, number]; dash?: number[] }> = [
+    { key: "utilityEffectiveTariff", color: KIT_COLORS.red },
+    { key: "ufmsEffectiveTariff", color: KIT_COLORS.green },
+    { key: "assetFinanceInstalmentTariff", color: KIT_COLORS.violet, dash: [1.8, 1.8] },
   ];
   for (const item of series) {
-    pdf.setDrawColor(...item.color);
-    pdf.setLineWidth(0.8);
+    pdf.setDrawColor(item.color[0], item.color[1], item.color[2]);
+    pdf.setLineWidth(0.55);
     pdf.setLineDashPattern(item.dash ?? [], 0);
-    for (let i = 0; i < rows.length - 1; i += 1) {
-      pdf.line(pxForYear(rows[i].year), py(Number(rows[i][item.key])), pxForYear(rows[i + 1].year), py(Number(rows[i + 1][item.key])));
+    for (let index = 0; index < rows.length - 1; index += 1) {
+      pdf.line(px(rows[index].year), py(Number(rows[index][item.key])), px(rows[index + 1].year), py(Number(rows[index + 1][item.key])));
     }
   }
   pdf.setLineDashPattern([], 0);
-  pdf.setFontSize(6.5);
-  pdf.setTextColor(...MUTED);
   years.forEach((year, index) => {
-    if (index === 0 || index === years.length - 1 || index % 5 === 0) pdf.text(String(year), pxForYear(year), y + h + 5, { align: "center" });
+    if (index === 0 || index === years.length - 1 || index % 5 === 0) {
+      monoLabel(pdf, String(year), px(year), y + h + 4.4, { size: 5.6, alpha: KIT_INK.ghost, trackingEm: 0.06, align: "center" });
+    }
   });
-  const legend = [
-    ["National context", [55, 156, 191]],
-    ["Client utility", [224, 89, 72]],
-    ["UFMS + grid", [42, 166, 105]],
-    ["Asset instalment", [70, 116, 205]],
-  ] as const;
+  const legend: Array<[string, readonly [number, number, number]]> = [
+    ["National context", historyColor],
+    ["Client utility", KIT_COLORS.red],
+    ["Funded system + grid", KIT_COLORS.green],
+    ["Asset instalment", KIT_COLORS.violet],
+  ];
   let legendX = x;
-  pdf.setFontSize(6.2);
   for (const [label, color] of legend) {
     pdf.setFillColor(color[0], color[1], color[2]);
-    pdf.rect(legendX, y - 7, 4, 1.6, "F");
-    pdf.setTextColor(...MUTED);
-    pdf.text(label, legendX + 6, y - 5.5);
-    legendX += 42;
+    pdf.rect(legendX, y - 5.4, 3.4, 1.1, "F");
+    monoLabel(pdf, label, legendX + 4.6, y - 4.2, { size: 5.6, alpha: KIT_INK.dim, trackingEm: 0.06 });
+    legendX += 44;
   }
 }
 
-function coverPage(pdf: Pdf, proposal: F1Proposal) {
-  const supported = hasPositiveCommercialCase(proposal);
-  pdf.setFillColor(4, 11, 8);
-  pdf.rect(0, 0, PAGE_W, PAGE_H, "F");
-  pdf.setFillColor(185, 255, 145);
-  pdf.circle(182, 28, 18, "F");
-  pdf.setFillColor(4, 11, 8);
-  pdf.circle(182, 28, 8, "F");
-  pdf.setTextColor(185, 255, 145);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(8);
-  pdf.text("FOUNDATION-1 / MIGRATION INTELLIGENCE", MARGIN, 25);
-  pdf.setTextColor(244, 247, 244);
-  pdf.setFontSize(31);
-  pdf.text(["Migration", "Proposal"], MARGIN, 73, { lineHeightFactor: 0.95 });
-  pdf.setFontSize(12);
-  pdf.setFont("helvetica", "normal");
-  pdf.setTextColor(185, 194, 188);
-  pdf.text("Bill-audited pre-engineering assessment", MARGIN, 105);
-  pdf.setDrawColor(185, 255, 145);
-  pdf.setLineWidth(1.2);
-  pdf.line(MARGIN, 119, 78, 119);
-  pdf.setFont("helvetica", "bold");
-  pdf.setTextColor(244, 247, 244);
-  pdf.setFontSize(17);
-  pdf.text(proposal.businessName, MARGIN, 145);
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(9);
-  pdf.setTextColor(185, 194, 188);
-  const meta = [
-    proposal.clientProfileId ? `Profile ${proposal.clientProfileId}` : null,
-    [proposal.site.city, proposal.site.province].filter(Boolean).join(", ") || null,
-    new Date(proposal.generatedAt).toLocaleDateString("en-ZA", { year: "numeric", month: "long", day: "numeric" }),
-  ].filter(Boolean) as string[];
-  pdf.text(meta, MARGIN, 155, { lineHeightFactor: 1.7 });
-  pdf.setFillColor(12, 27, 19);
-  pdf.roundedRect(MARGIN, 202, CONTENT_W, 45, 4, 4, "F");
-  pdf.setTextColor(185, 255, 145);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(7);
-  pdf.text("REPORT STATUS", MARGIN + 7, 213);
-  pdf.setTextColor(244, 247, 244);
-  pdf.setFontSize(14);
-  pdf.text(supported ? "Bill-audited / commercial case supported" : "Bill-audited / commercial gaps identified", MARGIN + 7, 225);
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(8);
-  pdf.setTextColor(185, 194, 188);
-  pdf.text("Not a formal credit offer. Engineering validates yield, dispatch and final terms.", MARGIN + 7, 236);
-  coverKeyFigures(pdf, proposal);
-}
-
-/**
- * KEY FIGURES on page one — mirrors the operator upload form field-for-field
- * (founder direction 2026-08-09): read the numbers off page 1, type them in,
- * upload, submit. Also a clean client-facing decision summary.
- */
-function coverKeyFigures(pdf: Pdf, proposal: F1Proposal) {
-  const audit = proposal.billAudit;
-  const current = audit?.averageMonthlySpendExVat ?? null;
-  const yearOne = proposal.ufmsOption?.monthlySaving ?? null;
-  const solution = current !== null && yearOne !== null ? current - yearOne : null;
-  const tenYear = proposal.tenYearComparison?.ufmsSaving ?? null;
-  const rows: [string, string][] = [
-    ["Current monthly cost ex VAT", current !== null ? rand0(current) : "—"],
-    ["Solution monthly cost ex VAT", solution !== null ? rand0(solution) : "—"],
-    ["Year-one monthly movement", yearOne !== null ? rand0(yearOne) : "—"],
-    ["Ten-year movement", tenYear !== null ? rand0(tenYear) : "—"],
-    ["Utility provider", audit?.provider ?? "—"],
-    ["Tariff names", (audit?.tariffNames ?? []).join(", ") || "—"],
-    ["Billing periods audited", audit ? String(audit.uniquePeriodCount) : "—"],
-    ["Days covered", audit ? String(audit.coveredDays) : "—"],
-  ];
-  const top = 257;
-  const colW = CONTENT_W / 4;
-  pdf.setTextColor(185, 255, 145);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(7);
-  pdf.text("KEY FIGURES", MARGIN, top - 5);
-  for (let index = 0; index < rows.length; index += 1) {
-    const col = index % 4;
-    const line = Math.floor(index / 4);
-    const x = MARGIN + col * colW;
-    const y = top + line * 13;
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(5.6);
-    pdf.setTextColor(150, 162, 154);
-    pdf.text(rows[index][0].toUpperCase(), x, y);
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(8.6);
-    pdf.setTextColor(244, 247, 244);
-    const value = rows[index][1];
-    pdf.text(value.length > 24 ? `${value.slice(0, 23)}…` : value, x, y + 4.8);
-  }
-}
-
-function rand0(value: number) {
-  const sign = value < 0 ? "-" : "";
-  return `${sign}R${Math.round(Math.abs(value)).toLocaleString("en-ZA").replace(/,/g, " ")}`;
-}
-
-function executivePage(pdf: Pdf, proposal: F1Proposal) {
-  addPage(pdf);
-  let y = sectionTitle(pdf, "Decision brief", "The case at a glance", 20);
-  const economics = proposal.billAwareEconomics;
-  const current = economics?.yearOne.currentUtilityCost ?? proposal.profile.monthlySpend;
-  const solution = economics?.yearOne.solutionCost ?? current - proposal.ufmsOption.monthlySaving;
-  const saving = economics?.yearOne.saving ?? proposal.ufmsOption.monthlySaving;
-  const supported = hasPositiveCommercialCase(proposal);
-  const metricW = (CONTENT_W - 6) / 2;
-  metric(pdf, MARGIN, y, metricW, "Approved-current design bill", `${money(current)}/mo`, "Ex VAT · selected high-load period");
-  metric(pdf, MARGIN + metricW + 6, y, metricW, "Complete solution path", `${money(solution)}/mo`, "UFMS charge + retained grid charges");
-  metric(pdf, MARGIN, y + 40, metricW, supported ? "Modelled monthly reduction" : "Modelled monthly premium", money(Math.abs(saving)), supported ? `${((saving / current) * 100).toFixed(1)}% P50 bill-audited result` : `${Math.abs((saving / current) * 100).toFixed(1)}% above current path`);
-  metric(pdf, MARGIN + metricW + 6, y + 40, metricW, supported ? "Ten-year reduction" : "Ten-year premium", money(Math.abs(proposal.tenYearComparison.ufmsSaving)), "Nominal ZAR · disclosed escalation path");
-  y += 86;
-  pdf.setFillColor(9, 20, 14);
-  pdf.roundedRect(MARGIN, y, CONTENT_W, 34, 4, 4, "F");
-  pdf.setTextColor(185, 255, 145);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(8);
-  pdf.text("FOUNDATION-1 VIEW", MARGIN + 7, y + 9);
-  pdf.setTextColor(244, 247, 244);
-  pdf.setFontSize(12);
-  const verdict = supported
-    ? `The bill pack and P50 dispatch model support a ${money(saving)} monthly reduction on the selected design period. Interval engineering must validate generation, battery dispatch and imported-energy displacement before this becomes a formal offer.`
-    : `The completed bill audit identifies a ${money(Math.abs(saving))} monthly premium on the selected design period. The proposal remains complete as a gap report; the post-proposal EOI records interest in future reassessment without accepting this configuration.`;
-  pdf.text(pdf.splitTextToSize(verdict, CONTENT_W - 14) as string[], MARGIN + 7, y + 19, { lineHeightFactor: 1.25 });
-  y += 43;
-  y = sectionTitle(pdf, "Proposed architecture", "Designed for the high-load month", y);
-  const specs = [
-    ["Solar array", `${proposal.ufmsOption.sizing.pvKwp} kWp`],
-    ["Power conversion", `${proposal.ufmsOption.sizing.pcsKw} kW PCS`],
-    ["Battery storage", `${proposal.ufmsOption.sizing.bessKwh} kWh`],
-    ["Planning yield", proposal.solarYield ? `${Math.round(proposal.solarYield.averageMonthlyGenerationKwh).toLocaleString("en-ZA")} kWh/mo` : "Pending"],
-    ["Onsite energy to load", `${Math.round(proposal.ufmsOption.dispatch.onsiteToLoadKwh).toLocaleString("en-ZA")} kWh/mo · ${proposal.ufmsOption.dispatch.onsiteCoveragePct.toFixed(1)}%`],
-    ["Residual grid import", `${Math.round(proposal.ufmsOption.dispatch.residualGridKwh).toLocaleString("en-ZA")} kWh/mo`],
-  ];
-  y = drawTable(pdf, y, specs, [
-    { label: "DESIGN ELEMENT", width: 94, value: (row) => row[0] },
-    { label: "PLANNING VALUE", width: 84, align: "right", value: (row) => row[1] },
-  ]);
-  paragraph(pdf, proposal.disclaimer, MARGIN, y + 8, CONTENT_W, { size: 7.5 });
-}
-
-function auditPage(pdf: Pdf, proposal: F1Proposal) {
-  addPage(pdf);
-  let y = sectionTitle(pdf, "Evidence", "What the bills actually say", 20);
-  if (proposal.calculationBasis) {
-    const basisRows = [
-      ["Selected period", `${proposal.calculationBasis.periodStart} to ${proposal.calculationBasis.periodEnd}`],
-      ["Actual period", `${money(proposal.calculationBasis.historical.billedSpendExVat)} · ${Math.round(proposal.calculationBasis.historical.billedKwh).toLocaleString("en-ZA")} kWh`],
-      ["Standard month", `${money(proposal.calculationBasis.historical.monthlyEquivalentSpendExVat)} · ${Math.round(proposal.calculationBasis.historical.monthlyEquivalentKwh).toLocaleString("en-ZA")} kWh`],
-      ["Approved-current", proposal.calculationBasis.approvedCurrent?.monthlyEquivalentSpendExVat == null ? "Not available" : money(proposal.calculationBasis.approvedCurrent.monthlyEquivalentSpendExVat)],
-      ["Meter evidence", `${proposal.calculationBasis.readType} · ${proposal.calculationBasis.billingDays} service days`],
-    ];
-    y = drawTable(pdf, y, basisRows, [
-      { label: "DESIGN BASIS", width: 62, value: (row) => row[0] },
-      { label: "VALUE", width: 116, align: "right", value: (row) => row[1] },
-    ]);
-    y = paragraph(pdf, proposal.calculationBasis.explanation, MARGIN, y + 7, CONTENT_W, { size: 8 });
-  }
-  if (proposal.billAudit) {
-    y = sectionTitle(pdf, "Six-period audit", `${proposal.billAudit.uniquePeriodCount} periods / ${proposal.billAudit.coveredDays} days`, y + 10);
-    const auditRows = [
-      ["Utility / tariff", `${proposal.billAudit.provider} · ${proposal.billAudit.tariffNames.join(", ")}`],
-      ["Average usage", `${Math.round(proposal.billAudit.averageMonthlyKwh).toLocaleString("en-ZA")} kWh/month`],
-      ["Historical average", `${money(proposal.billAudit.averageMonthlySpendExVat)}/month ex VAT`],
-      ["Blended tariff", `R${decimal(proposal.billAudit.blendedTariffExVat)}/kWh ex VAT`],
-      ["Actual-read share", `${Math.round(proposal.billAudit.actualReadShare * 100)}%`],
-      ["Analysis confidence", proposal.billAudit.confidence],
-    ];
-    y = drawTable(pdf, y, auditRows, [
-      { label: "AUDIT FIELD", width: 62, value: (row) => row[0] },
-      { label: "RESULT", width: 116, align: "right", value: (row) => row[1] },
-    ]);
-    if (proposal.billAudit.warnings.length) {
-      y = sectionTitle(pdf, "Evidence notices", "What still needs attention", y + 10);
-      for (const warning of proposal.billAudit.warnings) y = paragraph(pdf, `• ${warning}`, MARGIN, y, CONTENT_W, { size: 8 });
-    }
-  }
-}
-
-function commercialFitPage(pdf: Pdf, proposal: F1Proposal) {
-  const fit = proposal.commercialFit;
-  if (!fit) return;
-  addPage(pdf);
-  let y = sectionTitle(pdf, "Commercial fit", "Does the load fit an available package?", 20);
-  const gapTone = fit.belowCommercialMinimum || fit.aboveStandardMaximum;
-  metric(pdf, MARGIN, y, 56, "Load-supported size", `${decimal(fit.requiredPvKwp, 1)} kWp`, "Before standard-package rounding");
-  metric(pdf, MARGIN + 61, y, 56, "Selected package", `${fit.selectedPvKwp} kWp`, `Smallest evidenced: ${fit.minimumCommercialPvKwp} kWp`);
-  metric(pdf, MARGIN + 122, y, 56, "Size variance", `${fit.sizeVariancePct >= 0 ? "+" : ""}${decimal(fit.sizeVariancePct, 1)}%`, gapTone ? "Commercial gap identified" : "Within commercial range");
-  y += 43;
-  const fitRows = [
-    ["Fit status", fit.status.replace(/-/g, " ")],
-    ["Bill-backed monthly use", `${Math.round(fit.monthlyConsumptionKwh).toLocaleString("en-ZA")} kWh`],
-    ["Selected planning generation", `${Math.round(fit.selectedMonthlyGenerationKwh).toLocaleString("en-ZA")} kWh/month`],
-    ["Generation variance", `${fit.generationGapKwh >= 0 ? "+" : ""}${Math.round(fit.generationGapKwh).toLocaleString("en-ZA")} kWh/month`],
-    ["Planning coverage", `${decimal(fit.generationCoveragePct, 1)}%`],
-    ["Standard package range", `${fit.minimumCommercialPvKwp}-${fit.maximumStandardPvKwp} kWp`],
-  ];
-  y = drawTable(pdf, y, fitRows, [
-    { label: "FIT TEST", width: 76, value: (row) => row[0] },
-    { label: "RESULT", width: 102, align: "right", value: (row) => row[1] },
-  ]);
-  pdf.setFillColor(...(gapTone ? [255, 244, 239] as [number, number, number] : PALE));
-  pdf.roundedRect(MARGIN, y + 8, CONTENT_W, 37, 4, 4, "F");
-  pdf.setTextColor(...(gapTone ? [154, 67, 46] as [number, number, number] : GREEN));
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(7.5);
-  pdf.text(gapTone ? "PACKAGE GAP" : "PACKAGE FIT", MARGIN + 7, y + 18);
-  paragraph(pdf, fit.message, MARGIN + 7, y + 27, CONTENT_W - 14, { size: 8, color: INK });
-  y += 54;
-
-  const economics = proposal.billAwareEconomics;
-  if (economics) {
-    y = sectionTitle(pdf, "Economic gap", "What the package does to the bill", y);
-    const monthlyDifference = economics.yearOne.saving;
-    const tenYearDifference = economics.tenYear.saving;
-    const rows = [
-      ["Approved-current utility path", `${money(economics.yearOne.currentUtilityCost)}/month`],
-      ["Complete solution path", `${money(economics.yearOne.solutionCost)}/month`],
-      [monthlyDifference >= 0 ? "Monthly reduction" : "Monthly premium", money(Math.abs(monthlyDifference))],
-      [tenYearDifference >= 0 ? "Ten-year reduction" : "Ten-year premium", money(Math.abs(tenYearDifference))],
-      ["Proposal disposition", hasPositiveCommercialCase(proposal) ? "EOI · proceed to formal assessment" : "EOI · retain for gap reassessment"],
-    ];
-    drawTable(pdf, y, rows, [
-      { label: "COMMERCIAL TEST", width: 88, value: (row) => row[0] },
-      { label: "RESULT", width: 90, align: "right", value: (row) => row[1] },
-    ]);
-  }
-}
-
-function migrationPathPage(pdf: Pdf, proposal: F1Proposal) {
-  addPage(pdf);
-  let y = sectionTitle(pdf, "Migration waterfall", "Every kWh is assigned once", 20);
-  const dispatch = proposal.ufmsOption.dispatch;
-  const combined = proposal.lumenCombined;
-  metric(pdf, MARGIN, y, 56, "Onsite share", `${decimal(dispatch.onsiteCoveragePct, 1)}%`, "Direct solar + battery output");
-  metric(pdf, MARGIN + 61, y, 56, "Grid residual", `${Math.round(dispatch.residualGridKwh).toLocaleString("en-ZA")} kWh`, "After onsite dispatch");
-  metric(pdf, MARGIN + 122, y, 56, "Residual wheeled", combined ? `${Math.round(combined.wheeledResidualKwh).toLocaleString("en-ZA")} kWh` : "Screen only", "Never applied to onsite kWh");
-  y += 43;
-  const energyRows = [
-    ["Business load", dispatch.monthlyLoadKwh],
-    ["Solar generation", dispatch.solarGenerationKwh],
-    ["Direct solar to load", dispatch.directSolarToLoadKwh],
-    ["Battery to load", dispatch.batteryToLoadKwh],
-    ["Onsite energy delivered", dispatch.onsiteToLoadKwh],
-    ["Residual grid import", dispatch.residualGridKwh],
-    ["Residual energy wheeled", combined?.wheeledResidualKwh ?? 0],
-    ["Residual Eskom commodity energy", combined?.eskomResidualKwh ?? dispatch.residualGridKwh],
-  ] as const;
-  y = drawTable(pdf, y, energyRows, [
-    { label: "ENERGY STEP", width: 112, value: (row) => row[0] },
-    { label: "MONTHLY kWh", width: 66, align: "right", value: (row) => Math.round(row[1]).toLocaleString("en-ZA") },
-  ]);
-  y = sectionTitle(pdf, "Charge waterfall", "What remains payable", y + 10);
-  const economics = proposal.billAwareEconomics;
-  const baseline = economics?.yearOne.currentUtilityCost ?? proposal.profile.monthlySpend;
-  const chargeRows = [
-    ["Current utility bill", baseline],
-    ["UFMS funded-system charge", proposal.ufmsOption.monthlyCharge],
-    ["Retained grid charges after onsite", proposal.ufmsOption.chargeWaterfall.retainedAfterUfms.total],
-    ["Residual wheeling charge", combined?.wheelingMonthlyCharge ?? 0],
-    ["Complete combined path", combined?.monthlyCost ?? proposal.ufmsOption.monthlyCharge + proposal.ufmsOption.chargeWaterfall.retainedAfterUfms.total],
-  ] as const;
-  y = drawTable(pdf, y, chargeRows, [
-    { label: "RAND STEP", width: 112, value: (row) => row[0] },
-    { label: "MONTH ONE · EX VAT", width: 66, align: "right", value: (row) => money(row[1]) },
-  ]);
-  paragraph(pdf, combined?.note ?? proposal.wheelingOption.note, MARGIN, y + 8, CONTENT_W, { size: 7.5 });
-}
-
-function economicsPage(pdf: Pdf, proposal: F1Proposal) {
-  addPage(pdf);
-  let y = sectionTitle(pdf, "Economics", "Ten-year cost path", 20);
-  const economics = proposal.billAwareEconomics;
-  if (!economics) return;
-  const rows = economics.tenYear.rows;
-  y = drawTable(pdf, y, rows, [
-    { label: "YEAR", width: 15, value: (row) => String(row.year) },
-    { label: "UTILITY", width: 34, align: "right", value: (row) => money(row.utilityCost) },
-    { label: "UFMS", width: 31, align: "right", value: (row) => money(row.ufmsCharge) },
-    { label: "GRID", width: 29, align: "right", value: (row) => money(row.residualGridCost) },
-    { label: "SOLUTION", width: 34, align: "right", value: (row) => money(row.solutionCost) },
-    { label: "CUM. GAP", width: 35, align: "right", value: (row) => money(row.cumulativeSaving) },
-  ], { fontSize: 7, pageTitle: "Ten-year economics" });
-  y = sectionTitle(pdf, "Totals", "The complete comparison", y + 10);
-  metric(pdf, MARGIN, y, 55, "Utility path", money(economics.tenYear.currentUtilityCost));
-  metric(pdf, MARGIN + 61, y, 55, "Solution path", money(economics.tenYear.solutionCost));
-  metric(pdf, MARGIN + 122, y, 56, "Difference", money(economics.tenYear.saving));
-  y += 42;
-  paragraph(pdf, economics.methodology, MARGIN, y, CONTENT_W, { size: 8 });
-}
-
-function tariffPage(pdf: Pdf, proposal: F1Proposal) {
+function tariffPages(pdf: Pdf, proposal: F1Proposal, context: string) {
   if (!proposal.tariffComparison) return;
-  addPage(pdf);
-  let y = sectionTitle(pdf, "Tariff intelligence", "Utility versus funded energy", 20);
-  drawLineChart(
-    pdf,
-    MARGIN,
-    y + 8,
-    CONTENT_W,
-    58,
-    proposal.tariffComparison.projectionRows,
-    proposal.tariffComparison.historicalContext,
-  );
-  y += 79;
-  y = drawTable(pdf, y, proposal.tariffComparison.projectionRows, [
-    { label: "YEAR", width: 20, value: (row) => String(row.year) },
-    { label: "UTILITY", width: 42, align: "right", value: (row) => `R${decimal(row.utilityEffectiveTariff)}` },
-    { label: "UFMS + GRID", width: 43, align: "right", value: (row) => `R${decimal(row.ufmsEffectiveTariff)}` },
-    { label: "ASSET INSTAL.", width: 38, align: "right", value: (row) => `R${decimal(row.assetFinanceInstalmentTariff)}` },
-    { label: "ASSET + GRID", width: 35, align: "right", value: (row) => `R${decimal(row.assetFinanceCompleteTariff)}` },
-  ], { fontSize: 7, pageTitle: "Tariff intelligence" });
-  paragraph(pdf, proposal.tariffComparison.historicalContextNote, MARGIN, y + 7, CONTENT_W, { size: 7.2 });
+  let y = addKitPage(pdf, { eyebrow: "TARIFF INTELLIGENCE · RAND PER UNIT", title: "Utility versus funded energy.", context, tone: KIT_COLORS.cyan });
+  drawTariffChart(pdf, KIT_PAGE.margin, y + 7, KIT_PAGE.contentWidth, 52, proposal.tariffComparison.projectionRows, proposal.tariffComparison.historicalContext);
+  y += 68;
+  y = dataTable(pdf, y, proposal.tariffComparison.projectionRows, [
+    { label: "Year", width: 22, strong: true, value: (row) => String(row.year) },
+    { label: "Utility", width: 38, align: "right", value: (row) => `R${decimal(row.utilityEffectiveTariff)}` },
+    { label: "Funded system + grid", width: 40, align: "right", value: (row) => `R${decimal(row.ufmsEffectiveTariff)}` },
+    { label: "Asset instalment", width: 38, align: "right", value: (row) => `R${decimal(row.assetFinanceInstalmentTariff)}` },
+    { label: "Asset + grid", width: 36, align: "right", value: (row) => `R${decimal(row.assetFinanceCompleteTariff)}` },
+  ], { fontSize: 7, onOverflow: continuation(pdf, "TARIFF INTELLIGENCE · CONTINUED", "Utility versus funded energy.", context) });
+  y += 5;
+  sourceNote(pdf, proposal.tariffComparison.historicalContextNote, y);
 
-  addPage(pdf);
-  y = sectionTitle(pdf, "Historical context", "National tariff template, 2007-2033", 20);
-  y = drawTable(pdf, y, proposal.tariffComparison.historicalContext, [
-    { label: "YEAR", width: 35, value: (row) => String(row.year) },
-    { label: "R/kWh", width: 55, align: "right", value: (row) => `R${decimal(row.utilityTariffRandPerKwh)}` },
-    { label: "CUMULATIVE", width: 50, align: "right", value: (row) => `${row.cumulativeIncreasePct.toLocaleString("en-ZA")}%` },
-    { label: "STATUS", width: 38, align: "right", value: (row) => row.evidence === "historical-template" ? "Template history" : "Legacy projection" },
-  ], { fontSize: 6.2, minRowHeight: 7.1, padding: 1.6, pageTitle: "Historical tariff context" });
+  y = addKitPage(pdf, { eyebrow: "HISTORICAL CONTEXT · NATIONAL TARIFF TEMPLATE", title: "Where the utility path comes from.", context, tone: KIT_COLORS.cyan });
+  dataTable(pdf, y, proposal.tariffComparison.historicalContext, [
+    { label: "Year", width: 34, strong: true, value: (row) => String(row.year) },
+    { label: "Rand per kWh", width: 50, align: "right", value: (row) => `R${decimal(row.utilityTariffRandPerKwh)}` },
+    { label: "Cumulative increase", width: 50, align: "right", value: (row) => `${row.cumulativeIncreasePct.toLocaleString("en-US")}%` },
+    { label: "Status", width: 40, align: "right", value: (row) => (row.evidence === "historical-template" ? "Template history" : "Legacy projection") },
+  ], { fontSize: 6.4, rowPadding: 1.2, onOverflow: continuation(pdf, "HISTORICAL CONTEXT · CONTINUED", "Where the utility path comes from.", context) });
 }
 
-function commercialPage(pdf: Pdf, proposal: F1Proposal) {
-  addPage(pdf);
-  let y = sectionTitle(pdf, "Commercial structures", "Three ways to fund the same system", 20);
+// ------------------------------------------------------ commercial structures
+
+function commercialPage(pdf: Pdf, proposal: F1Proposal, context: string) {
+  let y = addKitPage(pdf, { eyebrow: "COMMERCIAL STRUCTURES · ONE SYSTEM, THREE ROUTES", title: "Three ways to fund the same system.", context });
   const capex = proposal.commercial.capitalCostInclVat;
-  metric(pdf, MARGIN, y, 56, "Turnkey capital", money(capex.total), "Indicative · incl VAT");
-  metric(pdf, MARGIN + 61, y, 56, "UFMS month one", money(proposal.ufmsOption.monthlyCharge), "Ex VAT · 6% annual escalation");
   const asset = proposal.commercial.structures.find((option) => option.label === "Asset Finance");
-  metric(pdf, MARGIN + 122, y, 56, "Asset finance", asset?.monthlyCharge ? money(asset.monthlyCharge) : "Pending", "Indicative · credit subject");
-  y += 43;
-  y = drawTable(pdf, y, proposal.commercial.structures, [
-    { label: "OPTION", width: 32, value: (row) => row.label },
-    { label: "MONTHLY", width: 32, align: "right", value: (row) => row.monthlyCharge === null ? "n/a" : money(row.monthlyCharge) },
-    { label: "UPFRONT", width: 29, align: "right", value: (row) => row.upfront === null ? "n/a" : money(row.upfront) },
-    { label: "ESC.", width: 20, align: "right", value: (row) => row.escalation === null ? "n/a" : `${Math.round(row.escalation * 100)}%` },
-    { label: "WHAT IT MEANS", width: 65, value: (row) => row.comparisonNote },
-  ], { fontSize: 7, pageTitle: "Commercial structures" });
-  y = sectionTitle(pdf, "Turnkey value", "Where the capital goes", y + 10);
-  const stackRows = [
-    ["Generation equipment", capex.generation],
-    ["Power conversion and storage", capex.powerCubeBess],
-    ["Engineering and implementation", capex.engineering],
-    ["Project, compliance and lifecycle costs", capex.softCosts],
-  ] as const;
-  drawTable(pdf, y, stackRows, [
-    { label: "CAPITAL COMPONENT", width: 118, value: (row) => row[0] },
-    { label: "INDICATIVE VALUE", width: 60, align: "right", value: (row) => money(row[1]) },
+  y = statStrip(pdf, y, 23.3, [
+    { value: money(capex.total), label: "Turnkey capital · indicative incl VAT" },
+    { value: money(proposal.ufmsOption.monthlyCharge), label: "Funded system · month one ex VAT", accent: KIT_COLORS.amber },
+    { value: asset?.monthlyCharge ? money(asset.monthlyCharge) : "Pending", label: "Asset finance · indicative, credit subject" },
+  ]);
+  y += 8;
+
+  monoLabel(pdf, "STRUCTURE COMPARISON", KIT_PAGE.margin, y);
+  y += 2;
+  y = dataTable(pdf, y, proposal.commercial.structures, [
+    { label: "Option", width: 30, strong: true, value: (row) => row.label },
+    { label: "Monthly", width: 28, align: "right", value: (row) => (row.monthlyCharge === null ? "·" : money(row.monthlyCharge)) },
+    { label: "Upfront", width: 28, align: "right", value: (row) => (row.upfront === null ? "·" : money(row.upfront)) },
+    { label: "Escalation", width: 22, align: "right", value: (row) => (row.escalation === null ? "·" : `${Math.round(row.escalation * 100)}%`) },
+    { label: "What it means", width: 66, value: (row) => row.comparisonNote },
+  ], { fontSize: 7.2 });
+  y += 8;
+
+  monoLabel(pdf, "TURNKEY VALUE · WHERE THE CAPITAL GOES", KIT_PAGE.margin, y);
+  y += 3;
+  keyValueRows(pdf, y, [
+    { label: "Generation equipment", value: money(capex.generation) },
+    { label: "Power conversion and storage", value: money(capex.powerCubeBess) },
+    { label: "Engineering and implementation", value: money(capex.engineering) },
+    { label: "Project, compliance and lifecycle costs", value: money(capex.softCosts) },
+    { label: "Turnkey total", value: money(capex.total), strong: true },
   ]);
 }
 
-function impactPage(pdf: Pdf, proposal: F1Proposal) {
+// -------------------------------------------------------------------- impact
+
+function impactPage(pdf: Pdf, proposal: F1Proposal, context: string) {
   if (!proposal.energyAndEsg) return;
-  addPage(pdf);
-  let y = sectionTitle(pdf, "Environmental impact", "What cleaner energy may avoid", 20);
+  let y = addKitPage(pdf, { eyebrow: "ENVIRONMENTAL IMPACT · PLANNING VIEW", title: "What cleaner energy may avoid.", context, tone: KIT_COLORS.green });
   const energy = proposal.energyAndEsg.annualPlanningEnergyReductionGwh;
-  metric(pdf, MARGIN, y, 56, "Planning energy", energy === null ? "Pending" : `${decimal(energy, 3)} GWh`, "Modelled onsite grid displacement");
-  metric(pdf, MARGIN + 61, y, 56, "Scope 2 baseline", proposal.energyAndEsg.annualScope2EmissionsTonnes === null ? "Pending" : `${decimal(proposal.energyAndEsg.annualScope2EmissionsTonnes, 1)} t`, "Audited grid consumption");
-  metric(pdf, MARGIN + 122, y, 56, "ESG readiness", `${proposal.energyAndEsg.energyEsgReadinessScore}/100`, proposal.energyAndEsg.scoreLabel);
-  y += 43;
-  y = drawTable(pdf, y, proposal.energyAndEsg.impactRows, [
-    { label: "IMPACT", width: 67, value: (row) => row.label },
-    { label: "FACTOR", width: 50, align: "right", value: (row) => `${decimal(row.factor, row.factor < 10 ? 2 : 0)} ${row.factorUnit}` },
-    { label: "ANNUAL REDUCTION", width: 61, align: "right", value: (row) => `${decimal(row.annualReduction, row.annualReduction < 10 ? 2 : 0)} ${row.reductionUnit}` },
-  ], { fontSize: 7.5 });
-  y = paragraph(pdf, "CO2e uses the current Foundation-1 report factor of 0.94 kgCO2e/kWh. NOx, SO2, particulate, water, coal and ash factors reproduce the observed partner proposal and are disclosed as legacy planning factors, not independently verified engineering outcomes.", MARGIN, y + 8, CONTENT_W, { size: 7.5 });
-  paragraph(pdf, proposal.energyAndEsg.scoreScope, MARGIN, y + 4, CONTENT_W, { size: 7.5 });
+  y = statStrip(pdf, y, 23.3, [
+    { value: energy === null ? "Pending" : `${decimal(energy, 3)} GWh`, label: "Planning energy · modelled displacement" },
+    { value: proposal.energyAndEsg.annualScope2EmissionsTonnes === null ? "Pending" : `${decimal(proposal.energyAndEsg.annualScope2EmissionsTonnes, 1)} t`, label: "Scope 2 baseline · audited consumption" },
+    { value: `${proposal.energyAndEsg.energyEsgReadinessScore}/100`, label: proposal.energyAndEsg.scoreLabel, accent: KIT_COLORS.green },
+  ]);
+  y += 8;
+  y = dataTable(pdf, y, proposal.energyAndEsg.impactRows, [
+    { label: "Impact", width: 66, strong: true, value: (row) => row.label },
+    { label: "Factor", width: 52, align: "right", value: (row) => `${decimal(row.factor, row.factor < 10 ? 2 : 0)} ${row.factorUnit}` },
+    { label: "Annual reduction", width: 56, align: "right", value: (row) => `${decimal(row.annualReduction, row.annualReduction < 10 ? 2 : 0)} ${row.reductionUnit}` },
+  ], { fontSize: 7.4 });
+  y += 6;
+  y = sourceNote(pdf, "Carbon dioxide equivalence uses the current Foundation-1 report factor of 0.94 kilograms per kWh. The remaining factors reproduce the observed funded-project planning factors and are disclosed as legacy planning values, not independently verified engineering outcomes.", y);
+  y += 1.5;
+  sourceNote(pdf, proposal.energyAndEsg.scoreScope, y);
 }
 
-function methodologyPage(pdf: Pdf, proposal: F1Proposal) {
-  addPage(pdf);
-  let y = sectionTitle(pdf, "Method and limitations", "How to read this proposal", 20);
+// -------------------------------------------------------------- methodology
+
+function methodologyPage(pdf: Pdf, proposal: F1Proposal, context: string) {
+  let y = addKitPage(pdf, { eyebrow: "METHOD AND LIMITATIONS · READ ME FIRST", title: "How to read this proposal.", context });
   for (const [index, line] of proposal.explainer.entries()) {
-    pdf.setFillColor(...PALE);
-    pdf.circle(MARGIN + 3, y - 1, 3, "F");
-    pdf.setTextColor(...GREEN);
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(7);
-    pdf.text(String(index + 1), MARGIN + 3, y, { align: "center" });
-    y = paragraph(pdf, line, MARGIN + 10, y, CONTENT_W - 10, { size: 8 });
-    y += 4;
-    if (y > FOOTER_Y - 18) {
-      addPage(pdf, "Method and limitations");
-      y = 30;
+    if (y > KIT_PAGE.bodyLimitY - 14) {
+      y = addKitPage(pdf, { eyebrow: "METHOD AND LIMITATIONS · CONTINUED", title: "How to read this proposal.", context });
     }
+    drawText(pdf, String(index + 1).padStart(2, "0"), KIT_PAGE.margin, y, { font: "courier", size: 8, color: blend(KIT_COLORS.amber, 0.9), trackingEm: 0.08 });
+    y = paragraph(pdf, line, KIT_PAGE.margin + 12.7, y, { size: 8.2, color: inkTint(KIT_INK.body) }, KIT_PAGE.contentWidth - 12.7, { lineHeight: 4.1 });
+    y += 3.4;
   }
-  if (proposal.billAwareEconomics) {
-    y = sectionTitle(pdf, "Guardrails", "What is deliberately not assumed", y + 4);
-    for (const limitation of proposal.billAwareEconomics.limitations) {
-      y = paragraph(pdf, `• ${limitation}`, MARGIN, y, CONTENT_W, { size: 7.8 });
-      y += 2;
+  const limitations = proposal.billAwareEconomics?.limitations ?? [];
+  if (limitations.length) {
+    y += 4;
+    if (y > KIT_PAGE.bodyLimitY - 26) {
+      y = addKitPage(pdf, { eyebrow: "METHOD AND LIMITATIONS · CONTINUED", title: "How to read this proposal.", context });
+    }
+    monoLabel(pdf, "GUARDRAILS · WHAT IS DELIBERATELY NOT ASSUMED", KIT_PAGE.margin, y);
+    y += 5;
+    for (const limitation of limitations) {
+      if (y > KIT_PAGE.bodyLimitY - 8) {
+        y = addKitPage(pdf, { eyebrow: "METHOD AND LIMITATIONS · CONTINUED", title: "How to read this proposal.", context });
+      }
+      drawText(pdf, "·", KIT_PAGE.margin + 0.7, y, { weight: "bold", size: 7.8, color: inkTint(KIT_INK.ghost) });
+      y = paragraph(pdf, limitation, KIT_PAGE.margin + 4.9, y, { size: 7.8, color: inkTint(KIT_INK.dim) }, KIT_PAGE.contentWidth - 4.9, { lineHeight: 3.9 });
+      y += 1.6;
     }
   }
 }
 
-function addFooters(pdf: Pdf, proposal: F1Proposal) {
-  const pages = pdf.getNumberOfPages();
-  for (let page = 1; page <= pages; page += 1) {
-    pdf.setPage(page);
-    pdf.setDrawColor(...(page === 1 ? [53, 71, 62] as [number, number, number] : RULE));
-    pdf.line(MARGIN, FOOTER_Y - 4, PAGE_W - MARGIN, FOOTER_Y - 4);
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(6.5);
-    pdf.setTextColor(...(page === 1 ? [150, 163, 155] as [number, number, number] : MUTED));
-    pdf.text("FOUNDATION-1 (PTY) LTD · CONFIDENTIAL CLIENT ASSESSMENT", MARGIN, FOOTER_Y);
-    pdf.text(`${proposal.clientProfileId ?? "Client"} · ${page} / ${pages}`, PAGE_W - MARGIN, FOOTER_Y, { align: "right" });
-  }
+// ------------------------------------------------------------ the journey
+
+function journeyPage(pdf: Pdf, proposal: F1Proposal, context: string) {
+  let y = addKitPage(pdf, { eyebrow: "SECURE MIGRATION · THE FULL JOURNEY", title: "From proposal to savings from day one.", context });
+  const supported = hasPositiveCommercialCase(proposal);
+  y = stageJourney(pdf, y + 2, [
+    { title: "Screen", detail: "The public estimate that opened this case: the monthly spend and the site's area, no documents.", state: "done" },
+    { title: "Evidence", detail: "The most recent utility bills, submitted together and reconciled as one evidence pack.", state: "done" },
+    { title: "Foundation-1 Migration Report", detail: "The audited read of the bills: every charge line checked, every route compared.", state: "done" },
+    { title: "Non-binding Expression of Interest", detail: "The authorised representative recorded interest in formal terms. Nothing binding.", state: "done" },
+    { title: "Formal proposals", detail: "This document: the funded pathway priced from the audited bills.", state: "current" },
+    { title: "Verification", detail: "Foundation-1 confirms the business holds the required verification documents, then hands the case to the funder.", state: "ahead" },
+    { title: "Term sheet", detail: "The funder issues formal terms. Nothing binds either party until this is signed.", state: "ahead" },
+    { title: "Migration", detail: "The funded system is installed and commissioned with the grid connection retained. R0 end to end until the switch.", state: "ahead" },
+    { title: "Savings from day one", detail: "The new monthly cost applies from the first billing cycle after go-live: qualifying sites keep up to about sixty percent.", state: "final" },
+  ]);
+  y += 2;
+  darkCallout(pdf, y, 26, {
+    eyebrow: "Next step",
+    title: supported ? "Confirm verification and request formal terms." : "Keep the case open for reassessment.",
+    body: supported
+      ? "Reply to your Foundation-1 contact to start verification. You pay nothing to start, nothing to design and nothing to build: the first payment exists only after your new power is live, and from that day you simply pay less."
+      : "Foundation-1 retains the audited evidence pack and reprices the case when system pricing, consumption or utility tariffs move. No cost, no obligation, and the evidence stays yours.",
+  });
 }
+
+// ----------------------------------------------------------------- assembly
 
 export function migrationProposalPdfFilename(proposal: F1Proposal) {
   const company = sanitizeFileSegment(proposal.businessName) || "client";
@@ -643,19 +551,24 @@ export function buildMigrationProposalPdf(proposal: F1Proposal) {
     subject: "Bill-audited pre-engineering renewable-energy migration assessment",
     author: "Foundation-1 (Pty) Ltd",
     creator: "Foundation-1 1OS",
-    keywords: "renewable energy, migration proposal, UFMS, asset finance, ESG",
+    keywords: "renewable energy, migration proposal, funded system, asset finance, environmental readiness",
   });
-  coverPage(pdf, proposal);
-  executivePage(pdf, proposal);
-  auditPage(pdf, proposal);
-  commercialFitPage(pdf, proposal);
-  migrationPathPage(pdf, proposal);
-  economicsPage(pdf, proposal);
-  tariffPage(pdf, proposal);
-  commercialPage(pdf, proposal);
-  impactPage(pdf, proposal);
-  methodologyPage(pdf, proposal);
-  addFooters(pdf, proposal);
+  const context = [proposal.clientProfileId ?? null, proposal.site.city ?? null]
+    .filter(Boolean)
+    .join(" · ")
+    .toUpperCase() || "CONFIDENTIAL";
+  buildCover(pdf, proposal);
+  decisionPage(pdf, proposal, context);
+  evidencePage(pdf, proposal, context);
+  commercialFitPage(pdf, proposal, context);
+  waterfallPage(pdf, proposal, context);
+  economicsPage(pdf, proposal, context);
+  tariffPages(pdf, proposal, context);
+  commercialPage(pdf, proposal, context);
+  impactPage(pdf, proposal, context);
+  methodologyPage(pdf, proposal, context);
+  journeyPage(pdf, proposal, context);
+  footerBand(pdf, "Migration proposal", "Confidential client assessment");
   return {
     bytes: new Uint8Array(pdf.output("arraybuffer")),
     filename: migrationProposalPdfFilename(proposal),
