@@ -108,6 +108,7 @@ async function simulateConversation([name, caseKey, persona]) {
   let clientMessage = await glm(
     [
       { role: "system", content: `${persona} You are contacting your migration assistant Dawn for the first time today. Write ONE opening message (1-3 sentences), in character. Never break character.` },
+      { role: "user", content: "Write your opening message to Dawn now." },
     ],
     { maxTokens: 160, temperature: 0.9 },
   );
@@ -126,9 +127,15 @@ async function simulateConversation([name, caseKey, persona]) {
     clientMessage = await glm(
       [
         { role: "system", content: `${persona} You are mid-conversation with Dawn, your migration assistant. React to Dawn's last message in ONE short message (1-3 sentences), in character. If your concern was genuinely addressed, you may move to a new related worry or say thanks and ask what happens next. Never break character.` },
-        ...transcript.slice(-6).map((m) => ({ role: m.role === "client" ? "assistant" : "user", content: m.content })),
+        {
+          role: "user",
+          content:
+            "Conversation so far:\n" +
+            transcript.slice(-6).map((m) => `${m.role === "client" ? "YOU" : "DAWN"}: ${m.content}`).join("\n\n") +
+            "\n\nWrite your next message to Dawn now.",
+        },
       ],
-      { maxTokens: 160, temperature: 0.9 },
+      { maxTokens: 200, temperature: 0.9 },
     );
   }
 
