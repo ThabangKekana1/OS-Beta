@@ -78,6 +78,12 @@ export async function completeChat(input: {
   maxOutputTokens?: number;
   /** Ask the provider for a JSON object. Ignored by providers that do not support it. */
   json?: boolean;
+  /**
+   * Reasoning control for hybrid-thinking providers (Z.ai GLM). "disabled" keeps
+   * chat latency low and stops reasoning from consuming the whole token budget.
+   * Omitted entirely unless set, so plain OpenAI-compatible providers never see it.
+   */
+  thinking?: "enabled" | "disabled";
   signal?: AbortSignal;
 }): Promise<ModelCompletion> {
   const config = modelConfig();
@@ -111,6 +117,7 @@ export async function completeChat(input: {
         temperature: input.temperature ?? 0.2,
         max_tokens: input.maxOutputTokens ?? config.maxOutputTokens,
         ...(input.json ? { response_format: { type: "json_object" } } : {}),
+        ...(input.thinking ? { thinking: { type: input.thinking } } : {}),
       }),
     });
 
