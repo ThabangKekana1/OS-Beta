@@ -86,8 +86,8 @@ export async function POST(
           ok: true,
           conversationId: null,
           reply:
-            "You have sent quite a few messages in a short time, so I am pausing briefly. " +
-            "Your case is safe and nothing is lost. If something is urgent, " +
+            "You're quick! Give me a moment to catch up. " +
+            "Your case is safe and nothing's lost. If something's urgent, " +
             "[message the team](dawn:view/support) and a person will reply by email.",
           rateLimited: true,
         },
