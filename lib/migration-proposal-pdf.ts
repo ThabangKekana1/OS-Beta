@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import type { F1Proposal } from "@/lib/f1-proposal";
 import { sanitizeFileSegment } from "@/lib/download-utils";
+import { ONSITE_INCLUSIONS } from "@/lib/report-pack-pdf";
 import type { UtilityTariffHistoryRow } from "@/lib/proposal-impact-model";
 import {
   KIT_COLORS,
@@ -456,6 +457,48 @@ function commercialPage(pdf: Pdf, proposal: F1Proposal, context: string) {
   ]);
 }
 
+// ---------------------------------------------------------- inclusions
+
+function inclusionsPage(pdf: Pdf, context: string) {
+  let y = addKitPage(pdf, {
+    eyebrow: "THE ON-SITE SERVICE · WHAT THE ONE AMOUNT INCLUDES",
+    title: "Everything the amount carries.",
+    context,
+  });
+  y += 2;
+  y = paragraph(
+    pdf,
+    "The solar and storage pathway replaces your utility bill with one fixed monthly amount under a power purchase agreement with a minimum term of 10 years. That one amount carries the full service below, owned, insured and operated for the life of the agreement, at no capital outlay from you.",
+    KIT_PAGE.margin,
+    y,
+    { size: 9, color: inkTint(KIT_INK.body) },
+    KIT_PAGE.contentWidth,
+  );
+  y += 6;
+  const rowHeight = 12.6;
+  panel(pdf, KIT_PAGE.margin, y, KIT_PAGE.contentWidth, rowHeight * ONSITE_INCLUSIONS.length + 2.4);
+  ONSITE_INCLUSIONS.forEach((inclusion, index) => {
+    const rowY = y + 1.2 + index * rowHeight;
+    if (index > 0) {
+      hairline(pdf, KIT_PAGE.margin + 4, rowY, KIT_PAGE.margin + KIT_PAGE.contentWidth - 4, rowY, { alpha: KIT_INK.softLine, base: KIT_COLORS.panel });
+    }
+    monoLabel(pdf, inclusion.index, KIT_PAGE.margin + 6, rowY + 7.6, { size: 7.4, color: KIT_COLORS.amber, alpha: 0.92, base: KIT_COLORS.panel });
+    drawText(pdf, inclusion.item, KIT_PAGE.margin + 16, rowY + 5.8, { size: 9.4, weight: "bold", color: blend(KIT_COLORS.ink, 0.9, KIT_COLORS.panel) });
+    drawText(pdf, inclusion.detail, KIT_PAGE.margin + 16, rowY + 10.2, { size: 7.8, color: blend(KIT_COLORS.ink, KIT_INK.dim, KIT_COLORS.panel) });
+  });
+  y += rowHeight * ONSITE_INCLUSIONS.length + 2.4;
+  y += 5;
+  paragraph(
+    pdf,
+    "The wheeled renewable energy pathway carries the same minimum 10-year power purchase agreement and is available as traditional wheeling or virtual wheeling, whichever fits your metering and supply arrangement.",
+    KIT_PAGE.margin,
+    y,
+    { size: 8.4, color: inkTint(KIT_INK.dim) },
+    KIT_PAGE.contentWidth,
+  );
+  footerBand(pdf, "Migration proposal", context);
+}
+
 // -------------------------------------------------------------------- impact
 
 function impactPage(pdf: Pdf, proposal: F1Proposal, context: string) {
@@ -565,6 +608,7 @@ export function buildMigrationProposalPdf(proposal: F1Proposal) {
   economicsPage(pdf, proposal, context);
   tariffPages(pdf, proposal, context);
   commercialPage(pdf, proposal, context);
+  inclusionsPage(pdf, context);
   impactPage(pdf, proposal, context);
   methodologyPage(pdf, proposal, context);
   journeyPage(pdf, proposal, context);

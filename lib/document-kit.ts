@@ -288,14 +288,19 @@ function parseAnalemma(): AnalemmaGeometry {
 const ANALEMMA = parseAnalemma();
 
 /**
- * The Foundation-1 lockup: analemma with the sun at the winter-solstice tip
- * and the wordmark. `x`/`yTop` locate the top-left of the analemma viewbox.
+ * The analemma alone, scalable: the certificate and any large-mark treatment
+ * draw through this. `x`/`yTop` locate the top-left of the 420x120 viewbox.
  */
-export function brandLockup(pdf: jsPDF, x: number, yTop: number, options: { scale?: number } = {}) {
-  const scale = options.scale ?? 0.0667; // viewbox 420x120 -> 28mm wide
-  const stroke = inkTint(0.94);
+export function analemmaMark(
+  pdf: jsPDF,
+  x: number,
+  yTop: number,
+  options: { scale?: number; strokeAlpha?: number; lineWidth?: number; sunHaloAlpha?: number } = {},
+) {
+  const scale = options.scale ?? 0.0667;
+  const stroke = inkTint(options.strokeAlpha ?? 0.94);
   pdf.setDrawColor(stroke[0], stroke[1], stroke[2]);
-  pdf.setLineWidth(0.28);
+  pdf.setLineWidth(options.lineWidth ?? 0.28);
   pdf.lines(
     ANALEMMA.segments,
     x + ANALEMMA.startX * scale,
@@ -306,11 +311,20 @@ export function brandLockup(pdf: jsPDF, x: number, yTop: number, options: { scal
   );
   const sunX = x + ANALEMMA_SUN.x * scale;
   const sunY = yTop + ANALEMMA_SUN.y * scale;
-  const halo = blend(KIT_COLORS.sunHalo, 0.4);
+  const halo = blend(KIT_COLORS.sunHalo, options.sunHaloAlpha ?? 0.4);
   pdf.setFillColor(halo[0], halo[1], halo[2]);
   pdf.circle(sunX, sunY, 18 * scale, "F");
   pdf.setFillColor(KIT_COLORS.sunCore[0], KIT_COLORS.sunCore[1], KIT_COLORS.sunCore[2]);
   pdf.circle(sunX, sunY, 7 * scale, "F");
+}
+
+/**
+ * The Foundation-1 lockup: analemma with the sun at the winter-solstice tip
+ * and the wordmark. `x`/`yTop` locate the top-left of the analemma viewbox.
+ */
+export function brandLockup(pdf: jsPDF, x: number, yTop: number, options: { scale?: number } = {}) {
+  const scale = options.scale ?? 0.0667; // viewbox 420x120 -> 28mm wide
+  analemmaMark(pdf, x, yTop, { scale });
   drawText(pdf, "Foundation-1", x + 420 * scale + 3.2, yTop + 60 * scale + 1.45, {
     weight: "bold",
     size: 12,
