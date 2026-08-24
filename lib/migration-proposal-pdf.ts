@@ -1,7 +1,7 @@
 import { jsPDF } from "jspdf";
 import type { F1Proposal } from "@/lib/f1-proposal";
 import { sanitizeFileSegment } from "@/lib/download-utils";
-import { ONSITE_INCLUSIONS } from "@/lib/report-pack-pdf";
+import { ONSITE_INCLUSIONS } from "@/lib/report-pack-core";
 import type { UtilityTariffHistoryRow } from "@/lib/proposal-impact-model";
 import {
   KIT_COLORS,

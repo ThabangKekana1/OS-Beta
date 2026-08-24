@@ -4,10 +4,8 @@ import {
   getMigrationCaseRelations,
   isMigrationCaseWebsiteRequest,
 } from "@/lib/migration-case-store";
-import {
-  buildReportPackDocument,
-  isReportPackDocumentId,
-} from "@/lib/report-pack-pdf";
+import { isReportPackDocumentId } from "@/lib/report-pack-core";
+import { buildReportPackDocument } from "@/lib/report-pack-html";
 import { consumeRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -56,7 +54,7 @@ export async function GET(
         { status: 409 },
       );
     }
-    const { bytes, filename } = buildReportPackDocument(doc, {
+    const { bytes, filename } = await buildReportPackDocument(doc, {
       caseRow,
       proposal: relations.proposal,
     });
