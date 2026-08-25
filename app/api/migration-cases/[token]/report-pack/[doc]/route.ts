@@ -10,6 +10,7 @@ import { consumeRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 function requestIp(request: NextRequest) {
   const forwarded = request.headers.get("x-forwarded-for");

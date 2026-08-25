@@ -16,6 +16,7 @@
     "tariffs:generate": "node scripts/generate-eskom-tariff-catalogue.mjs"
   },
   "dependencies": {
+    "@sparticuz/chromium": "^149.0.0",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.103.0",
     "clsx": "^2.1.1",
@@ -24,6 +25,7 @@
     "lucide-react": "^0.469.0",
     "next": "^16.0.0",
     "pdf-parse": "^2.4.5",
+    "playwright-core": "^1.62.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "^3.8.1",

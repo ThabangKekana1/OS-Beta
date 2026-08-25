@@ -1,20 +1,35 @@
-import type { Browser } from "@playwright/test";
+import type { Browser } from "playwright-core";
 
 // =============================================================================
 // HTML to PDF through headless Chromium: the same engine that renders the
 // website renders the documents, so the design system is byte-identical.
+//
+// Local and self-hosted: CHROMIUM_EXECUTABLE_PATH points at a Chromium binary.
+// Serverless (Vercel): @sparticuz/chromium ships the binary with the function.
 // =============================================================================
 
 let browserPromise: Promise<Browser> | null = null;
 
+async function launchBrowser(): Promise<Browser> {
+  const { chromium } = await import("playwright-core");
+  const localPath = process.env.CHROMIUM_EXECUTABLE_PATH;
+  if (localPath) {
+    return chromium.launch({ executablePath: localPath });
+  }
+  const sparticuz = await import("@sparticuz/chromium");
+  const executablePath = await sparticuz.default.executablePath();
+  return chromium.launch({
+    executablePath,
+    args: sparticuz.default.args,
+  });
+}
+
 async function getBrowser(): Promise<Browser> {
   if (!browserPromise) {
-    browserPromise = (async () => {
-      const { chromium } = await import("@playwright/test");
-      return chromium.launch({
-        executablePath: process.env.CHROMIUM_EXECUTABLE_PATH || undefined,
-      });
-    })();
+    browserPromise = launchBrowser().catch((error) => {
+      browserPromise = null;
+      throw error;
+    });
   }
   return browserPromise;
 }
