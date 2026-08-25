@@ -4,6 +4,9 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   allowedDevOrigins: ["127.0.0.1", "localhost"],
   serverExternalPackages: ["pdf-parse", "pdfjs-dist", "@napi-rs/canvas", "@sparticuz/chromium", "playwright-core"],
+  outputFileTracingIncludes: {
+    "/api/migration-cases/*/report-pack/*": ["./node_modules/@sparticuz/chromium/bin/**"],
+  },
   poweredByHeader: false,
   async headers() {
     return [
