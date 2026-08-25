@@ -25,12 +25,15 @@ async function launchBrowser(): Promise<Browser> {
 }
 
 async function getBrowser(): Promise<Browser> {
-  if (!browserPromise) {
-    browserPromise = launchBrowser().catch((error) => {
-      browserPromise = null;
-      throw error;
-    });
+  if (browserPromise) {
+    const existing = await browserPromise.catch(() => null);
+    if (existing && existing.isConnected()) return existing;
+    browserPromise = null;
   }
+  browserPromise = launchBrowser().catch((error) => {
+    browserPromise = null;
+    throw error;
+  });
   return browserPromise;
 }
 
@@ -41,7 +44,9 @@ export async function htmlToPdf(
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    await page.setContent(html, { waitUntil: "networkidle", timeout: 30000 });
+    // The documents are fully self-contained (no network fetches), so "load"
+    // is complete and immune to idle-timer hangs on serverless.
+    await page.setContent(html, { waitUntil: "load", timeout: 30000 });
     const bytes = await page.pdf({
       format: "A4",
       landscape: Boolean(options.landscape),
