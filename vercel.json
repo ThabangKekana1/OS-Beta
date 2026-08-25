@@ -15,8 +15,8 @@
   ],
   "functions": {
     "app/api/**/report-pack/**": {
-      "memory": 3009,
-      "maxDuration": 90
+      "memory": 2048,
+      "maxDuration": 60
     }
   }
 }
