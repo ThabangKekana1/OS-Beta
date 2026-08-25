@@ -6,6 +6,10 @@ import {
 } from "@/lib/migration-case-store";
 import { isReportPackDocumentId } from "@/lib/report-pack-core";
 import { buildReportPackDocument } from "@/lib/report-pack-html";
+import {
+  loadStoredReportPackDocument,
+  storeReportPackDocument,
+} from "@/lib/report-pack-store";
 import { consumeRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -55,14 +59,14 @@ export async function GET(
         { status: 409 },
       );
     }
-    let pack: { bytes: Uint8Array; filename: string };
-    try {
-      pack = await buildReportPackDocument(doc, { caseRow, proposal: relations.proposal });
-    } catch {
-      // One retry absorbs a serverless cold start of the renderer.
-      pack = await buildReportPackDocument(doc, { caseRow, proposal: relations.proposal });
+    const filename = `foundation-1-${doc}-${caseRow.public_reference.toLowerCase()}.pdf`;
+    let bytes = await loadStoredReportPackDocument(caseRow, relations.proposal, doc);
+    if (!bytes) {
+      // Not stored yet (older publishes): generate once and persist.
+      const built = await buildReportPackDocument(doc, { caseRow, proposal: relations.proposal });
+      bytes = built.bytes;
+      storeReportPackDocument(caseRow, relations.proposal, doc, bytes).catch(() => undefined);
     }
-    const { bytes, filename } = pack;
     return new NextResponse(Buffer.from(bytes), {
       status: 200,
       headers: {

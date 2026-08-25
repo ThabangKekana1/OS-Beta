@@ -9,6 +9,7 @@ import {
 } from "@/lib/migration-case-store";
 import { sendCaseLifecycleMessage } from "@/lib/case-lifecycle";
 import { createNotification } from "@/lib/notifications";
+import { generateAndStoreReportPack } from "@/lib/report-pack-store";
 import { ensurePrivateBucket } from "@/lib/server-json-store";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 
@@ -207,6 +208,13 @@ export async function publishOperatorProposal(input: OperatorProposalInput) {
     link: `/admin/migration-cases`,
     email: false,
   }).catch(() => undefined);
+
+  // Generate and store the client document pack as an immutable snapshot of
+  // this publish. Non-blocking: the download route falls back to on-demand
+  // generation for anything missing.
+  void generateAndStoreReportPack(updatedCase, proposal as MigrationCaseProposalRow).catch(
+    () => undefined,
+  );
 
   return {
     caseRow: updatedCase,
