@@ -356,3 +356,27 @@ export async function recentMovements(caseId: string, limit = 25): Promise<DawnM
     detail: (row.properties ?? {}) as Record<string, unknown>,
   }));
 }
+
+export async function loadActiveProposal(
+  caseRow: { active_proposal_id?: string | null },
+): Promise<import("@/lib/migration-case-store").MigrationCaseProposalRow | null> {
+  if (!caseRow.active_proposal_id) return null;
+  const { data } = await client()
+    .from("migration_case_proposals")
+    .select("*")
+    .eq("id", caseRow.active_proposal_id)
+    .maybeSingle();
+  return (data as import("@/lib/migration-case-store").MigrationCaseProposalRow) ?? null;
+}
+
+export async function loadActiveBillPack(
+  caseRow: { active_bill_pack_id?: string | null },
+): Promise<Record<string, unknown> | null> {
+  if (!caseRow.active_bill_pack_id) return null;
+  const { data } = await client()
+    .from("migration_case_bill_packs")
+    .select("*")
+    .eq("id", caseRow.active_bill_pack_id)
+    .maybeSingle();
+  return (data as Record<string, unknown>) ?? null;
+}

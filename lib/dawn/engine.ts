@@ -15,7 +15,9 @@ import {
   appendMessage,
   ensureConversation,
   listMessages,
+  loadActiveBillPack,
   loadActivePlaybook,
+  loadActiveProposal,
   loadMemory,
   recentMovements,
   retitleConversation,
@@ -67,11 +69,13 @@ export async function runDawnTurn(input: {
   if (!message) throw new Error("Empty message.");
 
   const conversation = await ensureConversation(input.caseRow.id, input.conversationId);
-  const [historyRaw, playbook, movements, memory] = await Promise.all([
+  const [historyRaw, playbook, movements, memory, proposal, billPack] = await Promise.all([
     listMessages(conversation.id, HISTORY_TURNS),
     loadActivePlaybook().catch(() => []),
     recentMovements(input.caseRow.id).catch(() => []),
     loadMemory(input.caseRow.id).catch(() => []),
+    loadActiveProposal(input.caseRow).catch(() => null),
+    loadActiveBillPack(input.caseRow).catch(() => null),
   ]);
 
   // Token-budgeted history: newest turns first, as many as fit the budget.
@@ -90,6 +94,8 @@ export async function runDawnTurn(input: {
     caseRow: input.caseRow,
     movements,
     currentView: input.currentView ?? null,
+    proposal,
+    billPack,
   });
 
   const playbookBlock =

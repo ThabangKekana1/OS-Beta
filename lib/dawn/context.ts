@@ -6,7 +6,8 @@
  * their stage, their documents, their recent movements in the workspace.
  * Partner identities and internal economics never appear here.
  */
-import type { MigrationCaseRow } from "@/lib/migration-case-store";
+import type { MigrationCaseProposalRow, MigrationCaseRow } from "@/lib/migration-case-store";
+import { deriveReportPackFigures } from "@/lib/report-pack-core";
 import { stageNarrative } from "./prompt";
 
 export type DawnMovement = {
@@ -72,6 +73,8 @@ export function buildCaseContext(input: {
   caseRow: MigrationCaseRow;
   movements: DawnMovement[];
   currentView?: string | null;
+  proposal?: MigrationCaseProposalRow | null;
+  billPack?: Record<string, unknown> | null;
 }): { context: string; stuck: DawnStuckSignal } {
   const { caseRow } = input;
   const narrative = stageNarrative({
@@ -111,6 +114,51 @@ export function buildCaseContext(input: {
   if (done.length > 0) lines.push(`Milestones: ${done.join("; ")}`);
   if (input.currentView) lines.push(`The client is currently on the "${input.currentView}" tab.`);
   if (stuck.stuck) lines.push(`Possible stuck signal: ${stuck.reason}`);
+
+  // Bill audit evidence: what the uploaded bills actually produced.
+  const pack = input.billPack ?? null;
+  if (pack) {
+    const portfolio = (pack.portfolio ?? {}) as Record<string, unknown>;
+    const periods = Number(pack.recognised_period_count ?? portfolio.uniquePeriodCount ?? 0);
+    const days = Number(pack.covered_days ?? portfolio.coveredDays ?? 0);
+    const files = Number(pack.source_file_count ?? 0);
+    if (files > 0 || periods > 0) {
+      lines.push(
+        `Bill evidence: ${files} file${files === 1 ? "" : "s"} uploaded, ${periods} billing period${periods === 1 ? "" : "s"} recognised, ${days} days covered, status ${String(pack.status ?? "unknown")}.`,
+      );
+    }
+  }
+
+  // The published Migration Report and the generated document pack: every
+  // figure the client can see, so Dawn never guesses at her own documents.
+  if (input.proposal) {
+    const f = deriveReportPackFigures({ caseRow, proposal: input.proposal });
+    const R = (v: number) => `R${Math.round(v).toLocaleString("en-ZA")}`;
+    const pct = (v: number) => `${Math.round(v)} percent`;
+    const wheelKeep = f.currentMonthly - f.wheelingMonthly;
+    const wheelPct = f.currentMonthly > 0 ? (wheelKeep / f.currentMonthly) * 100 : 0;
+    const onsiteKeep = f.currentMonthly - f.onsiteMonthly;
+    const onsitePct = f.currentMonthly > 0 ? (onsiteKeep / f.currentMonthly) * 100 : 0;
+    const wheeledKwh = Math.round(f.monthlyKwh * f.wheelingShare);
+
+    lines.push("");
+    lines.push("THE MIGRATION REPORT AND DOCUMENT PACK (published; the client downloads all four under Current step or Documents):");
+    lines.push(
+      `1. Migration Report: audited monthly bill ${R(f.currentMonthly)} excl VAT, from ${f.billingPeriods} billing periods over ${f.coveredDays} days; blended tariff found R${f.blendedTariff.toFixed(2)} per kWh; consumption about ${Math.round(f.monthlyKwh).toLocaleString("en-ZA")} kWh a month; complete blended solution ${R(f.solutionMonthly)} a month, keeping ${R(f.monthlySaving)} (about ${pct(f.yearOnePct)}) in year one; ten-year movement ${R(f.tenYearDifference)} against the Eskom path modelled at 13 percent a year.`,
+    );
+    lines.push(
+      `2. Example bill, wheeled renewable energy: total ${R(f.wheelingMonthly)} a month excl VAT against the audited ${R(f.currentMonthly)}, so the client keeps ${R(wheelKeep)} a month (about ${pct(wheelPct)} off the bill). About ${pct(f.wheelingShare * 100)} of the ENERGY (${wheeledKwh.toLocaleString("en-ZA")} kWh) moves to the contracted rate of R${f.wheeledTariff.toFixed(2)} per kWh; the remainder stays with the distributor at the audited blended tariff. CRITICAL: the ${pct(f.wheelingShare * 100)} on that bill is the share of energy at the contracted rate, NOT a savings percentage; the bill saving is ${pct(wheelPct)}. If the client read it as savings, clear that up plainly. Offered as traditional or virtual wheeling, minimum 10-year power purchase agreement.`,
+    );
+    lines.push(
+      `3. Example bill, solar and storage on site: total ${R(f.onsiteMonthly)} a month excl VAT, keeping ${R(onsiteKeep)} (about ${pct(onsitePct)}); fixed ${pct(f.onsiteEscalation * 100)} annual escalation in the agreement versus Eskom modelled at 13 percent; minimum 10-year power purchase agreement; the one amount includes Tier 1 solar panels (25-year warranty), commercial battery storage (10-year warranty), LED lighting and smart metering, solar water heating and borehole filtration, CCTV and generation registration, a 24/7 electrician and plumber, and full insurance, maintenance and operations.`,
+    );
+    lines.push(
+      `4. The First Light Certificate (specimen): issued on migration day; models about ${Math.round(f.annualCo2Tonnes).toLocaleString("en-ZA")} tonnes of carbon avoided a year on about ${Math.round(f.annualKwh).toLocaleString("en-ZA")} kWh of renewable supply a year.`,
+    );
+    lines.push(
+      "The example bills are indicative, modelled from the audited bills; formal proposals confirm final amounts. Quote these figures freely; they are the client's own documents.",
+    );
+  }
 
   return { context: `CASE CONTEXT (facts, client-visible)\n${lines.join("\n")}`, stuck };
 }
