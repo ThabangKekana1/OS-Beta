@@ -55,10 +55,14 @@ export async function GET(
         { status: 409 },
       );
     }
-    const { bytes, filename } = await buildReportPackDocument(doc, {
-      caseRow,
-      proposal: relations.proposal,
-    });
+    let pack: { bytes: Uint8Array; filename: string };
+    try {
+      pack = await buildReportPackDocument(doc, { caseRow, proposal: relations.proposal });
+    } catch {
+      // One retry absorbs a serverless cold start of the renderer.
+      pack = await buildReportPackDocument(doc, { caseRow, proposal: relations.proposal });
+    }
+    const { bytes, filename } = pack;
     return new NextResponse(Buffer.from(bytes), {
       status: 200,
       headers: {
