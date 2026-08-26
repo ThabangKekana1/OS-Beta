@@ -9,7 +9,7 @@ const WEBSITE = process.env.NEXT_PUBLIC_WEBSITE_ORIGIN ?? "https://foundation-1.
 /**
  * Admin-issued lead estimate link. The assessment funnel lives on the
  * Foundation-1 website — this route resolves the lead and forwards with
- * attribution so the website intake posts it back into 1OS.
+ * attribution so the website intake posts it back into 1-MI.
  */
 export default async function BrandedMigrationEstimatePage({
   params,

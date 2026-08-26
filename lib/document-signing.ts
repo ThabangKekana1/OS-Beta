@@ -224,7 +224,7 @@ export function buildSignedDocumentPdf(input: SignedDocumentInput) {
     title: `${input.documentTitle} — signed by ${input.companyName}`,
     subject: `In-platform signed rendition · ${input.caseReference}`,
     author: input.companyName,
-    creator: "Foundation-1 1OS Digital Signature",
+    creator: "Foundation-1 1-MI Digital Signature",
   });
 
   input.pages.forEach((page, index) => {

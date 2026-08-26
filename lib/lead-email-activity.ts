@@ -31,13 +31,13 @@ function activityCopy(activity: EmailActivity) {
   if (activity === "reply") {
     return {
       adminTitle: "Email reply received",
-      adminDetail: "Client replied in the 1OS inbox.",
+      adminDetail: "Client replied in the 1-MI inbox.",
     };
   }
 
   return {
     adminTitle: "Email sent",
-    adminDetail: "Outbound email sent from the 1OS inbox.",
+    adminDetail: "Outbound email sent from the 1-MI inbox.",
   };
 }
 

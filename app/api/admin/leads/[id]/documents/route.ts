@@ -243,7 +243,7 @@ export async function POST(
         uploadedBy: session.name,
         uploadedByType: "Admin Team",
         sourceAccount: lead.migrateAccountId,
-        sourceWorkspace: `1OS Admin / ${lead.company}`,
+        sourceWorkspace: `1-MI Admin / ${lead.company}`,
         storagePath: storedPath,
         fileName: file.name,
         contentType: file.type || null,

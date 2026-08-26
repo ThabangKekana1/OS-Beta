@@ -45,7 +45,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import { buildDailyWorklist, type WorklistCaseInput } from "@/lib/worklist";
 
 export const metadata: Metadata = {
-  title: "Case File | 1OS Admin",
+  title: "Case File | 1-MI Admin",
   description: "The full case file: intake, bills, proposal, EOI, KYC custody, submission and timeline.",
 };
 

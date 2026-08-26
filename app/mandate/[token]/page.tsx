@@ -4,7 +4,7 @@ import { MandateSigningForm } from "@/components/mandate/MandateSigningForm";
 import { readAdminStateSnapshot } from "@/lib/admin-state-store";
 
 export const metadata: Metadata = {
-  title: "1OS | Foundation-1 Mandate",
+  title: "1-MI | Foundation-1 Mandate",
   description: "Sign the Foundation-1 mandate authorising submission of your funding file.",
 };
 

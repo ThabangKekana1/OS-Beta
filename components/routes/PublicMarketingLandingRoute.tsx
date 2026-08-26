@@ -290,10 +290,10 @@ export function PublicMarketingShell({ children }: { children: (theme: "dark" | 
         ].join(" ")}
       >
         <div className="mx-auto flex h-[72px] max-w-[1600px] items-center px-5 sm:px-8 lg:px-12">
-          <Link href="/" aria-label="1OS home" className="flex h-12 items-center">
+          <Link href="/" aria-label="1-MI home" className="flex h-12 items-center">
             <Image
               src={logoSrc}
-              alt="1OS"
+              alt="1-MI"
               width={logoWidth}
               height={logoHeight}
               priority
@@ -430,7 +430,7 @@ export function PublicMarketingShell({ children }: { children: (theme: "dark" | 
             <div className="flex flex-col gap-4">
               <Image
                 src={logoSrc}
-                alt="1OS"
+                alt="1-MI"
                 width={logoWidth}
                 height={logoHeight}
                 sizes="88px"
@@ -459,7 +459,7 @@ export function PublicMarketingShell({ children }: { children: (theme: "dark" | 
 
           <div className={isLight ? "border-t border-black/10 py-8" : "border-t border-white/10 py-8"}>
             <p className={isLight ? "text-xs text-black" : "text-xs text-white"}>
-              © 2026 1OS | Reg: 2026/138664/07 | BBBEE Level 1 | All rights reserved. |{" "}
+              © 2026 1-MI | Reg: 2026/138664/07 | BBBEE Level 1 | All rights reserved. |{" "}
               <a
                 href="mailto:sales@1os.foundation-1.co.za"
                 className={isLight ? "text-black transition hover:text-black/70" : "text-white transition hover:text-white/70"}

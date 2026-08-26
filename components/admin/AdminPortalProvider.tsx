@@ -1871,10 +1871,10 @@ export function AdminPortalProvider({
             fileType: "PDF",
             status: "issued",
             uploadedAt: timelineLabel(),
-            uploadedBy: "1OS System",
+            uploadedBy: "1-MI System",
             uploadedByType: "Sales Team",
             sourceAccount: lead.migrateAccountId,
-            sourceWorkspace: `1OS Admin / ${lead.company}`,
+            sourceWorkspace: `1-MI Admin / ${lead.company}`,
           }),
           events: [
             {
@@ -1931,7 +1931,7 @@ export function AdminPortalProvider({
             uploadedBy: `${signerName} (Client)`,
             uploadedByType: "Client",
             sourceAccount: lead.migrateAccountId,
-            sourceWorkspace: `1OS Migrate / ${lead.company}`,
+            sourceWorkspace: `1-MI Migrate / ${lead.company}`,
           }),
           tasks: setTaskStatus(nextLead, "Submit signed EOI", true),
           events: [
@@ -1979,7 +1979,7 @@ export function AdminPortalProvider({
             uploadedBy: "Sales Team Upload",
             uploadedByType: "Sales Team",
             sourceAccount: lead.migrateAccountId,
-            sourceWorkspace: `1OS Admin / ${lead.company}`,
+            sourceWorkspace: `1-MI Admin / ${lead.company}`,
           }),
           tasks: setTaskStatus(nextLead, "Upload 6-month utility bill pack", true),
           events: [
@@ -2025,7 +2025,7 @@ export function AdminPortalProvider({
             uploadedBy: "Admin Team Upload",
             uploadedByType: "Admin Team",
             sourceAccount: lead.migrateAccountId,
-            sourceWorkspace: `1OS Admin / ${lead.company}`,
+            sourceWorkspace: `1-MI Admin / ${lead.company}`,
           }),
           events: [
             {
@@ -2067,7 +2067,7 @@ export function AdminPortalProvider({
             uploadedBy: "Sales Team Upload",
             uploadedByType: "Sales Team",
             sourceAccount: lead.migrateAccountId,
-            sourceWorkspace: `1OS Sales / ${lead.company}`,
+            sourceWorkspace: `1-MI Sales / ${lead.company}`,
           }),
           tasks: setTaskStatus(nextLead, "Submit signed proposal", true),
           events: [
@@ -2110,7 +2110,7 @@ export function AdminPortalProvider({
             uploadedBy: "Admin Team Upload",
             uploadedByType: "Admin Team",
             sourceAccount: lead.migrateAccountId,
-            sourceWorkspace: `1OS Admin / ${lead.company}`,
+            sourceWorkspace: `1-MI Admin / ${lead.company}`,
           }),
           events: [
             {
@@ -2157,7 +2157,7 @@ export function AdminPortalProvider({
             uploadedBy: "Sales Team Upload",
             uploadedByType: "Sales Team",
             sourceAccount: lead.migrateAccountId,
-            sourceWorkspace: `1OS Sales / ${lead.company}`,
+            sourceWorkspace: `1-MI Sales / ${lead.company}`,
           }),
           tasks: setTaskStatus(nextLead, "Submit signed term sheet", true),
           events: [

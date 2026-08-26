@@ -89,14 +89,14 @@ export async function createNotification(
       input.title,
       "",
       input.body ?? "",
-      link ? `\nOpen in 1OS: ${link}` : "",
+      link ? `\nOpen in 1-MI: ${link}` : "",
     ]
       .filter(Boolean)
       .join("\n");
 
     const result = await sendEmail({
       to: recipient,
-      subject: `[1OS] ${input.title}`,
+      subject: `[1-MI] ${input.title}`,
       text,
     });
     if (result.ok) {

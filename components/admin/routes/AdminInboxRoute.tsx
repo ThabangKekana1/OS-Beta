@@ -731,8 +731,8 @@ export function AdminInboxRoute({
   }, [activeThreadId, visibleThreads]);
 
   const inboxDescription = viewerRole === "partner"
-    ? "Send and receive emails directly from 1OS. Replies are automatically threaded to your referred lead."
-    : "Send and receive emails directly from 1OS. Replies are automatically threaded to the right lead.";
+    ? "Send and receive emails directly from 1-MI. Replies are automatically threaded to your referred lead."
+    : "Send and receive emails directly from 1-MI. Replies are automatically threaded to the right lead.";
   const inboxTitle = viewerRole === "partner"
     ? "Email conversations with referred leads."
     : "Email conversations with clients.";

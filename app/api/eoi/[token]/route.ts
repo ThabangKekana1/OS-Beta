@@ -47,7 +47,7 @@ function signedDocument(lead: AdminLead, signedBy: string) {
     uploadedBy: `${signedBy} (Client)`,
     uploadedByType: "Client" as const,
     sourceAccount: lead.migrateAccountId,
-    sourceWorkspace: `1OS Digital EOI / ${lead.company}`,
+    sourceWorkspace: `1-MI Digital EOI / ${lead.company}`,
     storagePath: existing?.storagePath ?? null,
     fileName: existing?.fileName ?? null,
     contentType: "application/pdf",

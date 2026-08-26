@@ -9,17 +9,17 @@ import { MobileSidebarToggle } from "@/components/MobileSidebarToggle";
 import { requireServerAuthSession } from "@/lib/auth-server";
 
 export const metadata: Metadata = {
-  title: "1OS Admin | Leads",
-  description: "Internal 1OS lead book for outreach, qualification, registration, and documents.",
+  title: "1-MI Admin | Leads",
+  description: "Internal 1-MI lead book for outreach, qualification, registration, and documents.",
   openGraph: {
-    title: "1OS Admin | Leads",
-    description: "Internal 1OS lead book for outreach, qualification, registration, and documents.",
+    title: "1-MI Admin | Leads",
+    description: "Internal 1-MI lead book for outreach, qualification, registration, and documents.",
     type: "website",
   },
   twitter: {
     card: "summary",
-    title: "1OS Admin | Leads",
-    description: "Internal 1OS lead book for outreach, qualification, registration, and documents.",
+    title: "1-MI Admin | Leads",
+    description: "Internal 1-MI lead book for outreach, qualification, registration, and documents.",
   },
 };
 

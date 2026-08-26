@@ -423,7 +423,7 @@ export function buildFunderReportPdf(report: FunderReport) {
       title: `Foundation-1 Funder Proposal Report: ${report.businessName}`,
       subject: "Returned funder proposals explained against the audited Eskom baseline",
       author: "Foundation-1 (Pty) Ltd",
-      creator: "Foundation-1 1OS",
+      creator: "Foundation-1 1-MI",
       keywords: "renewable energy, UFMS, wheeling, funder proposal, savings report",
     });
     const context = `CASE ${report.caseReference}`;

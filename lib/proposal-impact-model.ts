@@ -95,7 +95,7 @@ export type EnvironmentalImpactFactor = {
 };
 
 /**
- * CO2e uses the current 1OS report basis (0.94 kgCO2e/kWh = 940 t/GWh).
+ * CO2e uses the current 1-MI report basis (0.94 kgCO2e/kWh = 940 t/GWh).
  * The broader operational factors reproduce the observed partner proposal and
  * remain illustrative until an authoritative current source is attached.
  */

@@ -14,7 +14,7 @@ export function BrandMarkOneOS({ className, withMark = true }: BrandMarkOneOSPro
           <span className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-white/80" />
         </span>
       ) : null}
-      <span className="wordmark-centauri text-[1.02rem] text-white">1OS</span>
+      <span className="wordmark-centauri text-[1.02rem] text-white">1-MI</span>
     </div>
   );
 }

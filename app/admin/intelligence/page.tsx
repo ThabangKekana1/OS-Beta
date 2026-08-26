@@ -25,7 +25,7 @@ import {
 import { WeeklyBriefControl } from "@/components/admin/WeeklyBriefControl";
 
 export const metadata: Metadata = {
-  title: "Product Intelligence | 1OS Admin",
+  title: "Product Intelligence | 1-MI Admin",
   description:
     "Privacy-safe customer movement, graph quality and human-reviewed operating improvements.",
 };

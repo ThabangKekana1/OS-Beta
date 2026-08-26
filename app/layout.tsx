@@ -18,11 +18,11 @@ const orbitron = Orbitron({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://admin.foundation-1.co.za"),
-  title: "1OS | Energy-as-a-Service and Commercial Solar in South Africa",
+  title: "1-MI | Energy-as-a-Service and Commercial Solar in South Africa",
   description:
-    "1OS builds energy infrastructure for South Africa through commercial solar, energy-as-a-service, and guided business migration workflows.",
+    "1-MI builds energy infrastructure for South Africa through commercial solar, energy-as-a-service, and guided business migration workflows.",
   keywords: [
-    "1OS",
+    "1-MI",
     "energy migration",
     "Eden",
     "Lumen-1",
@@ -33,9 +33,9 @@ export const metadata: Metadata = {
     "Africa energy platform",
   ],
   openGraph: {
-    title: "1OS | Energy-as-a-Service and Commercial Solar in South Africa",
+    title: "1-MI | Energy-as-a-Service and Commercial Solar in South Africa",
     description:
-      "Commercial solar, lower-cost electricity, and guided business energy migration through one private 1OS workspace.",
+      "Commercial solar, lower-cost electricity, and guided business energy migration through one private 1-MI workspace.",
     type: "website",
   },
   icons: {

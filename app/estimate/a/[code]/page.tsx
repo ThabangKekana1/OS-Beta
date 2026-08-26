@@ -11,7 +11,7 @@ const WEBSITE =
  * Association member entry: /estimate/a/[code]
  * Verifies the code and forwards to the WEBSITE assessment funnel with
  * attribution carried in the query string (stored on the assessment as
- * source campaign when the website posts intake back into 1OS).
+ * source campaign when the website posts intake back into 1-MI).
  */
 export default async function AssociationReferralEntry({
   params,

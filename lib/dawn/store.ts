@@ -161,6 +161,31 @@ export async function loadActivePlaybook(): Promise<DawnPlaybookEntry[]> {
       reason: row.reason as string,
     });
   }
+  // Shared harness playbook layer (doc 20): improvements written by the
+  // improvement ontology or the sales harness under agent "dawn" join the
+  // same prompt. Lenient on purpose — a lagging migration must never break
+  // a live client conversation.
+  try {
+    const { data: sharedRows } = await client()
+      .from("foundation1_agent_playbooks")
+      .select("key,content,version,reason")
+      .eq("agent", "dawn")
+      .order("version", { ascending: false })
+      .limit(30);
+    for (const row of sharedRows ?? []) {
+      const key = row.key as string;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      entries.push({
+        key,
+        version: row.version as number,
+        content: row.content as string,
+        reason: row.reason as string,
+      });
+    }
+  } catch {
+    // Optional layer only.
+  }
   return entries;
 }
 

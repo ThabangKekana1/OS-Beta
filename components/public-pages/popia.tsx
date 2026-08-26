@@ -17,12 +17,12 @@ export default function PopiaPage() {
                     <div style={{ lineHeight: '1.8', color: 'var(--color-text-primary)' }}>
                         <h2 style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>1. What is POPIA?</h2>
                         <p>
-                            The Protection of Personal Information Act ("POPIA") is South Africa's data protection law. It sets out conditions for the lawful processing of personal information by public and private bodies. 1OS is fully committed to upholding the principles of POPIA to protect our clients' and users' information.
+                            The Protection of Personal Information Act ("POPIA") is South Africa's data protection law. It sets out conditions for the lawful processing of personal information by public and private bodies. 1-MI is fully committed to upholding the principles of POPIA to protect our clients' and users' information.
                         </p>
 
                         <h2 style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>2. Our Information Officer</h2>
                         <div>
-                            <p style={{ marginBottom: 'var(--space-4)' }}>1OS has appointed an Information Officer and Deputy Information Officers to ensure compliance with POPIA. Our Information Officer is responsible for:</p>
+                            <p style={{ marginBottom: 'var(--space-4)' }}>1-MI has appointed an Information Officer and Deputy Information Officers to ensure compliance with POPIA. Our Information Officer is responsible for:</p>
                             <ul style={{ paddingLeft: 'var(--space-6)', marginBottom: 'var(--space-4)' }}>
                                 <li>Encouraging compliance with the conditions for the lawful processing of personal information.</li>
                                 <li>Dealing with requests made to the body pursuant to POPIA.</li>
@@ -66,19 +66,19 @@ export default function PopiaPage() {
 
                         <h2 style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>5. Cross-Border Data Transfers</h2>
                         <p>
-                            1OS strives to keep data processing within the Republic of South Africa. In instances where personal information must be transferred cross-border, we ensure that the recipient is subject to law, binding corporate rules, or binding agreements which provide an adequate level of protection that is either the same or substantially similar to the conditions for lawful processing as set out in POPIA.
+                            1-MI strives to keep data processing within the Republic of South Africa. In instances where personal information must be transferred cross-border, we ensure that the recipient is subject to law, binding corporate rules, or binding agreements which provide an adequate level of protection that is either the same or substantially similar to the conditions for lawful processing as set out in POPIA.
                         </p>
 
                         <h2 style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>6. Data Breach Management</h2>
                         <p>
-                            In the event of a security breach where personal information has been compromised, 1OS will notify the Information Regulator and the affected data subjects as soon as reasonably possible, taking into account the legitimate needs of law enforcement or any measures necessary to determine the scope of the compromise and restore the integrity of the information system.
+                            In the event of a security breach where personal information has been compromised, 1-MI will notify the Information Regulator and the affected data subjects as soon as reasonably possible, taking into account the legitimate needs of law enforcement or any measures necessary to determine the scope of the compromise and restore the integrity of the information system.
                         </p>
 
                         <h2 style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>7. Access and Correction</h2>
                         <div>
                             <p style={{ marginBottom: 'var(--space-4)' }}>Under POPIA, you have the right to request:</p>
                             <ul style={{ paddingLeft: 'var(--space-6)', marginBottom: 'var(--space-4)' }}>
-                                <li>Confirmation of whether 1OS holds your personal information.</li>
+                                <li>Confirmation of whether 1-MI holds your personal information.</li>
                                 <li>The record or a description of the personal information held by us.</li>
                                 <li>The identities of any third parties who have had access to your personal information.</li>
                             </ul>
@@ -87,7 +87,7 @@ export default function PopiaPage() {
 
                         <h2 style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>8. Complaints</h2>
                         <p>
-                            If you believe 1OS has not complied with POPIA, you have the right to lodge a complaint with the Information Regulator:
+                            If you believe 1-MI has not complied with POPIA, you have the right to lodge a complaint with the Information Regulator:
                             <br /><br />
                             **The Information Regulator (South Africa)**<br />
                             JD House, 27 Stiemens Street, Braamfontein, Johannesburg, 2001<br />

@@ -9,8 +9,8 @@ import { MobileSidebarToggle } from "@/components/MobileSidebarToggle";
 import { requireServerAuthSession } from "@/lib/auth-server";
 
 export const metadata: Metadata = {
-  title: "1OS Sales | Leads",
-  description: "Scoped 1OS sales lead workspace for outreach and qualification.",
+  title: "1-MI Sales | Leads",
+  description: "Scoped 1-MI sales lead workspace for outreach and qualification.",
 };
 
 export default async function SalesLayout({ children }: { children: ReactNode }) {

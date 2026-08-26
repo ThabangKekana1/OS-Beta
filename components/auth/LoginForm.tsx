@@ -21,7 +21,7 @@ const LOGIN_COPY: Record<
 > = {
   admin: {
     heroEyebrow: "Admin access",
-    heroTitle: "Log in to the 1OS admin portal.",
+    heroTitle: "Log in to the 1-MI admin portal.",
     heroDescription:
       "Use your admin credentials to manage leads, client profiles, and inbox workflow operations.",
     formEyebrow: "Admin sign in",
@@ -30,7 +30,7 @@ const LOGIN_COPY: Record<
   },
   sales: {
     heroEyebrow: "Sales access",
-    heroTitle: "Log in to the 1OS sales portal.",
+    heroTitle: "Log in to the 1-MI sales portal.",
     heroDescription:
       "Use your sales credentials to manage your lead book, outreach, and inbox workflow.",
     formEyebrow: "Sales sign in",

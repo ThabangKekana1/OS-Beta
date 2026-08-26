@@ -593,7 +593,7 @@ export function buildMigrationProposalPdf(proposal: F1Proposal) {
     title: `Foundation-1 Migration Proposal: ${proposal.businessName}`,
     subject: "Bill-audited pre-engineering renewable-energy migration assessment",
     author: "Foundation-1 (Pty) Ltd",
-    creator: "Foundation-1 1OS",
+    creator: "Foundation-1 1-MI",
     keywords: "renewable energy, migration proposal, funded system, asset finance, environmental readiness",
   });
   const context = [proposal.clientProfileId ?? null, proposal.site.city ?? null]

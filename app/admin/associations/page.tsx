@@ -8,7 +8,7 @@ import {
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 
 export const metadata: Metadata = {
-  title: "Associations | 1OS Admin",
+  title: "Associations | 1-MI Admin",
   description: "The association channel: secretariat outreach, member links and attributed cases.",
 };
 

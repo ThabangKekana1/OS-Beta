@@ -102,7 +102,7 @@ export interface ActivityEvent {
 export interface TaskItem {
   id: string;
   title: string;
-  owner: "Client" | "1OS" | "Legal";
+  owner: "Client" | "1-MI" | "Legal";
   dueLabel: string;
   status: TaskStatus;
 }
@@ -171,12 +171,12 @@ export const caseStageLabels: Record<CaseStage, string> = {
   "Qualification In Progress": "Qualification in Progress",
   "Awaiting Service Acceptance": "Waiting for Your Approval",
   "Awaiting Documents": "Waiting for Your Documents",
-  "Documents Under Review": "In 1OS Review",
+  "Documents Under Review": "In 1-MI Review",
   "Proposal Issued": "Proposal Ready",
   "Awaiting Signed Proposal": "Waiting for Signed Proposal",
   "Term Sheet Issued": "Term Sheet Ready",
   "Awaiting Signed Term Sheet": "Waiting for Signed Term Sheet",
-  "Internal Review": "Final 1OS Review",
+  "Internal Review": "Final 1-MI Review",
   "Close Ready": "Ready to Close",
   Closed: "Migration Closed",
 };

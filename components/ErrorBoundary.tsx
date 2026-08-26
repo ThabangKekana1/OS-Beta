@@ -23,7 +23,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("[1OS Error Boundary]", error, errorInfo);
+    console.error("[1-MI Error Boundary]", error, errorInfo);
   }
 
   render() {

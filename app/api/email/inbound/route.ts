@@ -27,7 +27,7 @@ export const dynamic = "force-dynamic";
  *       "from": { "email": "client@example.com", "name": "Client" },
  *       "to":   [{ "email": "sales+lead-abc@replies.1os.co.za" }],
  *       "cc":   [],
- *       "subject": "Re: Welcome to 1OS",
+ *       "subject": "Re: Welcome to 1-MI",
  *       "text": "...",
  *       "html": "...",
  *       "headers": { "message-id": "<...>", "in-reply-to": "<...>", "references": "<...> <...>" },
@@ -216,7 +216,7 @@ async function forwardInboundCopyToMailbox({
   const originalFrom = formatMailboxAddress(fromName, fromAddress);
   const forwardSubject = subject.toLowerCase().startsWith("fwd:") ? subject : `Fwd: ${subject}`;
   const text = [
-    "A reply was received in the 1OS dashboard and copied to your mailbox.",
+    "A reply was received in the 1-MI dashboard and copied to your mailbox.",
     "",
     `From: ${originalFrom}`,
     `To: ${toAddresses.join(", ") || "(none)"}`,
@@ -229,7 +229,7 @@ async function forwardInboundCopyToMailbox({
   ].filter((line): line is string => line !== null).join("\n");
 
   const result = await sendEmail({
-    from: formatMailboxAddress("1OS Inbox", emailOnOutboundDomain(destination)),
+    from: formatMailboxAddress("1-MI Inbox", emailOnOutboundDomain(destination)),
     to: destination,
     subject: forwardSubject,
     text,

@@ -94,7 +94,7 @@ export function PublicClientRegistrationRoute({ linkId = null }: PublicClientReg
             href="/"
             className="mt-5 inline-flex rounded-full border border-white/14 px-5 py-2 text-xs uppercase tracking-[0.2em] text-white/72"
           >
-            Return to 1OS
+            Return to 1-MI
           </Link>
         </section>
       </div>
@@ -111,7 +111,7 @@ export function PublicClientRegistrationRoute({ linkId = null }: PublicClientReg
             Registration submitted
           </h1>
           <p className="mt-3 text-sm leading-7 text-white/62">
-            Your profile number is {registeredProfileId}. The 1OS team will continue the onboarding workflow.
+            Your profile number is {registeredProfileId}. The 1-MI team will continue the onboarding workflow.
           </p>
         </section>
       </div>

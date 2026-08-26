@@ -3,7 +3,7 @@ import type { MetadataRoute } from "next";
 const SITE_URL = "https://admin.foundation-1.co.za";
 const lastModified = new Date("2026-07-06");
 
-// 1OS is the operations platform — only legal pages are publicly indexable.
+// 1-MI is the operations platform — only legal pages are publicly indexable.
 // Marketing and assessment live on https://foundation-1.co.za.
 const publicPages = [
   { path: "/privacy", changeFrequency: "yearly", priority: 0.25 },

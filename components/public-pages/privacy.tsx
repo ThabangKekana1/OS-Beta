@@ -17,7 +17,7 @@ export default function PrivacyPage() {
                     <div style={{ lineHeight: '1.8', color: 'var(--color-text-primary)' }}>
                         <h2 style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>1. Introduction</h2>
                         <p>
-                            1OS ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our website, use our software, or engage with our energy infrastructure services (collectively, the "Services").
+                            1-MI ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our website, use our software, or engage with our energy infrastructure services (collectively, the "Services").
                         </p>
 
                         <h2 style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>2. Information We Collect</h2>
@@ -67,7 +67,7 @@ export default function PrivacyPage() {
 
                         <h2 style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>6. Data Sovereignty and Security</h2>
                         <p>
-                            1OS prioritizes the security of your data. We use industry-standard encryption protocols (SSL/TLS) for data in transit and robust security measures for data at rest. As part of our commitment to "Sovereign Intelligence," we aim to keep as much data processing as possible within South African infrastructure.
+                            1-MI prioritizes the security of your data. We use industry-standard encryption protocols (SSL/TLS) for data in transit and robust security measures for data at rest. As part of our commitment to "Sovereign Intelligence," we aim to keep as much data processing as possible within South African infrastructure.
                         </p>
 
                         <h2 style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>7. Your Privacy Choices</h2>
@@ -77,7 +77,7 @@ export default function PrivacyPage() {
 
                         <h2 style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>8. Third-Party Links</h2>
                         <p>
-                            Our Services may contains links to third-party websites or services that are not owned or controlled by 1OS. We are not responsible for the privacy practices or content of these third-party sites.
+                            Our Services may contains links to third-party websites or services that are not owned or controlled by 1-MI. We are not responsible for the privacy practices or content of these third-party sites.
                         </p>
 
                         <h2 style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>9. Children's Privacy</h2>

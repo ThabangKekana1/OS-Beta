@@ -19,7 +19,7 @@ import {
 } from "@/lib/worklist";
 
 export const metadata: Metadata = {
-  title: "Daily Worklist | 1OS Admin",
+  title: "Daily Worklist | 1-MI Admin",
   description: "Constraint-sorted operator worklist: what unblocks a submission today.",
 };
 

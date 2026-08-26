@@ -45,7 +45,7 @@ export function buildEoiTemplateText(
     lead.userProfile.role,
     lead.company,
     lead.businessRegistrationNumber,
-    `1OS Profile Number: ${lead.clientProfileId}`,
+    `1-MI Profile Number: ${lead.clientProfileId}`,
   ].join("\n");
 }
 

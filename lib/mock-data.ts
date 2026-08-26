@@ -46,12 +46,12 @@ export const WORKSPACE_OPTIONS: WorkspaceOption[] = [
   {
     id: "portfolio-watch",
     label: "My Businesses",
-    description: "Track every business you are moving through 1OS",
+    description: "Track every business you are moving through 1-MI",
   },
   {
     id: "client-readiness",
     label: "Next Steps",
-    description: "See what you still need to send and what 1OS is handling",
+    description: "See what you still need to send and what 1-MI is handling",
   },
 ];
 
@@ -61,7 +61,7 @@ export const RESOURCE_LIBRARY: ResourceItem[] = [
     title: "Welcome Letter",
     category: "Onboarding",
     summary:
-      "Executive introduction to the 1OS migration process, timeline, and trust model.",
+      "Executive introduction to the 1-MI migration process, timeline, and trust model.",
     fileType: "PDF",
     size: "1.2 MB",
     updatedAt: TODAY,
@@ -72,7 +72,7 @@ export const RESOURCE_LIBRARY: ResourceItem[] = [
     title: "Brochure",
     category: "Product",
     summary:
-      "High-level introduction to the 1OS migration offer and operating workflow.",
+      "High-level introduction to the 1-MI migration offer and operating workflow.",
     fileType: "PDF",
     size: "3.8 MB",
     updatedAt: TODAY,
@@ -140,10 +140,10 @@ const baseChecklist = [
   { id: "eoi", label: "Signed EOI submitted", complete: false },
   { id: "qualification", label: "Qualification complete", complete: false },
   { id: "acceptance", label: "Service acceptance confirmed", complete: false },
-  { id: "documents", label: "Documents approved by 1OS", complete: false },
+  { id: "documents", label: "Documents approved by 1-MI", complete: false },
   { id: "proposal", label: "Proposal signed", complete: false },
   { id: "term-sheet", label: "Term sheet signed", complete: false },
-  { id: "internal-review", label: "Final 1OS review completed", complete: false },
+  { id: "internal-review", label: "Final 1-MI review completed", complete: false },
   { id: "close", label: "Migration completed", complete: false },
 ];
 
@@ -276,8 +276,8 @@ const INITIAL_CASES: MigrationCase[] = [
       },
       {
         id: "vf-task-3",
-        title: "1OS prepares your service acceptance step",
-        owner: "1OS",
+        title: "1-MI prepares your service acceptance step",
+        owner: "1-MI",
         dueLabel: "Today",
         status: "open",
       },
@@ -304,7 +304,7 @@ const INITIAL_CASES: MigrationCase[] = [
     },
     stage: "Awaiting Signed Proposal",
     owner: "Bongani R.",
-    nextAction: "Review and sign the proposal so 1OS can prepare your term sheet.",
+    nextAction: "Review and sign the proposal so 1-MI can prepare your term sheet.",
     lastUpdated: "31 minutes ago",
     priority: "Standard",
     productRecommendation: "Eden",
@@ -412,8 +412,8 @@ const INITIAL_CASES: MigrationCase[] = [
       },
       {
         id: "fcrm-task-2",
-        title: "1OS prepares your term sheet pack",
-        owner: "1OS",
+        title: "1-MI prepares your term sheet pack",
+        owner: "1-MI",
         dueLabel: "Tomorrow",
         status: "open",
       },
@@ -449,7 +449,7 @@ const INITIAL_CASES: MigrationCase[] = [
     },
     stage: "Internal Review",
     owner: "Amahle S.",
-    nextAction: "1OS is completing final review before your migration is marked ready to close.",
+    nextAction: "1-MI is completing final review before your migration is marked ready to close.",
     lastUpdated: "1 hour ago",
     priority: "Executive",
     productRecommendation: "Lumen-1",
@@ -461,7 +461,7 @@ const INITIAL_CASES: MigrationCase[] = [
       rationale: [
         "Load complexity and site distribution are better suited to wheeled energy.",
         "Client cleared commercial review and signed the term sheet.",
-        "1OS is completing the final review checks before close.",
+        "1-MI is completing the final review checks before close.",
       ],
     },
     missingItems: [],
@@ -471,14 +471,14 @@ const INITIAL_CASES: MigrationCase[] = [
         type: "assistant",
         timestamp: "14:04",
         content:
-          "Your signed term sheet is in. 1OS is now completing the final review checks before close readiness.",
+          "Your signed term sheet is in. 1-MI is now completing the final review checks before close readiness.",
       },
       {
         id: "fsh-message-2",
         type: "system",
-        title: "Final 1OS review active",
+        title: "Final 1-MI review active",
         timestamp: "14:06",
-        content: "1OS is completing the last checks before close readiness.",
+        content: "1-MI is completing the last checks before close readiness.",
       },
     ],
     documents: [
@@ -561,7 +561,7 @@ const INITIAL_CASES: MigrationCase[] = [
       },
       {
         id: "fsh-activity-2",
-        title: "Final 1OS review started",
+        title: "Final 1-MI review started",
         detail: "Your signed pack is being checked for final close readiness.",
         timestamp: "Today, 14:06",
         tone: "internal",
@@ -570,8 +570,8 @@ const INITIAL_CASES: MigrationCase[] = [
     tasks: [
       {
         id: "fsh-task-1",
-        title: "1OS completes final review",
-        owner: "1OS",
+        title: "1-MI completes final review",
+        owner: "1-MI",
         dueLabel: "Today",
         status: "open",
       },
@@ -620,7 +620,7 @@ const INITIAL_CASES: MigrationCase[] = [
       rationale: [
         "Load shape suggests a more complex migration decision.",
         "The team still needs interval usage detail and the municipal account schedule.",
-        "1OS will confirm whether Eden or Lumen-1 produces the stronger commercial fit.",
+        "1-MI will confirm whether Eden or Lumen-1 produces the stronger commercial fit.",
       ],
     },
     missingItems: [
@@ -634,7 +634,7 @@ const INITIAL_CASES: MigrationCase[] = [
         type: "assistant",
         timestamp: "08:34",
         content:
-          "Welcome to 1OS migration. First review and digitally sign your non-binding Expression of Interest (EOI) through the secure link.",
+          "Welcome to 1-MI migration. First review and digitally sign your non-binding Expression of Interest (EOI) through the secure link.",
       },
       {
         id: "clover-message-2",
@@ -695,8 +695,8 @@ const INITIAL_CASES: MigrationCase[] = [
       },
       {
         id: "clover-task-3",
-        title: "1OS validates EOI and opens qualification",
-        owner: "1OS",
+        title: "1-MI validates EOI and opens qualification",
+        owner: "1-MI",
         dueLabel: "Tomorrow",
         status: "open",
       },
@@ -734,7 +734,7 @@ const INITIAL_CASES: MigrationCase[] = [
       loadProfile: "Stable site load with consistent daytime demand",
       rationale: [
         "The business qualified cleanly for the Eden pathway.",
-        "Proposal, term sheet, and final 1OS checks were all completed.",
+        "Proposal, term sheet, and final 1-MI checks were all completed.",
         "Case is now closed and handed over.",
       ],
     },

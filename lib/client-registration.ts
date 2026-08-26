@@ -677,7 +677,7 @@ export function buildAdminLeadShellFromSignup(
         id: makeId("event"),
         title: "Client account created",
         detail:
-          "Client signed up in 1OS. Name and email are visible in admin. Complete pre-qualification before full registration and EOI generation.",
+          "Client signed up in 1-MI. Name and email are visible in admin. Complete pre-qualification before full registration and EOI generation.",
         createdAt: timelineLabel(),
         tone: "system",
       },

@@ -18,7 +18,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import { buildDailyWorklist, summariseDealBook, type WorklistCaseInput } from "@/lib/worklist";
 
 export const metadata: Metadata = {
-  title: "Migration Cases | 1OS Admin",
+  title: "Migration Cases | 1-MI Admin",
   description: "The case board: every migration case, its one next action, and the alerts that matter.",
 };
 

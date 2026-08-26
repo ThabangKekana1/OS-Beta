@@ -17,12 +17,12 @@ export default function TermsPage() {
                     <div style={{ lineHeight: '1.8', color: 'var(--color-text-primary)' }}>
                         <h2 style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>1. Introduction</h2>
                         <p>
-                            Welcome to 1OS. These Terms of Service ("Terms") govern your access to and use of the 1OS website, services, and applications (collectively, the "Service"). By accessing or using our Service, you agree to be bound by these Terms and our Privacy Policy. If you do not agree to these Terms, please do not use our Service.
+                            Welcome to 1-MI. These Terms of Service ("Terms") govern your access to and use of the 1-MI website, services, and applications (collectively, the "Service"). By accessing or using our Service, you agree to be bound by these Terms and our Privacy Policy. If you do not agree to these Terms, please do not use our Service.
                         </p>
 
                         <h2 style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>2. Our Services</h2>
                         <p>
-                            1OS provides an infrastructure layer designed to facilitate the transition to renewable energy in South Africa. Our core offerings include zero-capital expenditure solar solutions, Virtual Power Plant (VPP) architecture, and specialized energy infrastructure for high-performance computing and AI data centers.
+                            1-MI provides an infrastructure layer designed to facilitate the transition to renewable energy in South Africa. Our core offerings include zero-capital expenditure solar solutions, Virtual Power Plant (VPP) architecture, and specialized energy infrastructure for high-performance computing and AI data centers.
                         </p>
 
                         <h2 style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>3. User Eligibility and Accounts</h2>
@@ -32,12 +32,12 @@ export default function TermsPage() {
 
                         <h2 style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>4. Zero-CAPEX Solar Model</h2>
                         <p>
-                            Our zero-capital expenditure model is subject to specific contractual agreements between 1OS and the business entity. Acceptance into this program is based on creditworthiness, site feasibility, and energy consumption profiles. All hardware remains the property of 1OS or its financing partners unless otherwise specified in a separate Purchase Option agreement.
+                            Our zero-capital expenditure model is subject to specific contractual agreements between 1-MI and the business entity. Acceptance into this program is based on creditworthiness, site feasibility, and energy consumption profiles. All hardware remains the property of 1-MI or its financing partners unless otherwise specified in a separate Purchase Option agreement.
                         </p>
 
                         <h2 style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>5. Virtual Power Plant (VPP) Participation</h2>
                         <p>
-                            By participating in the 1OS energy network, you agree to the aggregation of your energy generation and storage assets into our VPP architecture. 1OS manages the dispatch of these assets to optimize grid stability and network efficiency. Users will receive compensation or credits as outlined in their specific service level agreements.
+                            By participating in the 1-MI energy network, you agree to the aggregation of your energy generation and storage assets into our VPP architecture. 1-MI manages the dispatch of these assets to optimize grid stability and network efficiency. Users will receive compensation or credits as outlined in their specific service level agreements.
                         </p>
 
                         <h2 style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>6. Prohibited Conduct</h2>
@@ -47,19 +47,19 @@ export default function TermsPage() {
                                 <li>Use the Service for any illegal purpose or in violation of any local, state, national, or international law.</li>
                                 <li>Violate or encourage others to violate the rights of third parties, including intellectual property rights.</li>
                                 <li>Interfere with security-related features of the Service.</li>
-                                <li>Engage in any activity that disrupts or interferes with the proper functioning of the 1OS energy network.</li>
+                                <li>Engage in any activity that disrupts or interferes with the proper functioning of the 1-MI energy network.</li>
                                 <li>Attempt to decipher, decompile, disassemble, or reverse engineer any of the software used to provide the Service.</li>
                             </ul>
                         </div>
 
                         <h2 style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>7. Intellectual Property</h2>
                         <p>
-                            The Service, including all text, graphics, logos, and software, is the property of 1OS and is protected by copyright, trademark, and other laws. You are granted a limited, non-exclusive, non-transferable license to access and use the Service for its intended purpose.
+                            The Service, including all text, graphics, logos, and software, is the property of 1-MI and is protected by copyright, trademark, and other laws. You are granted a limited, non-exclusive, non-transferable license to access and use the Service for its intended purpose.
                         </p>
 
                         <h2 style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>8. Limitation of Liability</h2>
                         <p>
-                            TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, 1OS SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS OR REVENUES, WHETHER INCURRED DIRECTLY OR INDIRECTLY, OR ANY LOSS OF DATA, USE, GOODWILL, OR OTHER INTANGIBLE LOSSES.
+                            TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, 1-MI SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS OR REVENUES, WHETHER INCURRED DIRECTLY OR INDIRECTLY, OR ANY LOSS OF DATA, USE, GOODWILL, OR OTHER INTANGIBLE LOSSES.
                         </p>
 
                         <h2 style={{ marginTop: 'var(--space-8)', marginBottom: 'var(--space-4)' }}>9. Termination</h2>

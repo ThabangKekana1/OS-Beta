@@ -55,7 +55,7 @@ export function buildSignedEoiPdf(record: SignedEoiRecord) {
     title: `Signed Expression of Interest: ${record.company}`,
     subject: "Non-binding renewable-energy supply Expression of Interest",
     author: "Foundation-1 (Pty) Ltd",
-    creator: "Foundation-1 1OS Digital Signature",
+    creator: "Foundation-1 1-MI Digital Signature",
   });
   const signedDate = kitLongDate(record.eoiSignedAt);
   const context = `PROFILE ${record.clientProfileId}`;
