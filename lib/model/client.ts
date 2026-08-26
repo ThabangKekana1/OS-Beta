@@ -74,6 +74,8 @@ export function isModelConfigured() {
 export async function completeChat(input: {
   messages: ModelMessage[];
   role?: ModelRole;
+  /** Explicit model wins over role resolution — harness agents use MODEL_HARNESS. */
+  model?: string;
   temperature?: number;
   maxOutputTokens?: number;
   /** Ask the provider for a JSON object. Ignored by providers that do not support it. */
@@ -95,7 +97,7 @@ export async function completeChat(input: {
     };
   }
 
-  const model = modelForRole(input.role ?? "draft");
+  const model = input.model?.trim() || modelForRole(input.role ?? "draft");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
   if (input.signal) {

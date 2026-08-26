@@ -151,7 +151,10 @@ export async function runHarness(input: HarnessRunInput): Promise<HarnessRunResu
   let outcome: HarnessRunResult["outcome"] = "completed";
   let finalReply = "";
 
-  const configCheck = await completeChat({ messages, role: "draft", json: true });
+  // Harness cognition runs on its own model tier (MODEL_HARNESS, glm-5.3 flash),
+  // independent of the client-facing Dawn default (MODEL_DEFAULT).
+  const harnessModel = process.env.MODEL_HARNESS?.trim() || undefined;
+  const configCheck = await completeChat({ messages, role: "draft", json: true, model: harnessModel });
   if (!configCheck.ok && "skipped" in configCheck && configCheck.skipped) {
     return {
       runId,
@@ -178,7 +181,7 @@ export async function runHarness(input: HarnessRunInput): Promise<HarnessRunResu
       outcome = "stopped_budget";
       break;
     }
-    last = await completeChat({ messages, role: "draft", json: true });
+    last = await completeChat({ messages, role: "draft", json: true, model: harnessModel });
   }
 
   await persistHarnessRun(input, { runId, outcome, steps, startedAt });
