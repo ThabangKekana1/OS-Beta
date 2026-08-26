@@ -36,15 +36,17 @@ export async function POST(
     return NextResponse.json({ ok: false, error: "Could not read the upload." }, { status: 400 });
   }
 
-  const file = form.get("file");
-  if (!(file instanceof File) || file.size <= 0) {
-    return NextResponse.json({ ok: false, error: "Choose the assessment PDF." }, { status: 400 });
-  }
-  if (file.size > MAX_OPERATOR_PROPOSAL_BYTES) {
-    return NextResponse.json({ ok: false, error: "The assessment must be 25MB or smaller." }, { status: 413 });
-  }
-  if (file.type !== "application/pdf" && file.name.split(".").pop()?.toLowerCase() !== "pdf") {
-    return NextResponse.json({ ok: false, error: "Upload the assessment as a PDF." }, { status: 400 });
+  // One-action publishing: the upload is optional. Without it, the
+  // platform-generated Migration Report is the document of record.
+  const fileEntry = form.get("file");
+  const file = fileEntry instanceof File && fileEntry.size > 0 ? fileEntry : null;
+  if (file) {
+    if (file.size > MAX_OPERATOR_PROPOSAL_BYTES) {
+      return NextResponse.json({ ok: false, error: "The assessment must be 25MB or smaller." }, { status: 413 });
+    }
+    if (file.type !== "application/pdf" && file.name.split(".").pop()?.toLowerCase() !== "pdf") {
+      return NextResponse.json({ ok: false, error: "Upload the assessment as a PDF." }, { status: 400 });
+    }
   }
 
   const yearOneMonthlyDifference = money(form, "yearOneMonthlyDifference");
@@ -87,11 +89,13 @@ export async function POST(
 
     const result = await publishOperatorProposal({
       caseRow: data[0] as MigrationCaseRow,
-      file: {
-        name: file.name,
-        type: file.type,
-        bytes: new Uint8Array(await file.arrayBuffer()),
-      },
+      file: file
+        ? {
+            name: file.name,
+            type: file.type,
+            bytes: new Uint8Array(await file.arrayBuffer()),
+          }
+        : null,
       yearOneMonthlyDifference,
       tenYearDifference,
       currentMonthlyCostExVat,

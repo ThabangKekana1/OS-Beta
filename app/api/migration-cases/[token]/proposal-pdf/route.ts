@@ -7,6 +7,7 @@ import {
   isMigrationCaseWebsiteRequest,
   MIGRATION_CASE_DOCUMENT_BUCKET,
 } from "@/lib/migration-case-store";
+import { loadStoredReportPackDocument } from "@/lib/report-pack-store";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 
@@ -56,6 +57,23 @@ export async function GET(
     }
 
     const proposalRow = relations.proposal;
+
+    // One-action publishes carry no upload: the generated Migration Report,
+    // stored with the pack at publish, is the document of record.
+    if (proposalRow.source === "operator" && !proposalRow.document_storage_path) {
+      const stored = await loadStoredReportPackDocument(caseRow, proposalRow, "migration-report");
+      if (stored) {
+        return new NextResponse(Buffer.from(stored), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Disposition": `attachment; filename="foundation-1-migration-report-${caseRow.public_reference.toLowerCase()}.pdf"`,
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+          },
+        });
+      }
+    }
 
     // Phase 1 assessments are produced off-platform and stored as a document.
     if (proposalRow.source === "operator" && proposalRow.document_storage_path) {

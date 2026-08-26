@@ -47,15 +47,12 @@ export function AssessmentPublishControl({
 
 
   async function publish() {
-    if (!file) {
-      setError("Choose the assessment PDF.");
-      return;
-    }
+
     setBusy(true);
     setError("");
     try {
       const body = new FormData();
-      body.set("file", file);
+      if (file) body.set("file", file);
       for (const [key, value] of Object.entries(form)) body.set(key, value);
       const response = await fetch(
         `/api/admin/migration-cases/${encodeURIComponent(caseId)}/proposal`,
@@ -144,7 +141,7 @@ export function AssessmentPublishControl({
             </label>
           </div>
           <label className="block">
-            <span className={LABEL}>Assessment PDF</span>
+            <span className={LABEL}>Assessment PDF (optional, the platform generates the Migration Report)</span>
             <input
               type="file"
               accept="application/pdf,.pdf"

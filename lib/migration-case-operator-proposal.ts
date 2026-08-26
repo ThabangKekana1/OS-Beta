@@ -19,7 +19,8 @@ export const MAX_OPERATOR_PROPOSAL_BYTES = 25 * 1024 * 1024;
 
 export type OperatorProposalInput = {
   caseRow: MigrationCaseRow;
-  file: { name: string; type: string; bytes: Uint8Array };
+  /** Optional: when absent, the platform-generated Migration Report is the document of record. */
+  file?: { name: string; type: string; bytes: Uint8Array } | null;
   /** Year-one monthly movement. Positive means the client's bill goes down. */
   yearOneMonthlyDifference: number;
   tenYearDifference: number;
@@ -123,16 +124,28 @@ export async function publishOperatorProposal(input: OperatorProposalInput) {
   const storage = await ensurePrivateBucket(MIGRATION_CASE_DOCUMENT_BUCKET);
   if (!storage) throw new Error("Private document storage is unavailable.");
 
-  const storagePath =
-    `${input.caseRow.public_reference}/assessments/${randomUUID()}-${cleanFileName(input.file.name)}`;
-  const { error: uploadError } = await storage.storage
-    .from(MIGRATION_CASE_DOCUMENT_BUCKET)
-    .upload(storagePath, input.file.bytes, {
-      upsert: false,
-      contentType: input.file.type || "application/pdf",
-      cacheControl: "0",
-    });
-  if (uploadError) throw new Error(`Could not store the assessment: ${uploadError.message}`);
+  // One-action publishing: an uploaded assessment is optional. When no file
+  // arrives, the platform-generated Migration Report (stored with the pack
+  // below) is the document of record and serves the post-EOI download.
+  let storagePath: string | null = null;
+  let documentName: string | null = null;
+  let documentType: string | null = null;
+  let documentBytes: Uint8Array | null = null;
+  if (input.file) {
+    storagePath =
+      `${input.caseRow.public_reference}/assessments/${randomUUID()}-${cleanFileName(input.file.name)}`;
+    const { error: uploadError } = await storage.storage
+      .from(MIGRATION_CASE_DOCUMENT_BUCKET)
+      .upload(storagePath, input.file.bytes, {
+        upsert: false,
+        contentType: input.file.type || "application/pdf",
+        cacheControl: "0",
+      });
+    if (uploadError) throw new Error(`Could not store the assessment: ${uploadError.message}`);
+    documentName = input.file.name;
+    documentType = input.file.type || "application/pdf";
+    documentBytes = input.file.bytes;
+  }
 
   const positive = input.yearOneMonthlyDifference > 0 && input.tenYearDifference > 0;
   const now = new Date().toISOString();
@@ -148,10 +161,12 @@ export async function publishOperatorProposal(input: OperatorProposalInput) {
     engine_version: OPERATOR_PROPOSAL_VERSION,
     source: "operator",
     document_storage_path: storagePath,
-    document_original_name: input.file.name,
-    document_content_type: input.file.type || "application/pdf",
-    document_file_size_bytes: input.file.bytes.byteLength,
-    document_sha256: createHash("sha256").update(input.file.bytes).digest("hex"),
+    document_original_name: documentName,
+    document_content_type: documentType,
+    document_file_size_bytes: documentBytes ? documentBytes.byteLength : null,
+    document_sha256: documentBytes
+      ? createHash("sha256").update(documentBytes).digest("hex")
+      : null,
     published_by: input.publishedBy,
     operator_note: input.note?.trim() || null,
     updated_at: now,
@@ -197,7 +212,7 @@ export async function publishOperatorProposal(input: OperatorProposalInput) {
       tenYearDifference: input.tenYearDifference,
     },
     // Republishing must reach the client again rather than dedupe to silence.
-    `${proposal.id}:${row.document_sha256.slice(0, 12)}`,
+    `${proposal.id}:${row.document_sha256 ? row.document_sha256.slice(0, 12) : "generated"}`,
   ).catch(() => undefined);
 
   void createNotification({
