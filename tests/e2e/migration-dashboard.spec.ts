@@ -26,36 +26,18 @@ test("migration dashboard blocks unlocked profiles until client profile exists",
   await page.goto("/migration/dashboard?p=F1-TEST1234");
 
   await expect(page.getByRole("heading", { name: "Open Client Profile" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Open Profile From Report" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Complete Registration" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "WhatsApp Support" })).toBeVisible();
 });
 
-test("migration success page keeps report actions after contact preference signup", async ({ page }) => {
+test("registered session renders the migration case view with model snapshot", async ({ page }) => {
   await page.addInitScript(
     ({ storageKey, unlockKey }) => {
       window.localStorage.setItem(
         storageKey,
         JSON.stringify({
           input: { monthlyElectricitySpend: 100000, monthlySpend: 100000 },
-          result: {
-            currentUtilityProjection: {
-              currentMonthlySpend: 100000,
-              currentAnnualSpend: 1200000,
-              tenYearSpend: 21000000,
-            },
-            ufmsSolar: {
-              scenarios: [
-                { tenYearSavingAgainstEskom: 2000000 },
-                { tenYearSavingAgainstEskom: 3000000 },
-              ],
-            },
-            wheeling: {
-              conservative: { tenYearSavingAgainstEskom: 4000000 },
-              photovoltaicOnlyReference: { tenYearSavingAgainstEskom: 5000000 },
-            },
-            combinedScenarios: [
-              { combinedTenYearSavingAgainstEskom: 6000000 },
-            ],
-          },
+          result: {},
           documents: [],
           profileId: "F1-TEST1234",
           accessCode: "1234",
@@ -81,14 +63,16 @@ test("migration success page keeps report actions after contact preference signu
     { storageKey, unlockKey },
   );
 
-  await page.goto("/migration/success?p=F1-TEST1234");
+  await page.goto("/migration/dashboard?p=F1-TEST1234");
 
-  await expect(page.getByText("Registration successful")).toBeVisible();
-  await expect(page.getByRole("heading", { name: /Your Foundation.?1 file is open\./ })).toBeVisible();
-  await expect(page.getByText("via email")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Download Report" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Share Report" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Email Report" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your migration case." })).toBeVisible();
+  // Recomputed engine snapshot renders honest numbers from the stored input.
+  await expect(page.getByText("Initial model snapshot · retained for comparison")).toBeVisible();
+  await expect(page.getByText("Monthly spend")).toBeVisible();
+  await expect(page.getByText(/R[\s\u00a0\u202f]?100[\s\u00a0\u202f]?000/).first()).toBeVisible();
+  // Unlocked session exposes both navigation destinations.
+  await expect(page.getByRole("link", { name: "Assessment", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Decision report" })).toBeVisible();
 });
 
 test("migration dashboard reflects live admin profile status projection", async ({ page }) => {
@@ -156,7 +140,10 @@ test("migration dashboard reflects live admin profile status projection", async 
 
   await page.goto("/migration/dashboard?p=F1-TEST1234");
 
-  await expect(page.getByText("Term Sheet Pending")).toBeVisible();
-  await expect(page.getByText("Term Sheet Uploaded")).toBeVisible();
-  await expect(page.getByText("Review term sheet and confirm approval.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your migration case." })).toBeVisible();
+  // Signed EOI on file advances the stage projection past the EOI gate.
+  await expect(page.getByText("Where your file is")).toBeVisible();
+  await expect(page.getByText("Signed Expression of Interest - test")).toBeVisible();
+  await expect(page.getByText("Formal UFMS proposal preparation")).toBeVisible();
+  await expect(page.getByRole("link", { name: "View formal-proposal status" })).toBeVisible();
 });

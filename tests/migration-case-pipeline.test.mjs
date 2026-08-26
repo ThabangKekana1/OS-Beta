@@ -290,7 +290,11 @@ test("EOI is a post-proposal gate and produces an immutable PDF certificate", ()
   const eoiRoute = source("app/api/migration-cases/[token]/eoi/route.ts");
   assert.match(eoiRoute, /caseRow\.stage !== "proposal_ready" && caseRow\.stage !== "proposal_not_recommended"/);
   assert.doesNotMatch(eoiRoute, /!relations\.proposal\.economically_positive/);
-  assert.match(eoiRoute, /after the bill-audited proposal is completed/i);
+  // Gate copy: the client never reaches the EOI before the bill-audited
+  // proposal is completed. The client-facing 409 message must say so, and the
+  // audit trail records post-proposal signing.
+  assert.match(eoiRoute, /once your Foundation-1 Migration Report is ready/i);
+  assert.match(eoiRoute, /after the proposal was completed/i);
 
   const result = buildMigrationCaseEoiPdf({
     signatureId: "00000000-0000-4000-8000-000000000001",
@@ -653,7 +657,10 @@ test("the first report anchors on the supply route and area instead of one natio
   // Municipal supply anchors higher than the Eskom default assumption.
   const municipal = buildIndicativeMigrationReport({ ...base, siteCity: "Bethlehem", supplyType: "municipality" });
   assert.equal(municipal.tariffContext.candidates[0].id, "municipal-business");
-  assert.equal(municipal.tariffContext.anchor.blendedTariff, 3.1);
+  // Bethlehem resolves to Dihlabeng; the anchor is the exact NERSA-published
+  // 2026/27 schedule blend (3.4615), not the static 3.1 fallback.
+  assert.match(municipal.tariffContext.anchor.label, /Dihlabeng Local Municipality business tariff \(2026\/27 published schedule\)/);
+  assert.equal(municipal.tariffContext.anchor.blendedTariff, 3.4615);
   // Higher assumed rate than the old flat R2.75 → fewer estimated kWh for the same spend.
   assert.ok(municipal.scenarios[1].estimatedMonthlyKwh < base.monthlySpendExVat / 2.75);
 
@@ -662,12 +669,14 @@ test("the first report anchors on the supply route and area instead of one natio
   assert.equal(metro.site.municipality, "City of Ekurhuleni Metropolitan Municipality");
   assert.ok(metro.tariffContext.candidates.some((item) => item.id === "megaflex"));
 
-  // Visitor-selected tariff wins the anchor.
+  // Visitor-selected tariff wins the anchor, priced from the exact
+  // spend-dependent 2026/27 Megaflex book blend (not the static 2.45 anchor).
   const selected = buildIndicativeMigrationReport({ ...base, siteCity: "Boksburg", province: "Gauteng", supplyType: "eskom-direct", tariffFamily: "megaflex" });
   assert.equal(selected.tariffContext.anchor.id, "megaflex");
   assert.equal(selected.tariffContext.anchor.source, "client-selected-tariff");
-  assert.equal(selected.tariffContext.anchor.blendedTariff, 2.45);
-  assert.match(selected.limitations.join(" "), /anchored on a typical Megaflex blended rate/i);
+  assert.match(selected.tariffContext.anchor.label, /Megaflex \(2026\/27 tariff book\)/);
+  assert.equal(selected.tariffContext.anchor.blendedTariff, 2.5819);
+  assert.match(selected.limitations.join(" "), /anchored on a typical Megaflex \(2026\/27 tariff book\) blended rate/i);
 
   // Unknown town falls back honestly — no invented municipality.
   const unknown = buildIndicativeMigrationReport({ ...base, siteCity: "Nowhereville", supplyType: "eskom-direct" });
@@ -724,7 +733,9 @@ test("a gazetteer-resolved place flows into the report without bundling the data
   });
   assert.equal(report.site.municipality, "Lepele-Nkumpi Local Municipality");
   assert.equal(report.site.placeContext, "rural");
-  assert.deepEqual(report.tariffContext.candidates.map((item) => item.id), ["landrate", "ruraflex", "nightsave-rural"]);
+  // R60,000 a month crosses the large-load threshold: the time-of-use
+  // family (Ruraflex) leads the rural menu ahead of Landrate.
+  assert.deepEqual(report.tariffContext.candidates.map((item) => item.id), ["ruraflex", "landrate", "nightsave-rural"]);
   assert.equal(report.tariffContext.anchor.source, "supply-route-and-area");
   assert.match(report.limitations.join(" "), /Lepele-Nkumpi/);
 });

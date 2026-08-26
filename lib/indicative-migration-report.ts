@@ -1,3 +1,5 @@
+import { eskomBlendedForFamily } from "@/lib/eskom-tariff-model";
+import { municipalBlendedForMunicipality } from "@/lib/municipal-tariff-model";
 import { ENGINE_CONSTANTS, runPricingEngine } from "@/lib/pricing-engine";
 import { resolveSaPlace, type SaPlaceContext } from "@/lib/sa-places";
 import { provinceSolarYieldAssumption } from "@/lib/solar-yield-assumptions";
@@ -175,14 +177,18 @@ export function isElectricitySupplyType(value: unknown): value is ElectricitySup
 function candidateIds(
   supplyType: ElectricitySupplyType,
   placeContext: SaPlaceContext | null,
+  monthlySpendExVat: number,
 ): TariffFamilyId[] {
   if (supplyType === "municipality") return ["municipal-business"];
   if (supplyType === "landlord-or-body-corporate") return ["resold-supply"];
+  // Above roughly R60,000 a month a business is almost always on a
+  // time-of-use tariff, not the small-commercial flat rates.
+  const largeLoad = monthlySpendExVat >= 60_000;
   if (supplyType === "eskom-direct") {
-    if (placeContext === "metro") return ["businessrate", "nightsave-urban", "megaflex"];
-    if (placeContext === "rural") return ["landrate", "ruraflex", "nightsave-rural"];
-    if (placeContext === "town") return ["businessrate", "landrate", "megaflex"];
-    return ["businessrate", "landrate", "ruraflex"];
+    if (placeContext === "metro") return largeLoad ? ["megaflex", "nightsave-urban", "businessrate"] : ["businessrate", "nightsave-urban", "megaflex"];
+    if (placeContext === "rural") return largeLoad ? ["ruraflex", "landrate", "nightsave-rural"] : ["landrate", "ruraflex", "nightsave-rural"];
+    if (placeContext === "town") return largeLoad ? ["megaflex", "miniflex", "businessrate"] : ["businessrate", "landrate", "megaflex"];
+    return largeLoad ? ["megaflex", "ruraflex", "landrate"] : ["businessrate", "landrate", "ruraflex"];
   }
   // No bill is required on the public screen. Bracket the representative
   // tariff menu for the area's settlement type and let the bill pack resolve
@@ -205,6 +211,7 @@ function resolveTariffContext(input: {
   tariffFamily: TariffFamilyId | null;
   placeMunicipality: string | null;
   placeContext: SaPlaceContext | null;
+  monthlySpendExVat: number;
 }) {
   const place = resolveSaPlace(input.siteCity);
   const municipality = input.placeMunicipality ?? place?.municipality ?? null;
@@ -217,12 +224,28 @@ function resolveTariffContext(input: {
         ? "Landlord or body corporate (resold supply)"
         : municipality ? `${municipality} or Eskom` : "Eskom or your municipal distributor";
 
-  const ids = candidateIds(input.supplyType, placeContext);
-  const candidates = ids.map((id) => ({
-    id,
-    label: TARIFF_FAMILY_ANCHORS[id].label,
-    assumedBlendedTariff: TARIFF_FAMILY_ANCHORS[id].blendedTariff,
-  }));
+  const ids = candidateIds(input.supplyType, placeContext, input.monthlySpendExVat);
+  // Exact 2026/27 tariff-book blends where the family is modelled; static
+  // anchors only as the fallback. The blend is spend-dependent because fixed
+  // charges dilute with consumption, exactly as on a real bill.
+  const municipalExact = municipalBlendedForMunicipality(municipality, input.monthlySpendExVat);
+  const candidates = ids.map((id) => {
+    if (id === "municipal-business" && municipalExact) {
+      return {
+        id,
+        label: `${municipality} business tariff`,
+        assumedBlendedTariff: municipalExact.blendedTariff,
+        exactBook: true,
+      };
+    }
+    const exact = eskomBlendedForFamily(id, input.monthlySpendExVat);
+    return {
+      id,
+      label: TARIFF_FAMILY_ANCHORS[id].label,
+      assumedBlendedTariff: exact ? exact.blendedTariff : TARIFF_FAMILY_ANCHORS[id].blendedTariff,
+      exactBook: Boolean(exact),
+    };
+  });
 
   let anchor: {
     id: TariffFamilyId | null;
@@ -232,19 +255,21 @@ function resolveTariffContext(input: {
   };
   if (input.tariffFamily) {
     const selected = TARIFF_FAMILY_ANCHORS[input.tariffFamily];
+    const exact = eskomBlendedForFamily(input.tariffFamily, input.monthlySpendExVat);
     anchor = {
       id: input.tariffFamily,
-      label: selected.label,
-      blendedTariff: selected.blendedTariff,
+      label: exact ? `${selected.label} (2026/27 tariff book)` : selected.label,
+      blendedTariff: exact ? exact.blendedTariff : selected.blendedTariff,
       source: "client-selected-tariff",
     };
   } else if (candidates.length) {
-    const mid = candidates[Math.floor((candidates.length - 1) / 2)];
-    const averaged = candidates.reduce((sum, item) => sum + item.assumedBlendedTariff, 0) / candidates.length;
+    // Lead with the first (most common) family for the supply route and area,
+    // exact-book priced; the menu is still shown to the visitor.
+    const primary = candidates.find((candidate) => candidate.exactBook) ?? candidates[0];
     anchor = {
-      id: candidates.length === 1 ? candidates[0].id : null,
-      label: candidates.length === 1 ? candidates[0].label : `${mid.label} band (area menu)`,
-      blendedTariff: Math.round(averaged * 100) / 100,
+      id: primary.id,
+      label: primary.id === "municipal-business" && primary.exactBook ? `${primary.label} (2026/27 published schedule)` : primary.exactBook ? `${primary.label} (2026/27 tariff book)` : `${primary.label} band (area menu)`,
+      blendedTariff: primary.assumedBlendedTariff,
       source: placeContext ? "supply-route-and-area" : "supply-route",
     };
   } else {
@@ -287,6 +312,7 @@ export function buildIndicativeMigrationReport(
   const tariffContext = resolveTariffContext({
     supplyType: input.supplyType,
     siteCity,
+    monthlySpendExVat,
     tariffFamily,
     placeMunicipality: typeof input.placeMunicipality === "string" && input.placeMunicipality.trim()
       ? input.placeMunicipality.trim().slice(0, 160)

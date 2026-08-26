@@ -1,0 +1,2240 @@
+{
+  "source": "Eskom tariff book 2026/27 (official workbook eskom-tariffs-2026-27.xlsm)",
+  "supply": "Non-local authority (Eskom-direct supply)",
+  "vat": "all rates excl VAT",
+  "year": "2026/27",
+  "tx_zones": {
+    "note": "Tx zone = distance from Johannesburg (per Loss Factors sheet)",
+    "0": "<= 300km",
+    "1": "> 300km & <= 600km",
+    "2": "> 600km & <= 900km",
+    "3": "> 900km"
+  },
+  "tou_windows": {
+    "high_season": {
+      "label": "High demand season",
+      "months": "Jun - Aug"
+    },
+    "low_season": {
+      "label": "Low demand season",
+      "months": "Sep - May"
+    },
+    "weekday_saturday_sunday_hours": null,
+    "flag": "The workbook contains NO clock-hour TOU window definitions (no weekday/Saturday/Sunday peak/standard/off-peak hour bands on any sheet, including 'TOuS Original'). Only the seasonal definitions above appear on the tariff sheets. Hour bands were NOT guessed; take them from the Eskom Tariff Book PDF (schedule of standard prices) if needed."
+  },
+  "families": {
+    "landrate": {
+      "sheet": "Landrate NLA",
+      "seasonal_tou": false,
+      "variants": [
+        {
+          "name": "Landrate 1",
+          "billcode": "L101N",
+          "tx_zone": 0,
+          "voltage_code": 1,
+          "charges": {
+            "energy_c_kwh": 242.9,
+            "ancillary_service_c_kwh": 0.45,
+            "network_demand_c_kwh": 67.06,
+            "network_capacity_r_pod_day": 67.65,
+            "service_admin_r_pod_day": 26.65,
+            "generation_capacity_r_pod_day": 4.11
+          }
+        },
+        {
+          "name": "Landrate 2",
+          "billcode": "L201N",
+          "tx_zone": 0,
+          "voltage_code": 1,
+          "charges": {
+            "energy_c_kwh": 242.9,
+            "ancillary_service_c_kwh": 0.45,
+            "network_demand_c_kwh": 67.06,
+            "network_capacity_r_pod_day": 105.49,
+            "service_admin_r_pod_day": 26.65,
+            "generation_capacity_r_pod_day": 8.15
+          }
+        },
+        {
+          "name": "Landrate 3",
+          "billcode": "L301N",
+          "tx_zone": 0,
+          "voltage_code": 1,
+          "charges": {
+            "energy_c_kwh": 242.9,
+            "ancillary_service_c_kwh": 0.45,
+            "network_demand_c_kwh": 67.06,
+            "network_capacity_r_pod_day": 168.93,
+            "service_admin_r_pod_day": 26.65,
+            "generation_capacity_r_pod_day": 15.93
+          }
+        },
+        {
+          "name": "Landrate 4",
+          "billcode": "L401N",
+          "tx_zone": 0,
+          "voltage_code": 1,
+          "charges": {
+            "energy_c_kwh": 398.82,
+            "ancillary_service_c_kwh": 0.45,
+            "network_demand_c_kwh": 67.06,
+            "network_capacity_r_pod_day": 49.94,
+            "generation_capacity_r_pod_day": 2.7
+          }
+        },
+        {
+          "name": "LandrateDx",
+          "billcode": "Ld01N",
+          "tx_zone": 0,
+          "voltage_code": 1,
+          "charges": {
+            "fixed_all_inclusive_r_pod_day": 94.62
+          },
+          "note": "Fixed R/day charge inclusive of energy, ancillary service, network demand, network capacity and service charges (sheet footnote). The R/POD/day value shown is the all-inclusive fixed charge."
+        },
+        {
+          "name": "Landlight 20A",
+          "billcode": "Lt2001N",
+          "tx_zone": 0,
+          "voltage_code": 1,
+          "charges": {
+            "energy_c_kwh": 656.41
+          }
+        },
+        {
+          "name": "Landlight 60A",
+          "billcode": "Lt6001N",
+          "tx_zone": 0,
+          "voltage_code": 1,
+          "charges": {
+            "energy_c_kwh": 909.23
+          }
+        }
+      ]
+    },
+    "businessrate": {
+      "sheet": "Businessrate NLA",
+      "seasonal_tou": false,
+      "variants": [
+        {
+          "name": "Businessrate 1",
+          "billcode": "B101N",
+          "tx_zone": 0,
+          "voltage_code": 1,
+          "charges": {
+            "energy_c_kwh": 242.9,
+            "ancillary_service_c_kwh": 0.45,
+            "network_demand_c_kwh": 15.81,
+            "network_capacity_r_pod_day": 22.12,
+            "service_admin_r_pod_day": 15.99,
+            "electrification_rural_subsidy_c_kwh": 5.37,
+            "generation_capacity_r_pod_day": 3,
+            "affordability_subsidy_c_kwh": 0
+          }
+        },
+        {
+          "name": "Businessrate 2",
+          "billcode": "B201N",
+          "tx_zone": 0,
+          "voltage_code": 1,
+          "charges": {
+            "energy_c_kwh": 242.9,
+            "ancillary_service_c_kwh": 0.45,
+            "network_demand_c_kwh": 15.81,
+            "network_capacity_r_pod_day": 32.86,
+            "service_admin_r_pod_day": 15.99,
+            "electrification_rural_subsidy_c_kwh": 5.37,
+            "generation_capacity_r_pod_day": 4.48,
+            "affordability_subsidy_c_kwh": 0
+          }
+        },
+        {
+          "name": "Businessrate 3",
+          "billcode": "B301N",
+          "tx_zone": 0,
+          "voltage_code": 1,
+          "charges": {
+            "energy_c_kwh": 242.9,
+            "ancillary_service_c_kwh": 0.45,
+            "network_demand_c_kwh": 15.81,
+            "network_capacity_r_pod_day": 81.98,
+            "service_admin_r_pod_day": 15.99,
+            "electrification_rural_subsidy_c_kwh": 5.37,
+            "generation_capacity_r_pod_day": 11.18,
+            "affordability_subsidy_c_kwh": 0
+          }
+        },
+        {
+          "name": "Businessrate 4",
+          "billcode": "B401N",
+          "tx_zone": 0,
+          "voltage_code": 1,
+          "charges": {
+            "energy_c_kwh": 378.06,
+            "ancillary_service_c_kwh": 0.45,
+            "network_demand_c_kwh": 15.81,
+            "electrification_rural_subsidy_c_kwh": 5.37,
+            "generation_capacity_r_pod_day": 0,
+            "affordability_subsidy_c_kwh": 0
+          }
+        }
+      ]
+    },
+    "homepower": {
+      "sheet": "Homepower NLA",
+      "seasonal_tou": false,
+      "role": "residential tariff, small-business fallback",
+      "variants": [
+        {
+          "name": "Homepower 1",
+          "billcode": "H101N",
+          "tx_zone": 0,
+          "voltage_code": 1,
+          "charges": {
+            "energy_c_kwh": 280.05,
+            "ancillary_service_c_kwh": 0.45,
+            "network_demand_c_kwh": 28.68,
+            "network_capacity_r_pod_day": 13.19,
+            "service_admin_r_pod_day": 5.74,
+            "generation_capacity_r_pod_day": 1.09
+          }
+        },
+        {
+          "name": "Homepower 2",
+          "billcode": "H201N",
+          "tx_zone": 0,
+          "voltage_code": 1,
+          "charges": {
+            "energy_c_kwh": 280.05,
+            "ancillary_service_c_kwh": 0.45,
+            "network_demand_c_kwh": 28.68,
+            "network_capacity_r_pod_day": 29.44,
+            "service_admin_r_pod_day": 5.74,
+            "generation_capacity_r_pod_day": 1.93
+          }
+        },
+        {
+          "name": "Homepower 3",
+          "billcode": "H301N",
+          "tx_zone": 0,
+          "voltage_code": 1,
+          "charges": {
+            "energy_c_kwh": 280.05,
+            "ancillary_service_c_kwh": 0.45,
+            "network_demand_c_kwh": 28.68,
+            "network_capacity_r_pod_day": 62.89,
+            "service_admin_r_pod_day": 5.74,
+            "generation_capacity_r_pod_day": 4.7
+          }
+        },
+        {
+          "name": "Homepower 4",
+          "billcode": "H401N",
+          "tx_zone": 0,
+          "voltage_code": 1,
+          "charges": {
+            "energy_c_kwh": 280.05,
+            "ancillary_service_c_kwh": 0.45,
+            "network_demand_c_kwh": 28.68,
+            "network_capacity_r_pod_day": 9.08,
+            "service_admin_r_pod_day": 5.74,
+            "generation_capacity_r_pod_day": 0.71
+          }
+        },
+        {
+          "name": "Homepower Bulk",
+          "billcode": "HB31N",
+          "tx_zone": 0,
+          "voltage_code": null,
+          "charges": {
+            "energy_c_kwh": 280.05,
+            "ancillary_service_c_kwh": 0.45,
+            "network_demand_c_kwh": 28.68,
+            "network_capacity_r_kva_m": 60.17,
+            "service_admin_r_pod_day": 5.74,
+            "generation_capacity_r_kva_m": 7.25
+          },
+          "note": "Bulk: network capacity and generation capacity are R/kVA/m (not R/POD/day); network capacity based on NMD or measured maximum demand (sheet footnote)."
+        }
+      ]
+    },
+    "megaflex": {
+      "sheet": "Megaflex NLA",
+      "seasonal_tou": true,
+      "energy_blocks": [
+        {
+          "tx_zone": 0,
+          "tx_zone_label": "≤ 300km",
+          "voltage_code": 1,
+          "voltage": "< 500V",
+          "billcode": "Me01N",
+          "high_peak_c_kwh": 739.28,
+          "high_standard_c_kwh": 184.82,
+          "high_offpeak_c_kwh": 123.2,
+          "low_peak_c_kwh": 306.82,
+          "low_standard_c_kwh": 172.5,
+          "low_offpeak_c_kwh": 123.2,
+          "legacy_c_kwh": 24.78,
+          "generation_capacity_r_kva_m": 5.29,
+          "transmission_network_r_kva_m": 11.56
+        },
+        {
+          "tx_zone": 0,
+          "tx_zone_label": "≤ 300km",
+          "voltage_code": 2,
+          "voltage": "≥ 500V & < 66kV",
+          "billcode": "Me02N",
+          "high_peak_c_kwh": 720.19,
+          "high_standard_c_kwh": 180.05,
+          "high_offpeak_c_kwh": 120.03,
+          "low_peak_c_kwh": 298.89,
+          "low_standard_c_kwh": 168.05,
+          "low_offpeak_c_kwh": 120.03,
+          "legacy_c_kwh": 24.14,
+          "generation_capacity_r_kva_m": 12.27,
+          "transmission_network_r_kva_m": 11.15
+        },
+        {
+          "tx_zone": 0,
+          "tx_zone_label": "≤ 300km",
+          "voltage_code": 3,
+          "voltage": "≥ 66kV & ≤ 132kV",
+          "billcode": "Me03N",
+          "high_peak_c_kwh": 668.35,
+          "high_standard_c_kwh": 167.08,
+          "high_offpeak_c_kwh": 111.39,
+          "low_peak_c_kwh": 277.38,
+          "low_standard_c_kwh": 155.96,
+          "low_offpeak_c_kwh": 111.39,
+          "legacy_c_kwh": 22.4,
+          "generation_capacity_r_kva_m": 9.28,
+          "transmission_network_r_kva_m": 10.17
+        },
+        {
+          "tx_zone": 0,
+          "tx_zone_label": "≤ 300km",
+          "voltage_code": 4,
+          "voltage": "> 132kV*",
+          "billcode": "Me04N",
+          "high_peak_c_kwh": 623.23,
+          "high_standard_c_kwh": 155.81,
+          "high_offpeak_c_kwh": 103.87,
+          "low_peak_c_kwh": 258.65,
+          "low_standard_c_kwh": 145.43,
+          "low_offpeak_c_kwh": 103.87,
+          "legacy_c_kwh": 20.89,
+          "generation_capacity_r_kva_m": 10.65,
+          "transmission_network_r_kva_m": 17.77
+        },
+        {
+          "tx_zone": 1,
+          "tx_zone_label": "> 300km and ≤ 600km",
+          "voltage_code": 1,
+          "voltage": "< 500V",
+          "billcode": "Me11N",
+          "high_peak_c_kwh": 746.66,
+          "high_standard_c_kwh": 186.67,
+          "high_offpeak_c_kwh": 124.43,
+          "low_peak_c_kwh": 309.88,
+          "low_standard_c_kwh": 174.23,
+          "low_offpeak_c_kwh": 124.43,
+          "legacy_c_kwh": 24.78,
+          "generation_capacity_r_kva_m": 5.29,
+          "transmission_network_r_kva_m": 11.68
+        },
+        {
+          "tx_zone": 1,
+          "tx_zone_label": "> 300km and ≤ 600km",
+          "voltage_code": 2,
+          "voltage": "≥ 500V & < 66kV",
+          "billcode": "Me12N",
+          "high_peak_c_kwh": 727.41,
+          "high_standard_c_kwh": 181.85,
+          "high_offpeak_c_kwh": 121.24,
+          "low_peak_c_kwh": 301.88,
+          "low_standard_c_kwh": 169.72,
+          "low_offpeak_c_kwh": 121.24,
+          "legacy_c_kwh": 24.14,
+          "generation_capacity_r_kva_m": 12.27,
+          "transmission_network_r_kva_m": 11.26
+        },
+        {
+          "tx_zone": 1,
+          "tx_zone_label": "> 300km and ≤ 600km",
+          "voltage_code": 3,
+          "voltage": "≥ 66kV & ≤ 132kV",
+          "billcode": "Me13N",
+          "high_peak_c_kwh": 675.03,
+          "high_standard_c_kwh": 168.76,
+          "high_offpeak_c_kwh": 112.5,
+          "low_peak_c_kwh": 280.15,
+          "low_standard_c_kwh": 157.51,
+          "low_offpeak_c_kwh": 112.5,
+          "legacy_c_kwh": 22.4,
+          "generation_capacity_r_kva_m": 9.28,
+          "transmission_network_r_kva_m": 10.28
+        },
+        {
+          "tx_zone": 1,
+          "tx_zone_label": "> 300km and ≤ 600km",
+          "voltage_code": 4,
+          "voltage": "> 132kV*",
+          "billcode": "Me14N",
+          "high_peak_c_kwh": 629.46,
+          "high_standard_c_kwh": 157.37,
+          "high_offpeak_c_kwh": 104.91,
+          "low_peak_c_kwh": 261.23,
+          "low_standard_c_kwh": 146.87,
+          "low_offpeak_c_kwh": 104.91,
+          "legacy_c_kwh": 20.89,
+          "generation_capacity_r_kva_m": 10.65,
+          "transmission_network_r_kva_m": 17.96
+        },
+        {
+          "tx_zone": 2,
+          "tx_zone_label": "> 600km and ≤ 900km",
+          "voltage_code": 1,
+          "voltage": "< 500V",
+          "billcode": "Me21N",
+          "high_peak_c_kwh": 754.06,
+          "high_standard_c_kwh": 188.51,
+          "high_offpeak_c_kwh": 125.67,
+          "low_peak_c_kwh": 312.95,
+          "low_standard_c_kwh": 175.94,
+          "low_offpeak_c_kwh": 125.67,
+          "legacy_c_kwh": 24.78,
+          "generation_capacity_r_kva_m": 5.29,
+          "transmission_network_r_kva_m": 11.8
+        },
+        {
+          "tx_zone": 2,
+          "tx_zone_label": "> 600km and ≤ 900km",
+          "voltage_code": 2,
+          "voltage": "≥ 500V & < 66kV",
+          "billcode": "Me22N",
+          "high_peak_c_kwh": 734.61,
+          "high_standard_c_kwh": 183.66,
+          "high_offpeak_c_kwh": 122.43,
+          "low_peak_c_kwh": 304.87,
+          "low_standard_c_kwh": 171.41,
+          "low_offpeak_c_kwh": 122.43,
+          "legacy_c_kwh": 24.14,
+          "generation_capacity_r_kva_m": 12.27,
+          "transmission_network_r_kva_m": 11.37
+        },
+        {
+          "tx_zone": 2,
+          "tx_zone_label": "> 600km and ≤ 900km",
+          "voltage_code": 3,
+          "voltage": "≥ 66kV & ≤ 132kV",
+          "billcode": "Me23N",
+          "high_peak_c_kwh": 681.72,
+          "high_standard_c_kwh": 170.43,
+          "high_offpeak_c_kwh": 113.61,
+          "low_peak_c_kwh": 282.93,
+          "low_standard_c_kwh": 159.08,
+          "low_offpeak_c_kwh": 113.61,
+          "legacy_c_kwh": 22.4,
+          "generation_capacity_r_kva_m": 9.28,
+          "transmission_network_r_kva_m": 10.38
+        },
+        {
+          "tx_zone": 2,
+          "tx_zone_label": "> 600km and ≤ 900km",
+          "voltage_code": 4,
+          "voltage": "> 132kV*",
+          "billcode": "Me24N",
+          "high_peak_c_kwh": 635.69,
+          "high_standard_c_kwh": 158.93,
+          "high_offpeak_c_kwh": 105.95,
+          "low_peak_c_kwh": 263.83,
+          "low_standard_c_kwh": 148.33,
+          "low_offpeak_c_kwh": 105.95,
+          "legacy_c_kwh": 20.89,
+          "generation_capacity_r_kva_m": 10.65,
+          "transmission_network_r_kva_m": 18.12
+        },
+        {
+          "tx_zone": 3,
+          "tx_zone_label": "> 900km",
+          "voltage_code": 1,
+          "voltage": "< 500V",
+          "billcode": "Me31N",
+          "high_peak_c_kwh": 761.46,
+          "high_standard_c_kwh": 190.36,
+          "high_offpeak_c_kwh": 126.91,
+          "low_peak_c_kwh": 316.02,
+          "low_standard_c_kwh": 177.67,
+          "low_offpeak_c_kwh": 126.91,
+          "legacy_c_kwh": 24.78,
+          "generation_capacity_r_kva_m": 5.29,
+          "transmission_network_r_kva_m": 11.92
+        },
+        {
+          "tx_zone": 3,
+          "tx_zone_label": "> 900km",
+          "voltage_code": 2,
+          "voltage": "≥ 500V & < 66kV",
+          "billcode": "Me32N",
+          "high_peak_c_kwh": 741.81,
+          "high_standard_c_kwh": 185.46,
+          "high_offpeak_c_kwh": 123.64,
+          "low_peak_c_kwh": 307.86,
+          "low_standard_c_kwh": 173.08,
+          "low_offpeak_c_kwh": 123.64,
+          "legacy_c_kwh": 24.14,
+          "generation_capacity_r_kva_m": 12.27,
+          "transmission_network_r_kva_m": 11.47
+        },
+        {
+          "tx_zone": 3,
+          "tx_zone_label": "> 900km",
+          "voltage_code": 3,
+          "voltage": "≥ 66kV & ≤ 132kV",
+          "billcode": "Me33N",
+          "high_peak_c_kwh": 688.4,
+          "high_standard_c_kwh": 172.1,
+          "high_offpeak_c_kwh": 114.74,
+          "low_peak_c_kwh": 285.69,
+          "low_standard_c_kwh": 160.63,
+          "low_offpeak_c_kwh": 114.74,
+          "legacy_c_kwh": 22.4,
+          "generation_capacity_r_kva_m": 9.28,
+          "transmission_network_r_kva_m": 10.47
+        },
+        {
+          "tx_zone": 3,
+          "tx_zone_label": "> 900km",
+          "voltage_code": 4,
+          "voltage": "> 132kV*",
+          "billcode": "Me34N",
+          "high_peak_c_kwh": 641.92,
+          "high_standard_c_kwh": 160.48,
+          "high_offpeak_c_kwh": 106.97,
+          "low_peak_c_kwh": 266.41,
+          "low_standard_c_kwh": 149.78,
+          "low_offpeak_c_kwh": 106.97,
+          "legacy_c_kwh": 20.89,
+          "generation_capacity_r_kva_m": 10.65,
+          "transmission_network_r_kva_m": 18.3
+        }
+      ],
+      "distribution_network_charges_by_voltage": [
+        {
+          "voltage": "< 500V",
+          "network_capacity_r_kva_m": 42.66,
+          "network_demand_r_kva_m": 52.65,
+          "urban_lv_subsidy_r_kva_m": 0
+        },
+        {
+          "voltage": "≥ 500V & < 66kV",
+          "network_capacity_r_kva_m": 39.13,
+          "network_demand_r_kva_m": 26.29,
+          "urban_lv_subsidy_r_kva_m": 0
+        },
+        {
+          "voltage": "≥ 66kV & ≤ 132kV",
+          "network_capacity_r_kva_m": 14.16,
+          "network_demand_r_kva_m": 10.36,
+          "urban_lv_subsidy_r_kva_m": 11.09
+        },
+        {
+          "voltage": "> 132kV*",
+          "network_capacity_r_kva_m": 0,
+          "network_demand_r_kva_m": 0,
+          "urban_lv_subsidy_r_kva_m": 11.09
+        }
+      ],
+      "ancillary_service_by_voltage": [
+        {
+          "voltage": "< 500V",
+          "ancillary_service_c_kwh": 0.45
+        },
+        {
+          "voltage": "≥ 500V & < 66kV",
+          "ancillary_service_c_kwh": 0.42
+        },
+        {
+          "voltage": "≥ 66kV & ≤ 132kV",
+          "ancillary_service_c_kwh": 0.39
+        },
+        {
+          "voltage": "> 132kV*",
+          "ancillary_service_c_kwh": 0.37
+        }
+      ],
+      "service_admin_by_customer_category": [
+        {
+          "customer_category": "> 1 MVA",
+          "service_charge_r_pod_day": 215.91,
+          "admin_charge_r_pod_day": 21.07
+        },
+        {
+          "customer_category": "Key customers",
+          "service_charge_r_pod_day": 1216.44,
+          "admin_charge_r_pod_day": 21.07
+        }
+      ],
+      "reactive_energy_c_kvarh": {
+        "high_season": 34.49,
+        "low_season": 0
+      },
+      "subsidies": {
+        "electrification_rural_subsidy_c_kwh": 5.37,
+        "affordability_subsidy_c_kwh": 5.1
+      },
+      "notes": [
+        "Voltage '> 132kV*' = 132 kV or Transmission connected.",
+        "Network demand / capacity are R/kVA/m distribution charges by voltage; transmission network charge is per energy block (R/kVA/m)."
+      ]
+    },
+    "miniflex": {
+      "sheet": "Miniflex NLA",
+      "seasonal_tou": true,
+      "energy_blocks": [
+        {
+          "tx_zone": 0,
+          "tx_zone_label": "≤ 300km",
+          "voltage_code": 1,
+          "voltage": "< 500V",
+          "billcode": "Mi01N",
+          "high_peak_c_kwh": 739.28,
+          "high_standard_c_kwh": 184.82,
+          "high_offpeak_c_kwh": 123.2,
+          "low_peak_c_kwh": 306.82,
+          "low_standard_c_kwh": 172.5,
+          "low_offpeak_c_kwh": 123.2,
+          "legacy_c_kwh": 24.78,
+          "generation_capacity_r_kva_m": 5.29,
+          "network_capacity_r_kva_m": 54.22
+        },
+        {
+          "tx_zone": 0,
+          "tx_zone_label": "≤ 300km",
+          "voltage_code": 2,
+          "voltage": "≥ 500V & < 66kV",
+          "billcode": "Mi02N",
+          "high_peak_c_kwh": 720.19,
+          "high_standard_c_kwh": 180.05,
+          "high_offpeak_c_kwh": 120.03,
+          "low_peak_c_kwh": 298.89,
+          "low_standard_c_kwh": 168.05,
+          "low_offpeak_c_kwh": 120.03,
+          "legacy_c_kwh": 24.14,
+          "generation_capacity_r_kva_m": 12.27,
+          "network_capacity_r_kva_m": 50.27
+        },
+        {
+          "tx_zone": 0,
+          "tx_zone_label": "≤ 300km",
+          "voltage_code": 3,
+          "voltage": "≥ 66kV & ≤ 132kV",
+          "billcode": "Mi03N",
+          "high_peak_c_kwh": 668.35,
+          "high_standard_c_kwh": 167.08,
+          "high_offpeak_c_kwh": 111.39,
+          "low_peak_c_kwh": 277.38,
+          "low_standard_c_kwh": 155.96,
+          "low_offpeak_c_kwh": 111.39,
+          "legacy_c_kwh": 22.4,
+          "generation_capacity_r_kva_m": 9.28,
+          "network_capacity_r_kva_m": 24.33
+        },
+        {
+          "tx_zone": 0,
+          "tx_zone_label": "≤ 300km",
+          "voltage_code": 4,
+          "voltage": "> 132kV*",
+          "billcode": "Mi04N",
+          "high_peak_c_kwh": 623.23,
+          "high_standard_c_kwh": 155.81,
+          "high_offpeak_c_kwh": 103.87,
+          "low_peak_c_kwh": 258.65,
+          "low_standard_c_kwh": 145.43,
+          "low_offpeak_c_kwh": 103.87,
+          "legacy_c_kwh": 20.89,
+          "generation_capacity_r_kva_m": 10.65,
+          "network_capacity_r_kva_m": 17.77
+        },
+        {
+          "tx_zone": 1,
+          "tx_zone_label": "> 300km and ≤ 600km",
+          "voltage_code": 1,
+          "voltage": "< 500V",
+          "billcode": "Mi11N",
+          "high_peak_c_kwh": 746.66,
+          "high_standard_c_kwh": 186.67,
+          "high_offpeak_c_kwh": 124.43,
+          "low_peak_c_kwh": 309.88,
+          "low_standard_c_kwh": 174.23,
+          "low_offpeak_c_kwh": 124.43,
+          "legacy_c_kwh": 24.78,
+          "generation_capacity_r_kva_m": 5.29,
+          "network_capacity_r_kva_m": 54.35
+        },
+        {
+          "tx_zone": 1,
+          "tx_zone_label": "> 300km and ≤ 600km",
+          "voltage_code": 2,
+          "voltage": "≥ 500V & < 66kV",
+          "billcode": "Mi12N",
+          "high_peak_c_kwh": 727.41,
+          "high_standard_c_kwh": 181.85,
+          "high_offpeak_c_kwh": 121.24,
+          "low_peak_c_kwh": 301.88,
+          "low_standard_c_kwh": 169.72,
+          "low_offpeak_c_kwh": 121.24,
+          "legacy_c_kwh": 24.14,
+          "generation_capacity_r_kva_m": 12.27,
+          "network_capacity_r_kva_m": 50.38
+        },
+        {
+          "tx_zone": 1,
+          "tx_zone_label": "> 300km and ≤ 600km",
+          "voltage_code": 3,
+          "voltage": "≥ 66kV & ≤ 132kV",
+          "billcode": "Mi13N",
+          "high_peak_c_kwh": 675.03,
+          "high_standard_c_kwh": 168.76,
+          "high_offpeak_c_kwh": 112.5,
+          "low_peak_c_kwh": 280.15,
+          "low_standard_c_kwh": 157.51,
+          "low_offpeak_c_kwh": 112.5,
+          "legacy_c_kwh": 22.4,
+          "generation_capacity_r_kva_m": 9.28,
+          "network_capacity_r_kva_m": 24.44
+        },
+        {
+          "tx_zone": 1,
+          "tx_zone_label": "> 300km and ≤ 600km",
+          "voltage_code": 4,
+          "voltage": "> 132kV*",
+          "billcode": "Mi14N",
+          "high_peak_c_kwh": 629.46,
+          "high_standard_c_kwh": 157.37,
+          "high_offpeak_c_kwh": 104.91,
+          "low_peak_c_kwh": 261.23,
+          "low_standard_c_kwh": 146.87,
+          "low_offpeak_c_kwh": 104.91,
+          "legacy_c_kwh": 20.89,
+          "generation_capacity_r_kva_m": 10.65,
+          "network_capacity_r_kva_m": 17.96
+        },
+        {
+          "tx_zone": 2,
+          "tx_zone_label": "> 600km and ≤ 900km",
+          "voltage_code": 1,
+          "voltage": "< 500V",
+          "billcode": "Mi21N",
+          "high_peak_c_kwh": 754.06,
+          "high_standard_c_kwh": 188.51,
+          "high_offpeak_c_kwh": 125.67,
+          "low_peak_c_kwh": 312.95,
+          "low_standard_c_kwh": 175.94,
+          "low_offpeak_c_kwh": 125.67,
+          "legacy_c_kwh": 24.78,
+          "generation_capacity_r_kva_m": 5.29,
+          "network_capacity_r_kva_m": 54.46
+        },
+        {
+          "tx_zone": 2,
+          "tx_zone_label": "> 600km and ≤ 900km",
+          "voltage_code": 2,
+          "voltage": "≥ 500V & < 66kV",
+          "billcode": "Mi22N",
+          "high_peak_c_kwh": 734.61,
+          "high_standard_c_kwh": 183.66,
+          "high_offpeak_c_kwh": 122.43,
+          "low_peak_c_kwh": 304.87,
+          "low_standard_c_kwh": 171.41,
+          "low_offpeak_c_kwh": 122.43,
+          "legacy_c_kwh": 24.14,
+          "generation_capacity_r_kva_m": 12.27,
+          "network_capacity_r_kva_m": 50.5
+        },
+        {
+          "tx_zone": 2,
+          "tx_zone_label": "> 600km and ≤ 900km",
+          "voltage_code": 3,
+          "voltage": "≥ 66kV & ≤ 132kV",
+          "billcode": "Mi23N",
+          "high_peak_c_kwh": 681.72,
+          "high_standard_c_kwh": 170.43,
+          "high_offpeak_c_kwh": 113.61,
+          "low_peak_c_kwh": 282.93,
+          "low_standard_c_kwh": 159.08,
+          "low_offpeak_c_kwh": 113.61,
+          "legacy_c_kwh": 22.4,
+          "generation_capacity_r_kva_m": 9.28,
+          "network_capacity_r_kva_m": 24.54
+        },
+        {
+          "tx_zone": 2,
+          "tx_zone_label": "> 600km and ≤ 900km",
+          "voltage_code": 4,
+          "voltage": "> 132kV*",
+          "billcode": "Mi24N",
+          "high_peak_c_kwh": 635.69,
+          "high_standard_c_kwh": 158.93,
+          "high_offpeak_c_kwh": 105.95,
+          "low_peak_c_kwh": 263.83,
+          "low_standard_c_kwh": 148.33,
+          "low_offpeak_c_kwh": 105.95,
+          "legacy_c_kwh": 20.89,
+          "generation_capacity_r_kva_m": 10.65,
+          "network_capacity_r_kva_m": 18.12
+        },
+        {
+          "tx_zone": 3,
+          "tx_zone_label": "> 900km",
+          "voltage_code": 1,
+          "voltage": "< 500V",
+          "billcode": "Mi31N",
+          "high_peak_c_kwh": 761.46,
+          "high_standard_c_kwh": 190.36,
+          "high_offpeak_c_kwh": 126.91,
+          "low_peak_c_kwh": 316.02,
+          "low_standard_c_kwh": 177.67,
+          "low_offpeak_c_kwh": 126.91,
+          "legacy_c_kwh": 24.78,
+          "generation_capacity_r_kva_m": 5.29,
+          "network_capacity_r_kva_m": 54.58
+        },
+        {
+          "tx_zone": 3,
+          "tx_zone_label": "> 900km",
+          "voltage_code": 2,
+          "voltage": "≥ 500V & < 66kV",
+          "billcode": "Mi32N",
+          "high_peak_c_kwh": 741.81,
+          "high_standard_c_kwh": 185.46,
+          "high_offpeak_c_kwh": 123.64,
+          "low_peak_c_kwh": 307.86,
+          "low_standard_c_kwh": 173.08,
+          "low_offpeak_c_kwh": 123.64,
+          "legacy_c_kwh": 24.14,
+          "generation_capacity_r_kva_m": 12.27,
+          "network_capacity_r_kva_m": 50.61
+        },
+        {
+          "tx_zone": 3,
+          "tx_zone_label": "> 900km",
+          "voltage_code": 3,
+          "voltage": "≥ 66kV & ≤ 132kV",
+          "billcode": "Mi33N",
+          "high_peak_c_kwh": 688.4,
+          "high_standard_c_kwh": 172.1,
+          "high_offpeak_c_kwh": 114.74,
+          "low_peak_c_kwh": 285.69,
+          "low_standard_c_kwh": 160.63,
+          "low_offpeak_c_kwh": 114.74,
+          "legacy_c_kwh": 22.4,
+          "generation_capacity_r_kva_m": 9.28,
+          "network_capacity_r_kva_m": 24.63
+        },
+        {
+          "tx_zone": 3,
+          "tx_zone_label": "> 900km",
+          "voltage_code": 4,
+          "voltage": "> 132kV*",
+          "billcode": "Mi34N",
+          "high_peak_c_kwh": 641.92,
+          "high_standard_c_kwh": 160.48,
+          "high_offpeak_c_kwh": 106.97,
+          "low_peak_c_kwh": 266.41,
+          "low_standard_c_kwh": 149.78,
+          "low_offpeak_c_kwh": 106.97,
+          "legacy_c_kwh": 20.89,
+          "generation_capacity_r_kva_m": 10.65,
+          "network_capacity_r_kva_m": 18.3
+        }
+      ],
+      "service_admin_by_customer_category": [
+        {
+          "customer_category": "≤ 100 kVA",
+          "service_charge_r_pod_day": 14.94,
+          "admin_charge_r_pod_day": 0.79
+        },
+        {
+          "customer_category": "> 100 kVA & ≤ 500 kVA",
+          "service_charge_r_pod_day": 69.91,
+          "admin_charge_r_pod_day": 13.49
+        },
+        {
+          "customer_category": "> 500 kVA & ≤ 1 MVA",
+          "service_charge_r_pod_day": 215.91,
+          "admin_charge_r_pod_day": 21.07
+        },
+        {
+          "customer_category": "> 1 MVA",
+          "service_charge_r_pod_day": 215.91,
+          "admin_charge_r_pod_day": 21.07
+        },
+        {
+          "customer_category": "Key customers",
+          "service_charge_r_pod_day": 1216.44,
+          "admin_charge_r_pod_day": 21.07
+        }
+      ],
+      "ancillary_and_network_demand_by_voltage": [
+        {
+          "voltage": "< 500V",
+          "ancillary_service_c_kwh": 0.45,
+          "network_demand_c_kwh_peak_standard": 32.3,
+          "urban_lv_subsidy_r_kva_m": 0
+        },
+        {
+          "voltage": "≥ 500V & < 66kV",
+          "ancillary_service_c_kwh": 0.42,
+          "network_demand_c_kwh_peak_standard": 10.45,
+          "urban_lv_subsidy_r_kva_m": 0
+        },
+        {
+          "voltage": "≥ 66kV & ≤ 132kV",
+          "ancillary_service_c_kwh": 0.39,
+          "network_demand_c_kwh_peak_standard": 10.21,
+          "urban_lv_subsidy_r_kva_m": 11.09
+        },
+        {
+          "voltage": "> 132kV*",
+          "ancillary_service_c_kwh": 0.37,
+          "network_demand_c_kwh_peak_standard": 0,
+          "urban_lv_subsidy_r_kva_m": 11.09
+        }
+      ],
+      "reactive_energy_c_kvarh": {
+        "high_season": 15.02,
+        "low_season": 0
+      },
+      "subsidies": {
+        "electrification_rural_subsidy_c_kwh": 5.37,
+        "affordability_subsidy_c_kwh": 5.1
+      },
+      "notes": [
+        "Network capacity charge is per energy block (R/kVA/m).",
+        "Network demand charge [c/kWh] applies in Peak & Standard periods only (sheet header).",
+        "Voltage '> 132kV*' = 132 kV or Transmission connected."
+      ]
+    },
+    "ruraflex": {
+      "sheet": "Ruraflex NLA",
+      "seasonal_tou": true,
+      "energy_blocks": [
+        {
+          "tx_zone": 0,
+          "tx_zone_label": "≤ 300km",
+          "voltage_code": 1,
+          "voltage": "< 500V",
+          "billcode": "Ru01N",
+          "high_peak_c_kwh": 746.19,
+          "high_standard_c_kwh": 186.55,
+          "high_offpeak_c_kwh": 124.36,
+          "low_peak_c_kwh": 309.68,
+          "low_standard_c_kwh": 174.11,
+          "low_offpeak_c_kwh": 124.36,
+          "legacy_c_kwh": 25.01,
+          "generation_capacity_r_kva_m": 5.07,
+          "network_capacity_r_kva_m": 56.6
+        },
+        {
+          "tx_zone": 0,
+          "tx_zone_label": "≤ 300km",
+          "voltage_code": 2,
+          "voltage": "≥ 500V & ≤ 22kV",
+          "billcode": "Ru02N",
+          "high_peak_c_kwh": 732.98,
+          "high_standard_c_kwh": 183.23,
+          "high_offpeak_c_kwh": 122.16,
+          "low_peak_c_kwh": 304.19,
+          "low_standard_c_kwh": 171.03,
+          "low_offpeak_c_kwh": 122.16,
+          "legacy_c_kwh": 24.57,
+          "generation_capacity_r_kva_m": 7.63,
+          "network_capacity_r_kva_m": 52.55
+        },
+        {
+          "tx_zone": 1,
+          "tx_zone_label": "> 300km and ≤ 600km",
+          "voltage_code": 1,
+          "voltage": "< 500V",
+          "billcode": "Ru11N",
+          "high_peak_c_kwh": 753.66,
+          "high_standard_c_kwh": 188.42,
+          "high_offpeak_c_kwh": 125.6,
+          "low_peak_c_kwh": 312.78,
+          "low_standard_c_kwh": 175.85,
+          "low_offpeak_c_kwh": 125.6,
+          "legacy_c_kwh": 25.01,
+          "generation_capacity_r_kva_m": 5.07,
+          "network_capacity_r_kva_m": 56.71
+        },
+        {
+          "tx_zone": 1,
+          "tx_zone_label": "> 300km and ≤ 600km",
+          "voltage_code": 2,
+          "voltage": "≥ 500V & ≤ 22kV",
+          "billcode": "Ru12N",
+          "high_peak_c_kwh": 740.31,
+          "high_standard_c_kwh": 185.08,
+          "high_offpeak_c_kwh": 123.38,
+          "low_peak_c_kwh": 307.24,
+          "low_standard_c_kwh": 172.75,
+          "low_offpeak_c_kwh": 123.38,
+          "legacy_c_kwh": 24.57,
+          "generation_capacity_r_kva_m": 7.63,
+          "network_capacity_r_kva_m": 52.66
+        },
+        {
+          "tx_zone": 2,
+          "tx_zone_label": "> 600km and ≤ 900km",
+          "voltage_code": 1,
+          "voltage": "< 500V",
+          "billcode": "Ru21N",
+          "high_peak_c_kwh": 761.12,
+          "high_standard_c_kwh": 190.27,
+          "high_offpeak_c_kwh": 126.84,
+          "low_peak_c_kwh": 315.86,
+          "low_standard_c_kwh": 177.59,
+          "low_offpeak_c_kwh": 126.84,
+          "legacy_c_kwh": 25.01,
+          "generation_capacity_r_kva_m": 5.07,
+          "network_capacity_r_kva_m": 56.83
+        },
+        {
+          "tx_zone": 2,
+          "tx_zone_label": "> 600km and ≤ 900km",
+          "voltage_code": 2,
+          "voltage": "≥ 500V & ≤ 22kV",
+          "billcode": "Ru22N",
+          "high_peak_c_kwh": 747.64,
+          "high_standard_c_kwh": 186.92,
+          "high_offpeak_c_kwh": 124.61,
+          "low_peak_c_kwh": 310.28,
+          "low_standard_c_kwh": 174.45,
+          "low_offpeak_c_kwh": 124.61,
+          "legacy_c_kwh": 24.57,
+          "generation_capacity_r_kva_m": 7.63,
+          "network_capacity_r_kva_m": 52.78
+        },
+        {
+          "tx_zone": 3,
+          "tx_zone_label": "> 900km",
+          "voltage_code": 1,
+          "voltage": "< 500V",
+          "billcode": "Ru31N",
+          "high_peak_c_kwh": 768.58,
+          "high_standard_c_kwh": 192.14,
+          "high_offpeak_c_kwh": 128.08,
+          "low_peak_c_kwh": 318.96,
+          "low_standard_c_kwh": 179.34,
+          "low_offpeak_c_kwh": 128.08,
+          "legacy_c_kwh": 25.01,
+          "generation_capacity_r_kva_m": 5.07,
+          "network_capacity_r_kva_m": 56.95
+        },
+        {
+          "tx_zone": 3,
+          "tx_zone_label": "> 900km",
+          "voltage_code": 2,
+          "voltage": "≥ 500V & ≤ 22kV",
+          "billcode": "Ru32N",
+          "high_peak_c_kwh": 754.97,
+          "high_standard_c_kwh": 188.74,
+          "high_offpeak_c_kwh": 125.83,
+          "low_peak_c_kwh": 313.33,
+          "low_standard_c_kwh": 176.16,
+          "low_offpeak_c_kwh": 125.83,
+          "legacy_c_kwh": 24.57,
+          "generation_capacity_r_kva_m": 7.63,
+          "network_capacity_r_kva_m": 52.9
+        }
+      ],
+      "service_admin_by_customer_category": [
+        {
+          "customer_category": "≤ 100 kVA",
+          "service_charge_r_pod_day": 25.18,
+          "admin_charge_r_pod_day": 1.47
+        },
+        {
+          "customer_category": "> 100 kVA & ≤ 500 kVA",
+          "service_charge_r_pod_day": 69.91,
+          "admin_charge_r_pod_day": 13.49
+        },
+        {
+          "customer_category": "> 500 kVA & ≤ 1 MVA",
+          "service_charge_r_pod_day": 215.91,
+          "admin_charge_r_pod_day": 21.07
+        },
+        {
+          "customer_category": "> 1 MVA",
+          "service_charge_r_pod_day": 215.91,
+          "admin_charge_r_pod_day": 21.07
+        },
+        {
+          "customer_category": "Key customers",
+          "service_charge_r_pod_day": 1216.44,
+          "admin_charge_r_pod_day": 21.07
+        }
+      ],
+      "ancillary_and_network_demand_by_voltage": [
+        {
+          "voltage": "< 500V",
+          "ancillary_service_c_kwh": 0.45,
+          "network_demand_c_kwh_all_tou": 52.55
+        },
+        {
+          "voltage": "≥ 500V & < 22kV",
+          "ancillary_service_c_kwh": 0.45,
+          "network_demand_c_kwh_all_tou": 45.56
+        }
+      ],
+      "reactive_energy_c_kvarh": {
+        "high_season": 21.57,
+        "low_season": 0
+      },
+      "notes": [
+        "Network capacity and generation capacity charges are per energy block (R/kVA/m).",
+        "Network demand charge [c/kWh] applies in all time-of-use periods (sheet header).",
+        "No electrification/affordability subsidy rows on this sheet (rural tariff)."
+      ]
+    },
+    "nightsave_rural": {
+      "sheet": "Nightsave Rural NLA",
+      "seasonal_tou": true,
+      "tou_structure": "seasonally differentiated single energy rate + seasonal energy demand charge [R/kVA/m] (no peak/standard/off-peak energy split)",
+      "energy_blocks": [
+        {
+          "tx_zone": 0,
+          "tx_zone_label": "≤ 300km",
+          "voltage_code": 1,
+          "voltage": "< 500V",
+          "billcode": "NR01N",
+          "high_energy_c_kwh": 165.97,
+          "low_energy_c_kwh": 159.53,
+          "high_energy_demand_r_kva_m": 444.28,
+          "low_energy_demand_r_kva_m": 103.96,
+          "network_capacity_r_kva_m": 56.6,
+          "legacy_c_kwh": 25.01,
+          "generation_capacity_r_kva_m": 5.07
+        },
+        {
+          "tx_zone": 0,
+          "tx_zone_label": "≤ 300km",
+          "voltage_code": 2,
+          "voltage": "≥ 500V & ≤ 22kV",
+          "billcode": "NR02N",
+          "high_energy_c_kwh": 163.03,
+          "low_energy_c_kwh": 156.71,
+          "high_energy_demand_r_kva_m": 436.43,
+          "low_energy_demand_r_kva_m": 102.11,
+          "network_capacity_r_kva_m": 52.55,
+          "legacy_c_kwh": 24.57,
+          "generation_capacity_r_kva_m": 7.63
+        },
+        {
+          "tx_zone": 1,
+          "tx_zone_label": "> 300km and ≤ 600km",
+          "voltage_code": 1,
+          "voltage": "< 500V",
+          "billcode": "NR11N",
+          "high_energy_c_kwh": 167.62,
+          "low_energy_c_kwh": 161.12,
+          "high_energy_demand_r_kva_m": 448.7,
+          "low_energy_demand_r_kva_m": 105,
+          "network_capacity_r_kva_m": 56.71,
+          "legacy_c_kwh": 25.01,
+          "generation_capacity_r_kva_m": 5.07
+        },
+        {
+          "tx_zone": 1,
+          "tx_zone_label": "> 300km and ≤ 600km",
+          "voltage_code": 2,
+          "voltage": "≥ 500V & ≤ 22kV",
+          "billcode": "NR12N",
+          "high_energy_c_kwh": 164.65,
+          "low_energy_c_kwh": 158.27,
+          "high_energy_demand_r_kva_m": 440.76,
+          "low_energy_demand_r_kva_m": 103.14,
+          "network_capacity_r_kva_m": 52.66,
+          "legacy_c_kwh": 24.57,
+          "generation_capacity_r_kva_m": 7.63
+        },
+        {
+          "tx_zone": 2,
+          "tx_zone_label": "> 600km and ≤ 900km",
+          "voltage_code": 1,
+          "voltage": "< 500V",
+          "billcode": "NR21N",
+          "high_energy_c_kwh": 169.27,
+          "low_energy_c_kwh": 162.73,
+          "high_energy_demand_r_kva_m": 453.16,
+          "low_energy_demand_r_kva_m": 106.04,
+          "network_capacity_r_kva_m": 56.83,
+          "legacy_c_kwh": 25.01,
+          "generation_capacity_r_kva_m": 5.07
+        },
+        {
+          "tx_zone": 2,
+          "tx_zone_label": "> 600km and ≤ 900km",
+          "voltage_code": 2,
+          "voltage": "≥ 500V & ≤ 22kV",
+          "billcode": "NR22N",
+          "high_energy_c_kwh": 166.28,
+          "low_energy_c_kwh": 159.84,
+          "high_energy_demand_r_kva_m": 445.14,
+          "low_energy_demand_r_kva_m": 104.16,
+          "network_capacity_r_kva_m": 52.78,
+          "legacy_c_kwh": 24.57,
+          "generation_capacity_r_kva_m": 7.63
+        },
+        {
+          "tx_zone": 3,
+          "tx_zone_label": "> 900km",
+          "voltage_code": 1,
+          "voltage": "< 500V",
+          "billcode": "NR31N",
+          "high_energy_c_kwh": 170.93,
+          "low_energy_c_kwh": 164.3,
+          "high_energy_demand_r_kva_m": 457.58,
+          "low_energy_demand_r_kva_m": 107.06,
+          "network_capacity_r_kva_m": 56.95,
+          "legacy_c_kwh": 25.01,
+          "generation_capacity_r_kva_m": 5.07
+        },
+        {
+          "tx_zone": 3,
+          "tx_zone_label": "> 900km",
+          "voltage_code": 2,
+          "voltage": "≥ 500V & ≤ 22kV",
+          "billcode": "NR32N",
+          "high_energy_c_kwh": 167.9,
+          "low_energy_c_kwh": 161.4,
+          "high_energy_demand_r_kva_m": 449.48,
+          "low_energy_demand_r_kva_m": 105.18,
+          "network_capacity_r_kva_m": 52.9,
+          "legacy_c_kwh": 24.57,
+          "generation_capacity_r_kva_m": 7.63
+        }
+      ],
+      "service_admin_by_customer_category": [
+        {
+          "customer_category": "≤ 100 kVA",
+          "service_charge_r_pod_day": 25.18,
+          "admin_charge_r_pod_day": 1.47
+        },
+        {
+          "customer_category": "> 100 kVA & ≤ 500 kVA",
+          "service_charge_r_pod_day": 69.91,
+          "admin_charge_r_pod_day": 13.49
+        },
+        {
+          "customer_category": "> 500 kVA & ≤ 1 MVA",
+          "service_charge_r_pod_day": 215.91,
+          "admin_charge_r_pod_day": 21.07
+        },
+        {
+          "customer_category": "> 1 MVA",
+          "service_charge_r_pod_day": 215.91,
+          "admin_charge_r_pod_day": 21.07
+        },
+        {
+          "customer_category": "Key customers",
+          "service_charge_r_pod_day": 1216.44,
+          "admin_charge_r_pod_day": 21.07
+        }
+      ],
+      "ancillary_and_network_demand_by_voltage": [
+        {
+          "voltage": "< 500V",
+          "ancillary_service_c_kwh": 0.45,
+          "network_demand_c_kwh_all_tou": 52.55
+        },
+        {
+          "voltage": "≥ 500V & ≤ 22kV",
+          "ancillary_service_c_kwh": 0.45,
+          "network_demand_c_kwh_all_tou": 45.56
+        }
+      ],
+      "notes": [
+        "Energy demand charge is billed on kVA, seasonally differentiated (high Jun-Aug, low Sep-May)."
+      ]
+    },
+    "nightsave_urban_small": {
+      "sheet": " Nightsave Urban NLA",
+      "seasonal_tou": true,
+      "tou_structure": "seasonally differentiated single energy rate + seasonal energy demand charge [R/kVA/m]",
+      "tariff_name_in_sheet": "Nightsave Small",
+      "energy_blocks": [
+        {
+          "tx_zone": 0,
+          "tx_zone_label": "≤ 300km",
+          "voltage_code": 1,
+          "voltage": "< 500V",
+          "billcode": "NS01N",
+          "high_energy_c_kwh": 181.89,
+          "low_energy_c_kwh": 174.72,
+          "high_energy_demand_r_kva_m": 341.73,
+          "low_energy_demand_r_kva_m": 79.95,
+          "legacy_c_kwh": 24.78,
+          "generation_capacity_r_kva_m": 5.29,
+          "transmission_network_r_kva_m": 11.56
+        },
+        {
+          "tx_zone": 0,
+          "tx_zone_label": "≤ 300km",
+          "voltage_code": 2,
+          "voltage": "≥ 500V & < 66kV",
+          "billcode": "NS02N",
+          "high_energy_c_kwh": 177.2,
+          "low_energy_c_kwh": 170.21,
+          "high_energy_demand_r_kva_m": 332.91,
+          "low_energy_demand_r_kva_m": 77.88,
+          "legacy_c_kwh": 24.14,
+          "generation_capacity_r_kva_m": 12.27,
+          "transmission_network_r_kva_m": 11.15
+        },
+        {
+          "tx_zone": 0,
+          "tx_zone_label": "≤ 300km",
+          "voltage_code": 3,
+          "voltage": "≥ 66kV & ≤ 132kV",
+          "billcode": "NS03N",
+          "high_energy_c_kwh": 164.44,
+          "low_energy_c_kwh": 157.96,
+          "high_energy_demand_r_kva_m": 308.94,
+          "low_energy_demand_r_kva_m": 72.28,
+          "legacy_c_kwh": 22.4,
+          "generation_capacity_r_kva_m": 9.28,
+          "transmission_network_r_kva_m": 10.17
+        },
+        {
+          "tx_zone": 0,
+          "tx_zone_label": "≤ 300km",
+          "voltage_code": 4,
+          "voltage": "> 132kV*",
+          "billcode": "NS04N",
+          "high_energy_c_kwh": 153.35,
+          "low_energy_c_kwh": 147.3,
+          "high_energy_demand_r_kva_m": 286.37,
+          "low_energy_demand_r_kva_m": 67,
+          "legacy_c_kwh": 20.89,
+          "generation_capacity_r_kva_m": 10.65,
+          "transmission_network_r_kva_m": 17.77
+        },
+        {
+          "tx_zone": 1,
+          "tx_zone_label": "> 300km and ≤ 600km",
+          "voltage_code": 1,
+          "voltage": "< 500V",
+          "billcode": "NS11N",
+          "high_energy_c_kwh": 183.7,
+          "low_energy_c_kwh": 176.46,
+          "high_energy_demand_r_kva_m": 345.13,
+          "low_energy_demand_r_kva_m": 80.74,
+          "legacy_c_kwh": 24.78,
+          "generation_capacity_r_kva_m": 5.29,
+          "transmission_network_r_kva_m": 11.68
+        },
+        {
+          "tx_zone": 1,
+          "tx_zone_label": "> 300km and ≤ 600km",
+          "voltage_code": 2,
+          "voltage": "≥ 500V & < 66kV",
+          "billcode": "NS12N",
+          "high_energy_c_kwh": 178.97,
+          "low_energy_c_kwh": 171.91,
+          "high_energy_demand_r_kva_m": 336.22,
+          "low_energy_demand_r_kva_m": 78.66,
+          "legacy_c_kwh": 24.14,
+          "generation_capacity_r_kva_m": 12.27,
+          "transmission_network_r_kva_m": 11.26
+        },
+        {
+          "tx_zone": 1,
+          "tx_zone_label": "> 300km and ≤ 600km",
+          "voltage_code": 3,
+          "voltage": "≥ 66kV & ≤ 132kV",
+          "billcode": "NS13N",
+          "high_energy_c_kwh": 166.09,
+          "low_energy_c_kwh": 159.53,
+          "high_energy_demand_r_kva_m": 312.02,
+          "low_energy_demand_r_kva_m": 72.99,
+          "legacy_c_kwh": 22.4,
+          "generation_capacity_r_kva_m": 9.28,
+          "transmission_network_r_kva_m": 10.28
+        },
+        {
+          "tx_zone": 1,
+          "tx_zone_label": "> 300km and ≤ 600km",
+          "voltage_code": 4,
+          "voltage": "> 132kV*",
+          "billcode": "NS14N",
+          "high_energy_c_kwh": 154.88,
+          "low_energy_c_kwh": 148.76,
+          "high_energy_demand_r_kva_m": 290.95,
+          "low_energy_demand_r_kva_m": 68.07,
+          "legacy_c_kwh": 20.89,
+          "generation_capacity_r_kva_m": 10.65,
+          "transmission_network_r_kva_m": 17.96
+        },
+        {
+          "tx_zone": 2,
+          "tx_zone_label": "> 600km and ≤ 900km",
+          "voltage_code": 1,
+          "voltage": "< 500V",
+          "billcode": "NS21N",
+          "high_energy_c_kwh": 185.52,
+          "low_energy_c_kwh": 178.21,
+          "high_energy_demand_r_kva_m": 348.56,
+          "low_energy_demand_r_kva_m": 81.55,
+          "legacy_c_kwh": 24.78,
+          "generation_capacity_r_kva_m": 5.29,
+          "transmission_network_r_kva_m": 11.8
+        },
+        {
+          "tx_zone": 2,
+          "tx_zone_label": "> 600km and ≤ 900km",
+          "voltage_code": 2,
+          "voltage": "≥ 500V & < 66kV",
+          "billcode": "NS22N",
+          "high_energy_c_kwh": 180.74,
+          "low_energy_c_kwh": 173.62,
+          "high_energy_demand_r_kva_m": 339.56,
+          "low_energy_demand_r_kva_m": 79.44,
+          "legacy_c_kwh": 24.14,
+          "generation_capacity_r_kva_m": 12.27,
+          "transmission_network_r_kva_m": 11.37
+        },
+        {
+          "tx_zone": 2,
+          "tx_zone_label": "> 600km and ≤ 900km",
+          "voltage_code": 3,
+          "voltage": "≥ 66kV & ≤ 132kV",
+          "billcode": "NS23N",
+          "high_energy_c_kwh": 167.73,
+          "low_energy_c_kwh": 161.12,
+          "high_energy_demand_r_kva_m": 315.12,
+          "low_energy_demand_r_kva_m": 73.73,
+          "legacy_c_kwh": 22.4,
+          "generation_capacity_r_kva_m": 9.28,
+          "transmission_network_r_kva_m": 10.38
+        },
+        {
+          "tx_zone": 2,
+          "tx_zone_label": "> 600km and ≤ 900km",
+          "voltage_code": 4,
+          "voltage": "> 132kV*",
+          "billcode": "NS24N",
+          "high_energy_c_kwh": 156.41,
+          "low_energy_c_kwh": 150.23,
+          "high_energy_demand_r_kva_m": 293.85,
+          "low_energy_demand_r_kva_m": 68.75,
+          "legacy_c_kwh": 20.89,
+          "generation_capacity_r_kva_m": 10.65,
+          "transmission_network_r_kva_m": 18.12
+        },
+        {
+          "tx_zone": 3,
+          "tx_zone_label": "> 900km",
+          "voltage_code": 1,
+          "voltage": "< 500V",
+          "billcode": "NS31N",
+          "high_energy_c_kwh": 187.34,
+          "low_energy_c_kwh": 179.95,
+          "high_energy_demand_r_kva_m": 351.96,
+          "low_energy_demand_r_kva_m": 82.33,
+          "legacy_c_kwh": 24.78,
+          "generation_capacity_r_kva_m": 5.29,
+          "transmission_network_r_kva_m": 11.92
+        },
+        {
+          "tx_zone": 3,
+          "tx_zone_label": "> 900km",
+          "voltage_code": 2,
+          "voltage": "≥ 500V & < 66kV",
+          "billcode": "NS32N",
+          "high_energy_c_kwh": 182.51,
+          "low_energy_c_kwh": 175.32,
+          "high_energy_demand_r_kva_m": 342.87,
+          "low_energy_demand_r_kva_m": 80.21,
+          "legacy_c_kwh": 24.14,
+          "generation_capacity_r_kva_m": 12.27,
+          "transmission_network_r_kva_m": 11.47
+        },
+        {
+          "tx_zone": 3,
+          "tx_zone_label": "> 900km",
+          "voltage_code": 3,
+          "voltage": "≥ 66kV & ≤ 132kV",
+          "billcode": "NS33N",
+          "high_energy_c_kwh": 169.37,
+          "low_energy_c_kwh": 162.68,
+          "high_energy_demand_r_kva_m": 318.19,
+          "low_energy_demand_r_kva_m": 74.44,
+          "legacy_c_kwh": 22.4,
+          "generation_capacity_r_kva_m": 9.28,
+          "transmission_network_r_kva_m": 10.47
+        },
+        {
+          "tx_zone": 3,
+          "tx_zone_label": "> 900km",
+          "voltage_code": 4,
+          "voltage": "> 132kV*",
+          "billcode": "NS34N",
+          "high_energy_c_kwh": 157.93,
+          "low_energy_c_kwh": 151.71,
+          "high_energy_demand_r_kva_m": 296.71,
+          "low_energy_demand_r_kva_m": 69.41,
+          "legacy_c_kwh": 20.89,
+          "generation_capacity_r_kva_m": 10.65,
+          "transmission_network_r_kva_m": 18.3
+        }
+      ],
+      "distribution_network_charges_by_voltage": [
+        {
+          "voltage": "< 500V",
+          "network_capacity_r_kva_m": 42.66,
+          "network_demand_r_kva_m": 52.65,
+          "urban_lv_subsidy_r_kva_m": 0
+        },
+        {
+          "voltage": "≥ 500V & < 66kV",
+          "network_capacity_r_kva_m": 39.13,
+          "network_demand_r_kva_m": 26.29,
+          "urban_lv_subsidy_r_kva_m": 0
+        },
+        {
+          "voltage": "≥ 66kV & ≤ 132kV",
+          "network_capacity_r_kva_m": 14.16,
+          "network_demand_r_kva_m": 10.36,
+          "urban_lv_subsidy_r_kva_m": 11.09
+        },
+        {
+          "voltage": "> 132kV / Transmission connected",
+          "network_capacity_r_kva_m": 0,
+          "network_demand_r_kva_m": 0,
+          "urban_lv_subsidy_r_kva_m": 11.09
+        }
+      ],
+      "ancillary_service_by_voltage": [
+        {
+          "voltage": "< 500V",
+          "ancillary_service_c_kwh": 0.45
+        },
+        {
+          "voltage": "≥ 500V & < 66kV",
+          "ancillary_service_c_kwh": 0.42
+        },
+        {
+          "voltage": "≥ 66kV & ≤ 132kV",
+          "ancillary_service_c_kwh": 0.39
+        },
+        {
+          "voltage": "> 132kV*",
+          "ancillary_service_c_kwh": 0.37
+        }
+      ],
+      "service_admin_by_customer_category": [
+        {
+          "customer_category": "≤ 100 kVA",
+          "service_charge_r_pod_day": 14.94,
+          "admin_charge_r_pod_day": 0.79
+        },
+        {
+          "customer_category": "> 100 kVA & ≤ 500 kVA",
+          "service_charge_r_pod_day": 69.91,
+          "admin_charge_r_pod_day": 13.49
+        },
+        {
+          "customer_category": "> 500 kVA & ≤ 1 MVA",
+          "service_charge_r_pod_day": 215.91,
+          "admin_charge_r_pod_day": 21.07
+        },
+        {
+          "customer_category": ">1 MVA",
+          "service_charge_r_pod_day": 215.91,
+          "admin_charge_r_pod_day": 21.07
+        },
+        {
+          "customer_category": "Key customers",
+          "service_charge_r_pod_day": 1216.44,
+          "admin_charge_r_pod_day": 21.07
+        }
+      ],
+      "subsidies": {
+        "electrification_rural_subsidy_c_kwh": 5.37,
+        "affordability_subsidy_c_kwh": 5.1
+      },
+      "notes": [
+        "Sheet lists tariff rows as 'Nightsave Small' (Nightsave Urban Small); the >1 MVA service-charge row is labelled 'Nightsave Large'.",
+        "Voltage '> 132kV*' = 132 kV or Transmission connected."
+      ]
+    },
+    "nightsave_urban_large": {
+      "sheet": "Nightsave Large NLA",
+      "seasonal_tou": true,
+      "tou_structure": "seasonally differentiated single energy rate + seasonal energy demand charge [R/kVA/m]",
+      "tariff_name_in_sheet": "Nightsave Large (Nightsave Urban Large)",
+      "energy_blocks": [
+        {
+          "tx_zone": 0,
+          "tx_zone_label": "≤ 300km",
+          "voltage_code": 1,
+          "voltage": "< 500V",
+          "billcode": "NL01N",
+          "high_energy_c_kwh": 181.89,
+          "low_energy_c_kwh": 174.72,
+          "high_energy_demand_r_kva_m": 341.73,
+          "low_energy_demand_r_kva_m": 79.95,
+          "legacy_c_kwh": 24.78,
+          "generation_capacity_r_kva_m": 5.29,
+          "transmission_network_r_kva_m": 11.56
+        },
+        {
+          "tx_zone": 0,
+          "tx_zone_label": "≤ 300km",
+          "voltage_code": 2,
+          "voltage": "≥ 500V & < 66kV",
+          "billcode": "NL02N",
+          "high_energy_c_kwh": 177.2,
+          "low_energy_c_kwh": 170.21,
+          "high_energy_demand_r_kva_m": 332.91,
+          "low_energy_demand_r_kva_m": 77.88,
+          "legacy_c_kwh": 24.14,
+          "generation_capacity_r_kva_m": 12.27,
+          "transmission_network_r_kva_m": 11.15
+        },
+        {
+          "tx_zone": 0,
+          "tx_zone_label": "≤ 300km",
+          "voltage_code": 3,
+          "voltage": "≥ 66kV & ≤ 132kV",
+          "billcode": "NL03N",
+          "high_energy_c_kwh": 164.44,
+          "low_energy_c_kwh": 157.96,
+          "high_energy_demand_r_kva_m": 308.94,
+          "low_energy_demand_r_kva_m": 72.28,
+          "legacy_c_kwh": 22.4,
+          "generation_capacity_r_kva_m": 9.28,
+          "transmission_network_r_kva_m": 10.17
+        },
+        {
+          "tx_zone": 0,
+          "tx_zone_label": "≤ 300km",
+          "voltage_code": 4,
+          "voltage": "> 132kV*",
+          "billcode": "NL04N",
+          "high_energy_c_kwh": 153.35,
+          "low_energy_c_kwh": 147.3,
+          "high_energy_demand_r_kva_m": 286.37,
+          "low_energy_demand_r_kva_m": 67,
+          "legacy_c_kwh": 20.89,
+          "generation_capacity_r_kva_m": 10.65,
+          "transmission_network_r_kva_m": 17.77
+        },
+        {
+          "tx_zone": 1,
+          "tx_zone_label": "> 300km and ≤ 600km",
+          "voltage_code": 1,
+          "voltage": "< 500V",
+          "billcode": "NL11N",
+          "high_energy_c_kwh": 183.7,
+          "low_energy_c_kwh": 176.46,
+          "high_energy_demand_r_kva_m": 345.13,
+          "low_energy_demand_r_kva_m": 80.74,
+          "legacy_c_kwh": 24.78,
+          "generation_capacity_r_kva_m": 5.29,
+          "transmission_network_r_kva_m": 11.68
+        },
+        {
+          "tx_zone": 1,
+          "tx_zone_label": "> 300km and ≤ 600km",
+          "voltage_code": 2,
+          "voltage": "≥ 500V & < 66kV",
+          "billcode": "NL12N",
+          "high_energy_c_kwh": 178.97,
+          "low_energy_c_kwh": 171.91,
+          "high_energy_demand_r_kva_m": 336.22,
+          "low_energy_demand_r_kva_m": 78.66,
+          "legacy_c_kwh": 24.14,
+          "generation_capacity_r_kva_m": 12.27,
+          "transmission_network_r_kva_m": 11.26
+        },
+        {
+          "tx_zone": 1,
+          "tx_zone_label": "> 300km and ≤ 600km",
+          "voltage_code": 3,
+          "voltage": "≥ 66kV & ≤ 132kV",
+          "billcode": "NL13N",
+          "high_energy_c_kwh": 166.09,
+          "low_energy_c_kwh": 159.53,
+          "high_energy_demand_r_kva_m": 312.02,
+          "low_energy_demand_r_kva_m": 72.99,
+          "legacy_c_kwh": 22.4,
+          "generation_capacity_r_kva_m": 9.28,
+          "transmission_network_r_kva_m": 10.28
+        },
+        {
+          "tx_zone": 1,
+          "tx_zone_label": "> 300km and ≤ 600km",
+          "voltage_code": 4,
+          "voltage": "> 132kV*",
+          "billcode": "NL14N",
+          "high_energy_c_kwh": 154.88,
+          "low_energy_c_kwh": 148.76,
+          "high_energy_demand_r_kva_m": 290.95,
+          "low_energy_demand_r_kva_m": 68.07,
+          "legacy_c_kwh": 20.89,
+          "generation_capacity_r_kva_m": 10.65,
+          "transmission_network_r_kva_m": 17.96
+        },
+        {
+          "tx_zone": 2,
+          "tx_zone_label": "> 600km and ≤ 900km",
+          "voltage_code": 1,
+          "voltage": "< 500V",
+          "billcode": "NL21N",
+          "high_energy_c_kwh": 185.52,
+          "low_energy_c_kwh": 178.21,
+          "high_energy_demand_r_kva_m": 348.56,
+          "low_energy_demand_r_kva_m": 81.55,
+          "legacy_c_kwh": 24.78,
+          "generation_capacity_r_kva_m": 5.29,
+          "transmission_network_r_kva_m": 11.8
+        },
+        {
+          "tx_zone": 2,
+          "tx_zone_label": "> 600km and ≤ 900km",
+          "voltage_code": 2,
+          "voltage": "≥ 500V & < 66kV",
+          "billcode": "NL22N",
+          "high_energy_c_kwh": 180.74,
+          "low_energy_c_kwh": 173.62,
+          "high_energy_demand_r_kva_m": 339.56,
+          "low_energy_demand_r_kva_m": 79.44,
+          "legacy_c_kwh": 24.14,
+          "generation_capacity_r_kva_m": 12.27,
+          "transmission_network_r_kva_m": 11.37
+        },
+        {
+          "tx_zone": 2,
+          "tx_zone_label": "> 600km and ≤ 900km",
+          "voltage_code": 3,
+          "voltage": "≥ 66kV & ≤ 132kV",
+          "billcode": "NL23N",
+          "high_energy_c_kwh": 167.73,
+          "low_energy_c_kwh": 161.12,
+          "high_energy_demand_r_kva_m": 315.12,
+          "low_energy_demand_r_kva_m": 73.73,
+          "legacy_c_kwh": 22.4,
+          "generation_capacity_r_kva_m": 9.28,
+          "transmission_network_r_kva_m": 10.38
+        },
+        {
+          "tx_zone": 2,
+          "tx_zone_label": "> 600km and ≤ 900km",
+          "voltage_code": 4,
+          "voltage": "> 132kV*",
+          "billcode": "NL24N",
+          "high_energy_c_kwh": 156.41,
+          "low_energy_c_kwh": 150.23,
+          "high_energy_demand_r_kva_m": 293.85,
+          "low_energy_demand_r_kva_m": 68.75,
+          "legacy_c_kwh": 20.89,
+          "generation_capacity_r_kva_m": 10.65,
+          "transmission_network_r_kva_m": 18.12
+        },
+        {
+          "tx_zone": 3,
+          "tx_zone_label": "> 900km",
+          "voltage_code": 1,
+          "voltage": "< 500V",
+          "billcode": "NL31N",
+          "high_energy_c_kwh": 187.34,
+          "low_energy_c_kwh": 179.95,
+          "high_energy_demand_r_kva_m": 351.96,
+          "low_energy_demand_r_kva_m": 82.33,
+          "legacy_c_kwh": 24.78,
+          "generation_capacity_r_kva_m": 5.29,
+          "transmission_network_r_kva_m": 11.92
+        },
+        {
+          "tx_zone": 3,
+          "tx_zone_label": "> 900km",
+          "voltage_code": 2,
+          "voltage": "≥ 500V & < 66kV",
+          "billcode": "NL32N",
+          "high_energy_c_kwh": 182.51,
+          "low_energy_c_kwh": 175.32,
+          "high_energy_demand_r_kva_m": 342.87,
+          "low_energy_demand_r_kva_m": 80.21,
+          "legacy_c_kwh": 24.14,
+          "generation_capacity_r_kva_m": 12.27,
+          "transmission_network_r_kva_m": 11.47
+        },
+        {
+          "tx_zone": 3,
+          "tx_zone_label": "> 900km",
+          "voltage_code": 3,
+          "voltage": "≥ 66kV & ≤ 132kV",
+          "billcode": "NL33N",
+          "high_energy_c_kwh": 169.37,
+          "low_energy_c_kwh": 162.68,
+          "high_energy_demand_r_kva_m": 318.19,
+          "low_energy_demand_r_kva_m": 74.44,
+          "legacy_c_kwh": 22.4,
+          "generation_capacity_r_kva_m": 9.28,
+          "transmission_network_r_kva_m": 10.47
+        },
+        {
+          "tx_zone": 3,
+          "tx_zone_label": "> 900km",
+          "voltage_code": 4,
+          "voltage": "> 132kV*",
+          "billcode": "NL34N",
+          "high_energy_c_kwh": 157.93,
+          "low_energy_c_kwh": 151.71,
+          "high_energy_demand_r_kva_m": 296.71,
+          "low_energy_demand_r_kva_m": 69.41,
+          "legacy_c_kwh": 20.89,
+          "generation_capacity_r_kva_m": 10.65,
+          "transmission_network_r_kva_m": 18.3
+        }
+      ],
+      "distribution_network_charges_by_voltage": [
+        {
+          "voltage": "< 500V",
+          "network_capacity_r_kva_m": 42.66,
+          "network_demand_r_kva_m": 52.65,
+          "urban_lv_subsidy_r_kva_m": 0
+        },
+        {
+          "voltage": "≥ 500V & < 66kV",
+          "network_capacity_r_kva_m": 39.13,
+          "network_demand_r_kva_m": 26.29,
+          "urban_lv_subsidy_r_kva_m": 0
+        },
+        {
+          "voltage": "≥ 66kV & ≤ 132kV",
+          "network_capacity_r_kva_m": 14.16,
+          "network_demand_r_kva_m": 10.36,
+          "urban_lv_subsidy_r_kva_m": 11.09
+        },
+        {
+          "voltage": "> 132kV / Transmission connected",
+          "network_capacity_r_kva_m": 0,
+          "network_demand_r_kva_m": 0,
+          "urban_lv_subsidy_r_kva_m": 11.09
+        }
+      ],
+      "ancillary_service_by_voltage": [
+        {
+          "voltage": "< 500V",
+          "ancillary_service_c_kwh": 0.45
+        },
+        {
+          "voltage": "≥ 500V & < 66kV",
+          "ancillary_service_c_kwh": 0.42
+        },
+        {
+          "voltage": "≥ 66kV & ≤ 132kV",
+          "ancillary_service_c_kwh": 0.39
+        },
+        {
+          "voltage": "> 132kV*",
+          "ancillary_service_c_kwh": 0.37
+        }
+      ],
+      "service_admin_by_customer_category": [
+        {
+          "customer_category": ">1 MVA",
+          "service_charge_r_pod_day": 215.91,
+          "admin_charge_r_pod_day": 21.07
+        },
+        {
+          "customer_category": "Key customers",
+          "service_charge_r_pod_day": 1216.44,
+          "admin_charge_r_pod_day": 21.07
+        }
+      ],
+      "subsidies": {
+        "electrification_rural_subsidy_c_kwh": 5.37,
+        "affordability_subsidy_c_kwh": 5.1
+      },
+      "notes": [
+        "Extracted in addition to the brief's sheet list because the Nightsave Urban family spans two sheets (Small + Large).",
+        "Voltage '> 132kV*' = 132 kV or Transmission connected."
+      ]
+    }
+  },
+  "uos_reference": {
+    "sheet": "TOuS Original",
+    "note": "Despite the brief's expectation, this sheet contains UNBUNDLED USE-OF-SYSTEM charges and loss factors, NOT time-of-use clock windows. Captured as reference data.",
+    "reliability_service_charge_urban_c_kwh": [
+      {
+        "voltage": "< 500V",
+        "charge_c_kwh": 0.27
+      },
+      {
+        "voltage": "≥ 500V & < 66kV",
+        "charge_c_kwh": 0.26
+      },
+      {
+        "voltage": "≥ 66kV & ≤ 132kV",
+        "charge_c_kwh": 0.25
+      },
+      {
+        "voltage": "> 132kV",
+        "charge_c_kwh": 0.23
+      }
+    ],
+    "reliability_service_charge_rural_c_kwh": [
+      {
+        "voltage": "< 500V",
+        "charge_c_kwh": 0.27
+      },
+      {
+        "voltage": "≥ 500V & ≤ 22kV",
+        "charge_c_kwh": 0.27
+      }
+    ],
+    "etuos_urban_r_kva": [
+      {
+        "tx_zone": "≤ 300km",
+        "voltage": "< 500V",
+        "charge_r_kva": 11.3644
+      },
+      {
+        "tx_zone": "≤ 300km",
+        "voltage": "≥ 500V & < 66kV",
+        "charge_r_kva": 11.194
+      },
+      {
+        "tx_zone": "≤ 300km",
+        "voltage": "≥ 66kV & ≤ 132kV",
+        "charge_r_kva": 10.8362
+      },
+      {
+        "tx_zone": "> 300km & ≤ 600km",
+        "voltage": "< 500V",
+        "charge_r_kva": 11.4666
+      },
+      {
+        "tx_zone": "> 300km & ≤ 600km",
+        "voltage": "≥ 500V & < 66kV",
+        "charge_r_kva": 11.3133
+      },
+      {
+        "tx_zone": "> 300km & ≤ 600km",
+        "voltage": "≥ 66kV & ≤ 132kV",
+        "charge_r_kva": 10.9555
+      },
+      {
+        "tx_zone": "> 600km & ≤ 900km",
+        "voltage": "< 500V",
+        "charge_r_kva": 11.5859
+      },
+      {
+        "tx_zone": "> 600km & ≤ 900km",
+        "voltage": "≥ 500V & < 66kV",
+        "charge_r_kva": 11.4325
+      },
+      {
+        "tx_zone": "> 600km & ≤ 900km",
+        "voltage": "≥ 66kV & ≤ 132kV",
+        "charge_r_kva": 11.0577
+      },
+      {
+        "tx_zone": "> 900km",
+        "voltage": "< 500V",
+        "charge_r_kva": 11.7051
+      },
+      {
+        "tx_zone": "> 900km",
+        "voltage": "≥ 500V & < 66kV",
+        "charge_r_kva": 11.5518
+      },
+      {
+        "tx_zone": "> 900km",
+        "voltage": "≥ 66kV & ≤ 132kV",
+        "charge_r_kva": 11.177
+      }
+    ],
+    "etuos_rural_r_kva": [
+      {
+        "tx_zone": "≤ 300km",
+        "voltage": "< 500V",
+        "charge_r_kva": 11.7733
+      },
+      {
+        "tx_zone": "≤ 300km",
+        "voltage": "≥ 500V & < 66kV",
+        "charge_r_kva": 11.6711
+      },
+      {
+        "tx_zone": "> 300km & ≤ 600km",
+        "voltage": "< 500V",
+        "charge_r_kva": 11.8926
+      },
+      {
+        "tx_zone": "> 300km & ≤ 600km",
+        "voltage": "≥ 500V & < 66kV",
+        "charge_r_kva": 11.7903
+      },
+      {
+        "tx_zone": "> 600km & ≤ 900km",
+        "voltage": "< 500V",
+        "charge_r_kva": 12.0118
+      },
+      {
+        "tx_zone": "> 600km & ≤ 900km",
+        "voltage": "≥ 500V & < 66kV",
+        "charge_r_kva": 11.9096
+      },
+      {
+        "tx_zone": "> 900km",
+        "voltage": "< 500V",
+        "charge_r_kva": 12.1311
+      },
+      {
+        "tx_zone": "> 900km",
+        "voltage": "≥ 500V & < 66kV",
+        "charge_r_kva": 12.0289
+      }
+    ],
+    "distribution_network_charges_rural": [
+      {
+        "voltage": "< 500V",
+        "network_access_r_kva_m": 6.2017,
+        "network_demand_c_kwh": 19.6732
+      },
+      {
+        "voltage": "≥ 500V & ≤ 22kV",
+        "network_access_r_kva_m": 2.2976,
+        "network_demand_c_kwh": 17.2389
+      }
+    ],
+    "subsidy_charges_c_kwh": {
+      "applies_to": "Megaflex, Miniflex, Nightsave Urban Large, Nightsave Urban Small, Businessrate",
+      "rural_network_subsidy_c_kwh": 2.68,
+      "electrification_networks_subsidy_c_kwh": 0.91,
+      "total_electrification_and_rural_subsidy_c_kwh": 3.59
+    },
+    "service_admin_charges_unbundled": [
+      {
+        "customer_category": "≤ 100 kVA",
+        "service_charge_r_account_day": 9.49,
+        "admin_charge_r_pod_day": 2.08
+      },
+      {
+        "customer_category": "> 100 kVA & ≤ 500 kVA",
+        "service_charge_r_account_day": 43.38,
+        "admin_charge_r_pod_day": 12.16
+      },
+      {
+        "customer_category": "> 500 kVA & ≤ 1 MVA",
+        "service_charge_r_account_day": 133.5,
+        "admin_charge_r_pod_day": 24.17
+      },
+      {
+        "customer_category": "> 1 MVA",
+        "service_charge_r_account_day": 133.5,
+        "admin_charge_r_pod_day": 60.17
+      },
+      {
+        "customer_category": "Key customers",
+        "service_charge_r_account_day": 2616.06,
+        "admin_charge_r_pod_day": 83.55
+      }
+    ],
+    "unparseable": [
+      "Distribution network charges urban (rows 50-53): all cells are #REF! errors in the workbook itself - flagged, not guessed.",
+      "TUoS [> 132kV] charge table (rows 106-109): #REF! errors in the workbook itself - flagged, not guessed.",
+      "Distribution network charges for Generators: only >= 66kV & <= 132kV has a value (9.4 R/MW/m); <500V and >=500V&<66kV rows are blank in the sheet."
+    ],
+    "generator_distribution_network_access_r_mw_m": [
+      {
+        "voltage": "≥ 66kV & ≤ 132kV",
+        "network_access_r_mw_m": 9.4
+      }
+    ]
+  },
+  "loss_factors": {
+    "sheet": "Loss Factors",
+    "distribution_loss_factors": [
+      {
+        "voltage": "< 500V",
+        "urban": 1.1862,
+        "rural": 1.1973
+      },
+      {
+        "voltage": "≥ 500V & < 66kV",
+        "urban": 1.1556,
+        "rural": 1.1761
+      },
+      {
+        "voltage": "≥ 66kV & ≤ 132kV",
+        "urban": 1.0724,
+        "rural": null
+      },
+      {
+        "voltage": "> 132kV/Transmission connected",
+        "urban": 1,
+        "rural": null
+      }
+    ],
+    "transmission_loss_factors_for_loads": [
+      {
+        "distance_from_johannesburg": "≤ 300km",
+        "zone": 0,
+        "loss_factor": 1.006
+      },
+      {
+        "distance_from_johannesburg": "> 300km & ≤ 600km",
+        "zone": 1,
+        "loss_factor": 1.016
+      },
+      {
+        "distance_from_johannesburg": "> 600km & ≤ 900km",
+        "zone": 2,
+        "loss_factor": 1.0261
+      },
+      {
+        "distance_from_johannesburg": "> 900km",
+        "zone": 3,
+        "loss_factor": 1.0361
+      }
+    ],
+    "transmission_connected_generator_loss_factors": [
+      {
+        "region": "Cape",
+        "loss_factor": 1
+      },
+      {
+        "region": "Karoo",
+        "loss_factor": 1
+      },
+      {
+        "region": "Kwazulu-Natal",
+        "loss_factor": 1.01495
+      },
+      {
+        "region": "Vaal",
+        "loss_factor": 1.00026
+      },
+      {
+        "region": "Waterburg",
+        "loss_factor": 1.01352
+      },
+      {
+        "region": "Mpumalanga",
+        "loss_factor": 1.01487
+      }
+    ]
+  },
+  "validation": {
+    "anchors_source": "audited client bills (must match exactly)",
+    "anchor_checks": [
+      {
+        "check": "Landrate 1 energy c/kWh",
+        "expected": 242.9,
+        "extracted": 242.9,
+        "result": "PASS"
+      },
+      {
+        "check": "Landrate 1 ancillary c/kWh",
+        "expected": 0.45,
+        "extracted": 0.45,
+        "result": "PASS"
+      },
+      {
+        "check": "Landrate 1 network demand c/kWh",
+        "expected": 67.06,
+        "extracted": 67.06,
+        "result": "PASS"
+      },
+      {
+        "check": "Landrate 1 service R/POD/day",
+        "expected": 26.65,
+        "extracted": 26.65,
+        "result": "PASS"
+      },
+      {
+        "check": "Landrate 2 energy c/kWh",
+        "expected": 242.9,
+        "extracted": 242.9,
+        "result": "PASS"
+      },
+      {
+        "check": "Landrate 2 ancillary c/kWh",
+        "expected": 0.45,
+        "extracted": 0.45,
+        "result": "PASS"
+      },
+      {
+        "check": "Landrate 2 network demand c/kWh",
+        "expected": 67.06,
+        "extracted": 67.06,
+        "result": "PASS"
+      },
+      {
+        "check": "Landrate 2 service R/POD/day",
+        "expected": 26.65,
+        "extracted": 26.65,
+        "result": "PASS"
+      },
+      {
+        "check": "Landrate 3 energy c/kWh",
+        "expected": 242.9,
+        "extracted": 242.9,
+        "result": "PASS"
+      },
+      {
+        "check": "Landrate 3 ancillary c/kWh",
+        "expected": 0.45,
+        "extracted": 0.45,
+        "result": "PASS"
+      },
+      {
+        "check": "Landrate 3 network demand c/kWh",
+        "expected": 67.06,
+        "extracted": 67.06,
+        "result": "PASS"
+      },
+      {
+        "check": "Landrate 3 service R/POD/day",
+        "expected": 26.65,
+        "extracted": 26.65,
+        "result": "PASS"
+      },
+      {
+        "check": "Landrate 2 network capacity R/POD/day",
+        "expected": 105.49,
+        "extracted": 105.49,
+        "result": "PASS"
+      },
+      {
+        "check": "Landrate 2 generation capacity R/POD/day",
+        "expected": 8.15,
+        "extracted": 8.15,
+        "result": "PASS"
+      }
+    ],
+    "sanity_checks": [
+      {
+        "check": "TOU ordering peak > standard > off-peak in every seasonal block (Megaflex 16, Miniflex 16, Ruraflex 8 blocks, both seasons)",
+        "result": "PASS"
+      },
+      {
+        "check": "Megaflex blended energy well below Landrate variable rate",
+        "detail": "Megaflex zone 0 <500V blended 190.5 c/kWh (15/45/40 peak/std/off-peak profile, 3/9 month season weights) vs Landrate 1-3 variable 310.0 c/kWh (energy 242.9 + network demand 67.06)",
+        "result": "PASS"
+      },
+      {
+        "check": "Nightsave high season > low season for energy and energy-demand in every block (Rural 8, Urban Small 16, Urban Large 16)",
+        "result": "PASS"
+      }
+    ],
+    "all_anchors_pass": true
+  }
+}

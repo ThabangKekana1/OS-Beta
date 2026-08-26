@@ -17,7 +17,6 @@ export function MigrationShell({ children }: { children: React.ReactNode }) {
   const stored = useStoredMigrationAssessment();
   const unlockedProfile = useMigrationDashboardUnlockedProfile();
   const isLandingPage = pathname === "/" || pathname === "/migration";
-  const isSuccessPage = pathname === "/migration/success";
   const hasDashboardSession = Boolean(
     stored?.profileId && stored.registration && unlockedProfile === stored.profileId,
   );
@@ -37,7 +36,7 @@ export function MigrationShell({ children }: { children: React.ReactNode }) {
             <span className={styles.brandName}>Foundation—1 <span className={styles.brandPill}>Migration OS</span></span>
           </Link>
           <div className={styles.navLinks}>
-            {!isSuccessPage && hasDashboardSession ? (
+            {hasDashboardSession ? (
               <>
                 <a href={WEBSITE_ASSESSMENT_URL}>
                   Assessment

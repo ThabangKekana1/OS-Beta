@@ -1184,7 +1184,7 @@ function buildExplainer(
     `Energy waterfall: ${Math.round(dispatch.solarGenerationKwh).toLocaleString("en-ZA")} kWh/month generation supplies ${Math.round(dispatch.directSolarToLoadKwh).toLocaleString("en-ZA")} kWh directly and ${Math.round(dispatch.batteryToLoadKwh).toLocaleString("en-ZA")} kWh through storage. Residual grid import is ${Math.round(dispatch.residualGridKwh).toLocaleString("en-ZA")} kWh/month (${(100 - dispatch.onsiteCoveragePct).toFixed(1)}% of load).`,
     `Charge waterfall: onsite energy avoids ${fmtR(ufms.chargeWaterfall.avoidedByOnsite.energy)} of commodity energy and ${fmtR(ufms.chargeWaterfall.avoidedByOnsite.networkVolumetric)} of volumetric network charges. Fixed, capacity, reactive and unsupported demand savings remain in the bill.`,
     `Turnkey value: ${fmtR(ufms.capex.total)} including ${fmtR(ufms.capex.incrementalStorageCost)} of storage above the base package. The funded month-one charge is ${fmtR(ufms.ufmsMonthly)} and escalates at 6% for ${ENGINE_CONSTANTS.termMonths / 12} years.`,
-    `Complete UFMS path: ${fmtR(ufms.ufmsMonthly)} funding plus ${fmtR(ufms.residualGridMonthly)} retained grid charges gives ${fmtR(ufms.ufmsMonthly + ufms.residualGridMonthly)} per month, a ${fmtR(Math.abs(ufms.monthlySaving))} ${ufms.monthlySaving >= 0 ? "saving" : "premium"}.`,
+    `Complete funded path: ${fmtR(ufms.ufmsMonthly)} funding plus ${fmtR(ufms.residualGridMonthly)} retained grid charges gives ${fmtR(ufms.ufmsMonthly + ufms.residualGridMonthly)} per month, a ${fmtR(Math.abs(ufms.monthlySaving))} ${ufms.monthlySaving >= 0 ? "saving" : "premium"}.`,
     `Combined path: wheeling is applied only to ${Math.round(combined.wheeledResidualKwh).toLocaleString("en-ZA")} residual kWh after onsite dispatch. It is never applied to kWh already served by solar or the battery.`,
     resolved.evidenceLevel === "interval-validated"
       ? "Evidence level: interval-validated. Demand reduction is credited only when the submitted interval series supports it."
@@ -1537,7 +1537,7 @@ export function predictCombined(input: CombinedPredictionInput): CombinedPredict
     monthlyCost: round2(monthlyCost),
     monthlySaving: round2(monthlySaving),
     savingPctOfBill: round2(monthlySaving / monthlySpend),
-    note: "Combined prediction is non-additive: onsite UFMS generation serves load first and wheeling reprices only the residual eligible grid energy. Network, fixed and service charges within the residual remain on the distributor bill.",
+    note: "Combined prediction is non-additive: the on-site system serves your load first and wheeling reprices only the residual eligible grid energy. Network, fixed and service charges within the residual remain on the distributor bill.",
   };
 }
 
