@@ -1,7 +1,8 @@
-import { redirect } from "next/navigation";
+import { AdminDeckRoute } from "@/components/admin/routes/AdminDeckRoute";
 
 export default function AdminPage() {
-  // The operator lands on the Daily Worklist: the constraint-sorted screen
-  // that runs the whole book (doc 06 §5.3 item 1).
-  redirect("/admin/worklist");
+  // The founder lands on Today: the decision-first deck (doc 21).
+  // The constraint-sorted worklist survives under the console group at
+  // /admin/worklist for audit and edge cases.
+  return <AdminDeckRoute />;
 }

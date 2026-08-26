@@ -1,0 +1,52 @@
+import type { ReactNode } from "react";
+import { BrandMarkOneOS } from "@/components/sidebar/BrandMarkOneOS";
+import { AdminPortalProvider } from "@/components/admin/AdminPortalProvider";
+import { AdminSidebar } from "@/components/admin/AdminSidebar";
+import { AdminThemeShell } from "@/components/admin/AdminThemeShell";
+import { SaveStatusBanner } from "@/components/admin/SaveStatusBanner";
+import { MobileSidebarToggle } from "@/components/MobileSidebarToggle";
+import { requireServerAuthSession } from "@/lib/auth-server";
+
+/**
+ * Legacy console chrome. The CRM survives here for audit and edge cases at
+ * its original URLs — reachable, but no longer the habitat (doc 21).
+ */
+export default async function LegacyAdminLayout({ children }: { children: ReactNode }) {
+  const session = await requireServerAuthSession("admin");
+
+  return (
+    <AdminPortalProvider
+      actorRole={session.role as "admin" | "sales"}
+      actorEmail={session.email}
+      actorName={session.name}
+      actorAgentId={session.agentId}
+      includeSalesLeads={false}
+      includeRegistrationDrafts={false}
+    >
+      <AdminThemeShell>
+        <div className="admin-layout-grid min-h-screen bg-[var(--black)] text-[var(--ink)] lg:grid lg:grid-cols-[19rem_minmax(0,1fr)] lg:gap-4 lg:px-4 lg:py-4">
+          <div className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-black/95 px-4 py-3 backdrop-blur-xl lg:hidden">
+            <div className="flex items-center justify-between">
+              <BrandMarkOneOS />
+              <div className="flex items-center gap-3">
+                <span className="rounded-full border border-white/12 px-3 py-1 text-[0.62rem] uppercase tracking-[0.22em] text-white/58">
+                  Console
+                </span>
+                <MobileSidebarToggle>
+                  <AdminSidebar mobile />
+                </MobileSidebarToggle>
+              </div>
+            </div>
+          </div>
+
+          <AdminSidebar />
+
+          <main className="min-w-0 overflow-hidden px-4 pb-20 pt-20 lg:min-h-0 lg:px-2 lg:pb-20 lg:pt-0">
+            {children}
+          </main>
+        </div>
+      </AdminThemeShell>
+      <SaveStatusBanner />
+    </AdminPortalProvider>
+  );
+}

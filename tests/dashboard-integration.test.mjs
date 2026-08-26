@@ -36,12 +36,12 @@ test("sales shell uses scoped leads and hides admin-only navigation", () => {
 });
 
 test("admin shell, sales, and inbox use the retained admin routes", () => {
-  const layout = read("app/admin/layout.tsx");
-  const inboxPage = read("app/admin/inbox/page.tsx");
+  const layout = read("app/admin/(legacy)/layout.tsx");
+  const inboxPage = read("app/admin/(legacy)/inbox/page.tsx");
   const inboxRoute = read("components/admin/routes/AdminInboxRoute.tsx");
-  const salesPage = read("app/admin/sales/page.tsx");
+  const salesPage = read("app/admin/(legacy)/sales/page.tsx");
   const salesRoute = read("components/admin/routes/AdminSalesRoute.tsx");
-  const activityPage = read("app/admin/activity/page.tsx");
+  const activityPage = read("app/admin/(legacy)/activity/page.tsx");
   const activityRoute = read("components/admin/routes/AdminActivityRoute.tsx");
   const activityApi = read("app/api/admin/activity/report/route.ts");
 

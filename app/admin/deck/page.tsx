@@ -1,5 +1,7 @@
-import { AdminDeckRoute } from "@/components/admin/routes/AdminDeckRoute";
+import { redirect } from "next/navigation";
 
-export default function AdminDeckPage() {
-  return <AdminDeckRoute />;
+// The deck concept graduated into the whole admin surface (doc 21):
+// Today IS /admin. Old links land there.
+export default function LegacyDeckRedirect() {
+  redirect("/admin");
 }

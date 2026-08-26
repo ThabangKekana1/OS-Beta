@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { getServerAuthSession } from "@/lib/auth-server";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import { markSent, SEND_DAILY_CAP, canDispatch } from "@/lib/harness/gate";
+import { say } from "@/lib/harness/voice";
 import { sendEmail } from "@/lib/email";
 
 export async function POST() {
@@ -101,5 +102,9 @@ export async function POST() {
     results.push({ id: row.id, prospectKey, ok: true });
   }
 
-  return NextResponse.json({ ok: true, dispatched: results.filter((r) => r.ok).length, results });
+  const dispatched = results.filter((r) => r.ok).length;
+  if (dispatched > 0) {
+    say(`Dispatched ${dispatched} approved send(s). ${results.filter((r) => !r.ok).length} blocked by caps/cadence.`, { kind: "dispatch", dispatched });
+  }
+  return NextResponse.json({ ok: true, dispatched, results });
 }

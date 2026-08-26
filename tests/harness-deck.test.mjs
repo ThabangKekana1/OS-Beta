@@ -39,3 +39,28 @@ test("harness cognition runs on its own model tier via MODEL_HARNESS", () => {
   const client = read("lib/model/client.ts");
   assert.match(client, /input\.model\?\.trim\(\) \|\| modelForRole/);
 });
+
+test("MI speaks through the thread but only ever acts through the gate", () => {
+  const chatRoute = read("app/api/admin/deck/chat/route.ts");
+  assert.doesNotMatch(chatRoute, /sendEmail|resend\.com|markSent/, "chat has no wire access");
+  assert.match(chatRoute, /buildFounderTools/);
+
+  const founder = read("lib/harness/founder.ts");
+  for (const banned of ["sendEmail", "api.resend.com"]) {
+    assert.doesNotMatch(founder, new RegExp(banned), `${banned} must not exist in MI's toolset`);
+  }
+  // Killing sends is a founder verdict relayed as gate rejections with reasons.
+  assert.match(founder, /status: "rejected"/);
+  assert.match(founder, /killed by founder via MI/);
+
+  // The persona carries the honesty contract.
+  assert.match(founder, /Never invent figures/);
+
+  // The thread persists with three author roles.
+  const migration = read("supabase/migrations/20260826140000_deck_thread.sql");
+  assert.match(migration, /role text not null check \(role in \('founder', 'harness', 'event'\)\)/);
+
+  // Platform events speak: dispatch reports into the same stream.
+  const dispatch = read("app/api/admin/sales/harness/dispatch/route.ts");
+  assert.match(dispatch, /\bsay\(/);
+});
