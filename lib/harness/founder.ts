@@ -176,7 +176,31 @@ async function readStatus() {
 }
 
 async function readBook(input: BookQuery) {
-  return searchSalesBook({ query: input.query ?? "", sector: input.sector, limit: 8 });
+  const admin = getSupabaseAdminClient();
+  const rows = await searchSalesBook({ query: input.query ?? "", sector: input.sector, limit: 8 });
+  // The agent must know the size of its world, not just the slice it can see.
+  let totalInBook: number | null = null;
+  let matching: number | null = null;
+  if (admin) {
+    const all = await admin
+      .from("foundation1_sales_book")
+      .select("book_id", { count: "exact", head: true });
+    totalInBook = all.count ?? null;
+    if (input.sector) {
+      const sectorCount = await admin
+        .from("foundation1_sales_book")
+        .select("book_id", { count: "exact", head: true })
+        .eq("sector", input.sector);
+      matching = sectorCount.count ?? null;
+    }
+  }
+  return {
+    totalInBook,
+    matchingFilter: matching,
+    showing: rows.length,
+    note: "showing the top-ranked slice only; totalInBook is the full book size",
+    rows,
+  };
 }
 
 async function readQueue() {
@@ -189,13 +213,22 @@ async function readQueue() {
     .order("created_at", { ascending: false })
     .limit(60);
   if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => ({
+  // Rejected and sent rows are not actionable, but the counts are context the
+  // founder asks for, so the agent carries the whole picture.
+  const { data: allStatuses } = await admin.from("foundation1_send_queue").select("status").limit(500);
+  const counts: Record<string, number> = {};
+  for (const row of allStatuses ?? []) {
+    const status = row.status as string;
+    counts[status] = (counts[status] ?? 0) + 1;
+  }
+  const actionable = (data ?? []).map((row) => ({
     prospectKey: row.prospect_key,
     company: ((row.payload ?? {}) as { companyName?: string }).companyName,
     sector: ((row.payload ?? {}) as { sector?: string }).sector,
     score: ((row.payload ?? {}) as { score?: number }).score,
     status: row.status,
   }));
+  return { countsByStatus: counts, actionable };
 }
 
 export function founderToolNames(): FounderToolName[] {
