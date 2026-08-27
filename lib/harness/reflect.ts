@@ -234,7 +234,12 @@ export async function runReflectionPass(input: {
   });
 
   if (!completion.ok) {
-    return { ...base, skipped: "Model unavailable for reflection." };
+    const why = "error" in completion && completion.error
+      ? completion.error
+      : "reason" in completion && completion.reason
+        ? completion.reason
+        : "unknown";
+    return { ...base, skipped: `Model unavailable for reflection: ${String(why).slice(0, 200)}` };
   }
   const parsed = parseJsonObject(completion.text) as { proposals?: ReflectionProposal[] } | null;
   const raw = Array.isArray(parsed?.proposals) ? parsed!.proposals : [];
