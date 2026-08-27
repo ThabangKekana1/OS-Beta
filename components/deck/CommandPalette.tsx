@@ -76,7 +76,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
       onClick={onClose}
     >
       <div
-        className="w-full max-w-xl overflow-hidden rounded-xl border border-white/12 bg-[#0a0a0c] shadow-2xl"
+        className="app-surface w-full max-w-xl overflow-hidden rounded-lg"
         onClick={(event) => event.stopPropagation()}
       >
         <input
@@ -93,7 +93,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
             if (event.key === "Enter") { event.preventDefault(); commit(cursor); }
           }}
           placeholder="Jump to… or search the book"
-          className="w-full border-b border-white/8 bg-transparent px-4 py-3.5 text-sm outline-none placeholder:text-white/30"
+          className="w-full border-b border-white/8 bg-transparent px-4 py-3.5 font-mono text-[13px] tracking-wide outline-none placeholder:font-sans placeholder:text-white/28"
         />
         <ul className="max-h-80 overflow-y-auto p-1.5">
           {flatOptions.map((option, index) => (
@@ -103,7 +103,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                 onMouseEnter={() => setCursor(index)}
                 onClick={() => commit(index)}
                 className={`block w-full truncate rounded-md px-3 py-2 text-left text-[13px] ${
-                  index === cursor ? "bg-emerald-300/10 text-emerald-100" : "text-white/70 hover:bg-white/5"
+                  index === cursor ? "bg-white/[0.05] text-white" : "text-white/70 hover:bg-white/[0.03]"
                 }`}
               >
                 {option.label}
@@ -111,7 +111,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
             </li>
           ))}
           {!flatOptions.length && (
-            <li className="px-3 py-6 text-center text-xs opacity-40">Nothing matches "{query}"</li>
+            <li className="px-3 py-6 text-center font-mono text-[10px] uppercase tracking-[0.14em] text-white/35">NO MATCH · {query}</li>
           )}
         </ul>
       </div>

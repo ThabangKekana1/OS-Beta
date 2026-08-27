@@ -1,13 +1,13 @@
 "use client";
 
 /**
- * The Deck (doc 21) — the admin front door. One ordered queue of verdicts:
- * Y approves, N rejects with a reason, E expands, J/K moves, A approves every
- * visible draft in the current filter. Every card shows its evidence before
- * it asks for a keystroke.
+ * The Deck — Today (doc 21). Design system: 1OS operator tokens
+ * (--panel/--ink/--line/--electric) per NEW F-1 DESIGN_GUIDE.md discipline:
+ * evidence-first density, shared-border matrices, 6px geometry, telemetry
+ * labels, pills reserved for status, motion only for state.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, Inbox, Sparkles } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { AdminBadge, AdminHeader } from "@/components/admin/AdminPrimitives";
 
 type DeckItem = {
@@ -46,7 +46,6 @@ export function AdminDeckRoute() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
-  const listRef = useRef<HTMLDivElement>(null);
 
   const refresh = useCallback(async () => {
     const response = await fetch("/api/admin/deck", { cache: "no-store" });
@@ -71,7 +70,7 @@ export function AdminDeckRoute() {
         body: JSON.stringify({ verdicts }),
       });
       const payload = await response.json().catch(() => null);
-      setNotice(payload?.ok ? `${payload.applied} verdict(s) applied.` : payload?.error ?? "Verdicts failed.");
+      setNotice(payload?.ok ? `${payload.applied} verdict(s) recorded.` : payload?.error ?? "Verdicts failed.");
       setBusy(false);
       await refresh();
     },
@@ -154,125 +153,153 @@ export function AdminDeckRoute() {
   }, [view]);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="space-y-8">
       <AdminHeader
-        eyebrow="1-MI · The Deck"
-        title="Today."
-        description="Everything that needs you, in one order. J/K move · Y approve · N reject · E expand · everything else already happened."
+        eyebrow="Today"
+        title="The verdict stack."
+        description="Everything that needs you, ordered. J/K move · Y approve · N reject · E expand."
+        actions={
+          <button type="button" onClick={() => void refresh()} className="line-label flex items-center gap-2 hover:text-white">
+            <RefreshCw className="size-3" /> sync
+          </button>
+        }
       />
 
-      {notice && (
-        <p className="rounded-md border border-emerald-300/20 bg-emerald-300/10 px-3 py-2 text-sm text-emerald-200">{notice}</p>
-      )}
-
-      <section className="grid grid-cols-3 gap-3 text-sm">
-        <div className="rounded-lg border border-white/12 bg-white/[0.03] p-3">
-          <p className="text-[11px] uppercase tracking-wide opacity-60">Deal book</p>
-          <p className="mt-1 font-medium">{zar(view?.brief.dealBook?.gatedValueZar ?? 0)}</p>
-          <div className="mt-2 h-1 rounded bg-white/10"><div className="h-1 rounded bg-emerald-400/80" style={{ width: `${goalPct}%` }} /></div>
-          <p className="mt-1 text-[11px] opacity-50">{goalPct}% of R100m · {funnel?.counts.sent ?? 0} touched</p>
+      {/* Brief matrix: one cell row, shared borders, telemetry labels */}
+      <section className="grid grid-cols-1 overflow-hidden rounded-md border border-white/10 sm:grid-cols-3 sm:gap-px sm:bg-white/10">
+        <div className="bg-[var(--canvas)] p-4">
+          <p className="line-label">Deal book · term sheet gated</p>
+          <p className="mt-3 font-mono text-xl tracking-tight text-white">{zar(view?.brief.dealBook?.gatedValueZar ?? 0)}</p>
+          <div className="mt-3 h-px w-full bg-white/12">
+            <div className="h-px bg-[var(--electric)]" style={{ width: `${Math.max(goalPct, 1)}%` }} />
+          </div>
+          <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.14em] text-white/40">
+            {goalPct}% OF R100M · {view?.brief.dealBook?.gatedCount ?? 0} GATED · PIPELINE {zar(view?.brief.dealBook?.weightedPipelineZar ?? 0)}
+          </p>
         </div>
-        <div className="rounded-lg border border-white/12 bg-white/[0.03] p-3">
-          <p className="text-[11px] uppercase tracking-wide opacity-60">Waiting on you</p>
-          <p className="mt-1 text-2xl font-medium">{drafts.length}</p>
-          <button type="button" onClick={() => void approveAllVisible()} disabled={busy || !drafts.length}
-            className="mt-2 text-xs underline decoration-dotted opacity-70 hover:opacity-100 disabled:opacity-30">
-            batch approve…
-          </button>
-        </div>
-        <div className="rounded-lg border border-white/12 bg-white/[0.03] p-3">
-          <p className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide opacity-60"><Sparkles className="size-3" /> What the harness changed</p>
-          <ul className="mt-1 space-y-1 text-[11px] leading-4 opacity-75">
-            {(view?.decisions ?? []).slice(0, 2).map((d) => (
-              <li key={d.id} className="truncate" title={d.reason ?? ""}>{d.summary ?? d.id}</li>
+        <div className="border-t border-white/10 bg-[var(--canvas)] p-4 sm:border-t-0">
+          <p className="line-label">Funnel · cumulative</p>
+          <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 font-mono text-[11px] text-white/70">
+            {[["sent", funnel?.counts.sent], ["replied", funnel?.counts.reply], ["bills-in", funnel?.counts.bills_in], ["term sheet", funnel?.counts.term_sheet]].map(([label, value]) => (
+              <div key={String(label)} className="flex justify-between border-b border-white/6 pb-1">
+                <dt className="text-white/45">{label}</dt>
+                <dd className="tabular-nums">{value ?? 0}</dd>
+              </div>
             ))}
-            {!view?.decisions?.length && <li className="opacity-50">No self-changes yet.</li>}
-          </ul>
+          </dl>
+        </div>
+        <div className="border-t border-white/10 bg-[var(--canvas)] p-4 sm:border-t-0">
+          <p className="line-label">Verdicts waiting</p>
+          <p className="mt-3 flex items-baseline gap-3">
+            <span className="font-mono text-xl tracking-tight text-white">{drafts.length}</span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/40">{view?.approvedCount ?? 0} APPROVED &amp; SENDABLE</span>
+          </p>
+          <button
+            type="button"
+            onClick={() => void approveAllVisible()}
+            disabled={busy || !drafts.length}
+            className="mt-3 min-h-[40px] rounded-sm border border-white/16 px-3 py-1.5 text-xs text-white/80 transition hover:border-white/40 hover:text-white disabled:pointer-events-none disabled:opacity-30"
+          >
+            Batch approve…
+          </button>
         </div>
       </section>
 
-      <section ref={listRef} className="space-y-2">
+      {notice ? (
+        <p className="rounded-sm border border-white/14 bg-white/[0.03] px-3 py-2 text-xs text-white/80">{notice}</p>
+      ) : null}
+
+      <section className="space-y-2">
         {!drafts.length && (
-          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-white/14 py-12 text-center">
-            <Inbox className="size-6 opacity-40" />
-            <p className="text-sm opacity-60">Queue clear. The harness works; you live your life.</p>
+          <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-white/12 py-14 text-center">
+            <span className="status-dot size-1.5 animate-pulse text-[var(--electric)]" style={{ animationDuration: "3.5s" }} />
+            <p className="text-sm text-white/60">Queue clear.</p>
+            <p className="line-label">MI WORKS. YOU DECIDE.</p>
           </div>
         )}
-        {drafts.map((item, index) => {
-          const isFocus = index === cursor;
-          const isOpen = expanded.has(item.id);
-          return (
-            <article
-              key={item.id}
-              onMouseEnter={() => setCursor(index)}
-              className={`cursor-default rounded-lg border p-3 transition-colors ${
-                isFocus ? "border-emerald-300/40 bg-emerald-300/[0.04]" : "border-white/10 bg-white/[0.02]"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <button type="button" onClick={() => setExpanded((prev) => { const n = new Set(prev); n.has(item.id) ? n.delete(item.id) : n.add(item.id); return n; })}
-                  className="min-w-0 flex-1 text-left">
-                  <p className="truncate text-sm font-medium">
-                    {isFocus ? <span className="mr-1.5 text-emerald-300">›</span> : null}
-                    {item.subject}
-                  </p>
-                  <p className="truncate text-xs opacity-55">
-                    {item.payload.companyName ?? item.prospectKey}
-                    {item.toAddress ? ` → ${item.toAddress}` : ""}
-                    {item.payload.sector ? ` · ${item.payload.sector}` : ""}
-                    {" · "}
-                    {(item.createdAt ?? "").slice(0, 16).replace("T", " ")}
-                  </p>
-                </button>
-                <div className="flex shrink-0 items-center gap-2">
-                  <AdminBadge label={typeof item.payload.score === "number" ? `${item.payload.score}` : "—"} tone={isFocus ? "bright" : "neutral"} />
-                  {isOpen ? <ChevronUp className="size-4 opacity-50" /> : <ChevronDown className="size-4 opacity-50" />}
-                </div>
-              </div>
+        {drafts.length > 0 && (
+          <ul className="divide-y divide-white/8 overflow-hidden rounded-md border border-white/12 bg-white/[0.015]">
+            {drafts.map((item, index) => {
+              const isFocus = index === cursor;
+              const isOpen = expanded.has(item.id);
+              return (
+                <li
+                  key={item.id}
+                  onMouseEnter={() => setCursor(index)}
+                  className={`relative transition-colors ${isFocus ? "bg-white/[0.035]" : "hover:bg-white/[0.02]"}`}
+                >
+                  {isFocus ? <span aria-hidden className="absolute inset-y-0 left-0 w-0.5 bg-[var(--electric)]" /> : null}
+                  <div className="flex items-start justify-between gap-4 px-4 py-3 pl-5">
+                    <button type="button" onClick={() => setExpanded((prev) => { const n = new Set(prev); n.has(item.id) ? n.delete(item.id) : n.add(item.id); return n; })} className="min-w-0 flex-1 text-left">
+                      <p className={`truncate text-[13px] ${isFocus ? "text-white" : "text-white/85"}`}>
+                        {item.subject}
+                      </p>
+                      <p className="mt-1 truncate font-mono text-[10px] uppercase tracking-[0.12em] text-white/40">
+                        {(item.payload.companyName ?? item.prospectKey)}
+                        {item.toAddress ? ` → ${item.toAddress}` : ""}
+                        {item.payload.sector ? ` · ${item.payload.sector}` : ""}
+                        {" · "}
+                        {(item.createdAt ?? "").slice(0, 16).replace("T", " ")}
+                      </p>
+                    </button>
+                    <span className={`mt-0.5 shrink-0 font-mono text-[11px] tabular-nums ${isFocus ? "text-white" : "text-white/50"}`}>
+                      {typeof item.payload.score === "number" ? String(item.payload.score).padStart(2, "0") : "--"}
+                    </span>
+                  </div>
 
-              {isOpen && (
-                <div className="mt-3 space-y-2">
-                  {!!item.payload.scoreReasons?.length && (
-                    <ul className="flex flex-wrap gap-1.5">
-                      {item.payload.scoreReasons.map((reason) => (
-                        <li key={reason} className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] opacity-75">{reason}</li>
-                      ))}
-                    </ul>
+                  {isOpen && (
+                    <div className="space-y-2 px-5 pb-3">
+                      {!!item.payload.scoreReasons?.length && (
+                        <p className="font-mono text-[10px] leading-4 text-white/45">
+                          {item.payload.scoreReasons.map((reason) => reason.toUpperCase()).join(" · ")}
+                        </p>
+                      )}
+                      <pre className="whitespace-pre-wrap break-words rounded-sm border border-white/8 bg-black/45 p-3 text-xs leading-5 text-white/85">{item.bodyText}</pre>
+                    </div>
                   )}
-                  <pre className="whitespace-pre-wrap break-words rounded-md bg-black/45 p-3 text-[12px] leading-5 opacity-90">{item.bodyText}</pre>
-                </div>
-              )}
 
-              {isFocus && (
-                <div className="mt-2.5 flex items-center gap-2 text-[11px] opacity-80">
-                  <kbd className="rounded border border-white/20 px-1.5 py-0.5">Y</kbd> approve
-                  <kbd className="ml-2 rounded border border-white/20 px-1.5 py-0.5">N</kbd> reject
-                  <kbd className="ml-2 rounded border border-white/20 px-1.5 py-0.5">E</kbd> expand
-                  <span className="ml-auto opacity-50">{index + 1}/{drafts.length}</span>
-                </div>
-              )}
-            </article>
-          );
-        })}
+                  {isFocus ? (
+                    <div className="flex items-center gap-3 px-5 pb-3 font-mono text-[10px] uppercase tracking-[0.12em] text-white/55">
+                      <span><kbd className="mr-1 rounded-sm border border-white/18 px-1 py-0.5">Y</kbd>APPROVE</span>
+                      <span><kbd className="mr-1 rounded-sm border border-white/18 px-1 py-0.5">N</kbd>REJECT</span>
+                      <span><kbd className="mr-1 rounded-sm border border-white/18 px-1 py-0.5">E</kbd>EXPAND</span>
+                      <span className="ml-auto tabular-nums text-white/35">{index + 1}/{drafts.length}</span>
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </section>
 
       {!!view?.receipts?.length && (
-        <section className="space-y-1.5">
-          <h2 className="text-[11px] uppercase tracking-widest opacity-40">Receipts{view.receiptsHidden > 0 ? ` (+${view.receiptsHidden} older)` : ""}</h2>
-          <ul className="divide-y divide-white/6 rounded-lg border border-white/8">
+        <section className="space-y-2">
+          <h2 className="line-label">Receipts{view.receiptsHidden > 0 ? ` · +${view.receiptsHidden} OLDER` : ""}</h2>
+          <ul className="divide-y divide-white/6 rounded-md border border-white/8">
             {view.receipts.map((r) => (
-              <li key={r.id} className="flex items-center justify-between px-3 py-1.5 text-xs">
-                <span className="truncate opacity-65">{r.subject}</span>
-                <span className={`shrink-0 text-[10px] uppercase ${
-                  r.status === "sent" ? "text-emerald-300/70" : r.status === "approved" ? "text-sky-300/70" : "text-rose-300/70"
-                }`}>
-                  {r.status}{r.sentAt ? ` ${r.sentAt.slice(0, 10)}` : ""}
-                </span>
+              <li key={r.id} className="flex items-center justify-between px-4 py-2 text-xs">
+                <span className="truncate text-white/60">{r.subject}</span>
+                <ReceiptStatus status={r.status} stamp={r.sentAt ?? r.createdAt} />
               </li>
             ))}
           </ul>
         </section>
       )}
     </div>
+  );
+}
+
+function ReceiptStatus({ status, stamp }: { status: DeckItem["status"]; stamp: string }) {
+  const tone =
+    status === "sent"
+      ? "text-[var(--electric)]"
+      : status === "approved"
+        ? "text-white/80"
+        : "text-white/40";
+  return (
+    <span className={`shrink-0 font-mono text-[10px] uppercase tracking-[0.12em] ${tone}`}>
+      {status}{stamp ? ` · ${stamp.slice(0, 10)}` : ""}
+    </span>
   );
 }

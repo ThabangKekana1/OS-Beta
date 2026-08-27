@@ -31,20 +31,20 @@ export function AdminThreadsRoute() {
   }, []);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
+    <div className="space-y-7">
       <AdminHeader
         eyebrow="Threads"
         title="Live conversations."
         description="Every human you are currently in motion with. Replies are yours; drafts waiting on verdicts live in Today."
       />
-      <ul className="divide-y divide-white/8 rounded-xl border border-white/10">
+      <ul className="divide-y divide-white/8 rounded-md border border-white/10">
         {(threads ?? []).map((thread) => (
-          <li key={thread.id} className="flex items-center gap-3 px-4 py-3">
-            {thread.source === "email" ? <Mail className="size-4 opacity-40" /> : <MessageSquareText className="size-4 opacity-40" />}
+          <li key={thread.id} className="flex min-h-[44px] items-center gap-3 px-4 py-2.5">
+            {thread.source === "email" ? <Mail className="size-3.5 text-white/35" /> : <MessageSquareText className="size-3.5 text-white/35" />}
             <div className="min-w-0 flex-1">
               <p className={`truncate text-[13px] ${thread.unread ? "font-medium text-white" : "text-white/75"}`}>
                 {thread.title}
-                {thread.unread ? <span className="ml-2 rounded bg-emerald-300/15 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-emerald-300">new</span> : null}
+                {thread.unread ? <span className="status-dot text-[var(--electric)]" aria-label="unread" /> : null}
               </p>
               {thread.snippet ? <p className="truncate text-[11px] opacity-45">{thread.snippet}</p> : null}
             </div>

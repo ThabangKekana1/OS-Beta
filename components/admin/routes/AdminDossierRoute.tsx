@@ -56,11 +56,11 @@ export function AdminDossierRoute({ prospectKey }: { prospectKey: string }) {
       <AdminHeader eyebrow="Dossier" title={dossier?.book?.company_name ?? prospectKey} description="" />
 
       {error && (
-        <p className="rounded-md border border-rose-300/20 bg-rose-300/10 px-3 py-2 text-sm text-rose-200">{error}</p>
+        <p className="rounded-sm border border-[color:var(--magenta)]/30 bg-[color:var(--magenta)]/10 px-3 py-2 font-mono text-xs text-white/85">{error}</p>
       )}
 
       {dossier?.book && (
-        <section className="space-y-2 rounded-lg border border-white/10 p-4">
+        <section className="space-y-2 overflow-hidden rounded-md border border-white/10 bg-[var(--canvas)] p-4">
           <p className="text-[11px] uppercase tracking-widest opacity-50">The evidence</p>
           <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-[13px]">
             <Fact label="Sector" value={[dossier.book.sector, dossier.book.sub_sector].filter(Boolean).join(" · ")} />
@@ -77,7 +77,7 @@ export function AdminDossierRoute({ prospectKey }: { prospectKey: string }) {
             />
           </div>
           {dossier.book.scale_signal && (
-            <p className="border-l-2 border-emerald-300/30 pl-3 text-[13px] italic leading-5 opacity-85">
+            <p className="border-l-2 border-[var(--electric)] pl-3 text-[13px] italic leading-5 text-white/85">
               "{dossier.book.scale_signal}"
             </p>
           )}
@@ -96,7 +96,7 @@ export function AdminDossierRoute({ prospectKey }: { prospectKey: string }) {
         <p className="text-[11px] uppercase tracking-widest opacity-50">Funnel position</p>
         <ol className="flex flex-wrap gap-1.5">
           {(dossier?.outcomes ?? []).map((o, i) => (
-            <li key={`${o.event}-${i}`} className="rounded-full border border-emerald-300/25 bg-emerald-300/5 px-2.5 py-0.5 text-[11px] text-emerald-200">
+            <li key={`${o.event}-${i}`} className="rounded-full border border-white/14 px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] text-white/75">
               {o.event.replaceAll("_", " ")}
             </li>
           ))}
@@ -126,7 +126,7 @@ export function AdminDossierRoute({ prospectKey }: { prospectKey: string }) {
           <p className="text-[11px] uppercase tracking-widest opacity-50">What the harness remembers</p>
           <ul className="space-y-1.5">
             {dossier.memory.map((m, i) => (
-              <li key={i} className="rounded-md border border-white/8 bg-white/[0.02] px-3 py-2 text-xs leading-5 opacity-80">
+              <li key={i} className="border-b border-white/8 px-0 py-2  px-3 py-2 text-xs leading-5 opacity-80">
                 <span className="mr-2 rounded bg-white/8 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">{m.kind}</span>
                 {JSON.stringify(m.content).slice(0, 300)}
               </li>

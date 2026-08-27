@@ -1,0 +1,24 @@
+import { chromium } from "@playwright/test";
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+await page.goto("http://127.0.0.1:3002/login?next=%2Fadmin");
+const EMAIL = process.env.DESIGN_SHOTS_EMAIL;
+const PASSWORD = process.env.DESIGN_SHOTS_PASSWORD;
+if (!EMAIL || !PASSWORD) { console.error("Set DESIGN_SHOTS_EMAIL and DESIGN_SHOTS_PASSWORD."); process.exit(1); }
+await page.locator('input[type="email"]').fill(EMAIL);
+await page.locator('input[type="password"]').fill(PASSWORD);
+await Promise.all([page.waitForURL((u) => !u.pathname.startsWith("/login")), page.locator('button[type="submit"]').click()]);
+await page.waitForSelector("html[data-mi-ready='1']", { timeout: 30000 });
+await page.waitForTimeout(1200);
+await page.screenshot({ path: "/tmp/shot-today.png" });
+await page.getByTestId("mi-toggle").click();
+await page.waitForTimeout(400);
+await page.getByTestId("mi-input").fill("Brief me");
+await page.getByTestId("mi-input").press("Enter");
+await page.waitForTimeout(9000);
+await page.screenshot({ path: "/tmp/shot-mi.png" });
+await page.goto("http://127.0.0.1:3002/admin/briefs");
+await page.waitForTimeout(2500);
+await page.screenshot({ path: "/tmp/shot-briefs.png" });
+await browser.close();
+console.log("shots saved");
