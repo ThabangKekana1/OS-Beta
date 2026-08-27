@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateAndStoreWeeklyBrief } from "@/lib/intelligence/learning-store";
+import { runReflectionPass } from "@/lib/harness/reflect";
 import { secureTelemetryKeyMatches } from "@/lib/intelligence/telemetry";
 import {
   runImprovementLearningCycle,
@@ -31,7 +32,25 @@ export async function GET(request: NextRequest) {
     const weeklyBrief = await generateAndStoreWeeklyBrief({
       environment: runtimeEnvironment(),
     });
-    return NextResponse.json({ ok: true, ...result, weeklyBrief });
+    // Recursive self-improvement: each agent reflects on its own outcomes and
+    // rewrites its playbook. Never throws into the cycle; a failed reflection
+    // leaves yesterday's playbook in place.
+    const reflections = await Promise.all(
+      (["sales-harness", "dawn"] as const).map(async (agent) => {
+        try {
+          return await runReflectionPass({ agent });
+        } catch (error) {
+          return {
+            agent,
+            evidenceCount: 0,
+            proposals: [],
+            applied: [],
+            skipped: error instanceof Error ? error.message : "reflection failed",
+          };
+        }
+      }),
+    );
+    return NextResponse.json({ ok: true, ...result, weeklyBrief, reflections });
   } catch (error) {
     return NextResponse.json(
       {

@@ -14,6 +14,7 @@
 import { randomUUID } from "node:crypto";
 import { completeChat, parseJsonObject, type ModelCompletion } from "@/lib/model/client";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
+import { loadPlaybookText } from "./memory";
 import type { HarnessToolMap } from "./tools";
 
 const MAX_ROUNDS_DEFAULT = 4;
@@ -100,8 +101,21 @@ export async function runHarness(input: HarnessRunInput): Promise<HarnessRunResu
     ? input.systemPrompt
     : `${input.systemPrompt}\n\nAvailable tools: ${toolNames.join(", ")}. Call only these, exactly by these names.`;
 
+  // Recursive self-improvement, closed here: what this agent learned from real
+  // outcomes is loaded into every run, so yesterday's evidence changes today's
+  // behaviour without anyone touching code.
+  let systemPrompt = systemWithTools;
+  try {
+    const learned = await loadPlaybookText(input.agent);
+    if (learned && !learned.startsWith("No learned playbook")) {
+      systemPrompt = `${systemWithTools}\n\nLEARNED PLAYBOOK (from your own outcomes, follow it):\n${learned}`;
+    }
+  } catch {
+    // A lagging playbook must never stop a run.
+  }
+
   const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
-    { role: "system", content: systemWithTools },
+    { role: "system", content: systemPrompt },
     {
       role: "user",
       content: [

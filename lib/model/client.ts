@@ -85,7 +85,7 @@ export async function completeChat(input: {
    * chat latency low and stops reasoning from consuming the whole token budget.
    * Omitted entirely unless set, so plain OpenAI-compatible providers never see it.
    */
-  thinking?: "enabled" | "disabled";
+  thinking?: "enabled" | "disabled" | "low" | "high" | "max";
   signal?: AbortSignal;
 }): Promise<ModelCompletion> {
   const config = modelConfig();
@@ -125,6 +125,14 @@ export async function completeChat(input: {
 
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
+      // Some reasoning models (glm-5.3 flash) refuse "disabled" thinking. Retry
+      // once at the lowest reasoning setting rather than losing the call.
+      if (input.thinking && /cannot be disabled|"code"\s*:\s*"?1210/i.test(detail)) {
+        clearTimeout(timeout);
+        const { thinking: _dropped, ...rest } = input;
+        void _dropped;
+        return completeChat(rest);
+      }
       return {
         ok: false,
         error: `Model request failed (${response.status}). ${detail.slice(0, 400)}`,

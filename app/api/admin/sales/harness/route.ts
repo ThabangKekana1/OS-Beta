@@ -12,6 +12,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import { computeDealBook } from "@/lib/harness/dealbook";
 import { queueSendDraft, type SendQueueStatus } from "@/lib/harness/gate";
 import { buildFirstTouchDraft } from "@/lib/harness/outreach";
+import { activePlaybookStamp } from "@/lib/harness/reflect";
 import { searchSalesBook } from "@/lib/harness/tools";
 
 async function requireAdmin() {
@@ -99,12 +100,19 @@ export async function POST(request: Request) {
   const all = await searchSalesBook({ limit: 200 });
   const targets = all.filter((lead) => !queued.has(lead.bookId));
 
+  // Every draft carries the playbook versions that shaped it, so each version
+  // can be scored against its own outcomes later (lib/harness/reflect).
+  const stamp = await activePlaybookStamp("sales-harness").catch(() => ({}));
+
   let created = 0;
   for (const lead of targets) {
     if (created >= wanted) break;
     const draft = buildFirstTouchDraft(lead);
     if (!draft) continue;
-    await queueSendDraft(draft);
+    await queueSendDraft({
+      ...draft,
+      payload: { ...(draft.payload ?? {}), playbook: stamp },
+    });
     created += 1;
   }
   return NextResponse.json({ ok: true, created });

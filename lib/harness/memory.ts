@@ -29,15 +29,23 @@ export async function loadPlaybook(agent: string): Promise<PlaybookEntry[]> {
     .from("foundation1_agent_playbooks")
     .select("*")
     .eq("agent", agent)
-    .order("key", { ascending: true });
+    .order("key", { ascending: true })
+    .order("version", { ascending: false });
   if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => ({
-    key: row.key as string,
-    content: row.content as string,
-    version: row.version as number,
-    reason: row.reason as string,
-    updatedAt: row.updated_at as string,
-  }));
+  // History is kept forever; only the newest version of each key is active.
+  const active = new Map<string, PlaybookEntry>();
+  for (const row of data ?? []) {
+    const key = row.key as string;
+    if (active.has(key)) continue;
+    active.set(key, {
+      key,
+      content: row.content as string,
+      version: row.version as number,
+      reason: row.reason as string,
+      updatedAt: row.updated_at as string,
+    });
+  }
+  return [...active.values()];
 }
 
 export async function loadPlaybookText(agent: string): Promise<string> {
