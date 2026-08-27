@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 
 const path = process.argv[2]
-  ?? new URL("../../6. Target Machine/book/direct_book.json", import.meta.url).pathname;
+  ?? decodeURIComponent(new URL("../../6. Target Machine/book/direct_book.json", import.meta.url).pathname);
 
 const rows = JSON.parse(readFileSync(path, "utf8"));
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

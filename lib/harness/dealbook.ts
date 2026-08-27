@@ -32,7 +32,7 @@ export async function computeDealBook(goalZar = 100_000_000): Promise<DealBookSn
   const [proposalsRes, sheetsRes] = await Promise.all([
     admin
       .from("migration_case_proposals")
-      .select("case_id,turnkey_capex_zar,capex_total_zar,payload")
+      .select("case_id,proposal_snapshot")
       .not("case_id", "is", null),
     admin.from("migration_case_term_sheets").select("case_id,status"),
   ]);
@@ -43,12 +43,12 @@ export async function computeDealBook(goalZar = 100_000_000): Promise<DealBookSn
   const sheetedCases = new Set<string>((sheetsRes.data ?? []).map((row) => String(row.case_id)));
 
   const capexOf = (row: Record<string, unknown>): number => {
-    for (const candidate of [row.turnkey_capex_zar, row.capex_total_zar]) {
-      if (typeof candidate === "number" && Number.isFinite(candidate)) return candidate;
-    }
-    const payload = (row.payload ?? {}) as Record<string, unknown>;
-    if (typeof payload.turnkeyCapexZar === "number") return payload.turnkeyCapexZar;
-    return 0;
+    // Turnkey capital lives inside the engine proposal snapshot. Operator
+    // publishes carry no capex and contribute nothing to the book.
+    const snapshot = (row.proposal_snapshot ?? {}) as Record<string, unknown>;
+    const capex = (snapshot.capex ?? {}) as Record<string, unknown>;
+    const total = capex.total;
+    return typeof total === "number" && Number.isFinite(total) ? total : 0;
   };
 
   let gatedValueZar = 0;

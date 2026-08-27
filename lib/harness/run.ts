@@ -94,8 +94,14 @@ export async function runHarness(input: HarnessRunInput): Promise<HarnessRunResu
   const maxToolCalls = input.maxToolCalls ?? MAX_TOOL_CALLS_DEFAULT;
   const toolNames = Object.keys(input.tools);
 
+  // The roster is enforced here so no caller can hand the model a prompt
+  // without its real tool names: hallucinated tools die at the source.
+  const systemWithTools = input.systemPrompt.includes("Available tools:")
+    ? input.systemPrompt
+    : `${input.systemPrompt}\n\nAvailable tools: ${toolNames.join(", ")}. Call only these, exactly by these names.`;
+
   const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
-    { role: "system", content: input.systemPrompt },
+    { role: "system", content: systemWithTools },
     {
       role: "user",
       content: [
@@ -154,7 +160,7 @@ export async function runHarness(input: HarnessRunInput): Promise<HarnessRunResu
   // Harness cognition runs on its own model tier (MODEL_HARNESS, glm-5.3 flash),
   // independent of the client-facing Dawn default (MODEL_DEFAULT).
   const harnessModel = process.env.MODEL_HARNESS?.trim() || undefined;
-  const configCheck = await completeChat({ messages, role: "draft", json: true, model: harnessModel });
+  const configCheck = await completeChat({ messages, role: "draft", json: true, model: harnessModel, thinking: "disabled" });
   if (!configCheck.ok && "skipped" in configCheck && configCheck.skipped) {
     return {
       runId,
@@ -181,7 +187,7 @@ export async function runHarness(input: HarnessRunInput): Promise<HarnessRunResu
       outcome = "stopped_budget";
       break;
     }
-    last = await completeChat({ messages, role: "draft", json: true, model: harnessModel });
+    last = await completeChat({ messages, role: "draft", json: true, model: harnessModel, thinking: "disabled" });
   }
 
   await persistHarnessRun(input, { runId, outcome, steps, startedAt });
@@ -198,6 +204,14 @@ export async function runHarness(input: HarnessRunInput): Promise<HarnessRunResu
 
 type PersistableOutcome = Pick<HarnessRunResult, "runId" | "outcome" | "steps" | "startedAt">;
 
+/** Harness outcomes expressed in the ledger's own status vocabulary. */
+const LEDGER_STATUS: Record<HarnessRunResult["outcome"], string> = {
+  completed: "succeeded",
+  stopped_budget: "needs_review",
+  no_model: "cancelled",
+  failed: "failed",
+};
+
 async function persistHarnessRun(input: HarnessRunInput, result: PersistableOutcome) {
   const admin = getSupabaseAdminClient();
   if (!admin) return;
@@ -207,7 +221,7 @@ async function persistHarnessRun(input: HarnessRunInput, result: PersistableOutc
     graph_version: 1,
     environment: process.env.NODE_ENV === "production" ? "production" : "development",
     case_id: input.caseId ?? null,
-    status: result.outcome,
+    status: LEDGER_STATUS[result.outcome] ?? "failed",
     requested_by: input.requestedBy ?? "system",
     input_summary: { objective: input.objective },
     running_notes: [],
