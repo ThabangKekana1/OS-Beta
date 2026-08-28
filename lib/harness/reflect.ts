@@ -197,12 +197,14 @@ export async function runReflectionPass(input: {
   const current = await loadPlaybook(agent);
   const keys = REFLECT_PLAYBOOK_KEYS[agent];
 
+  // Reflection is a background batch job: it uses the deterministic default
+  // model with thinking disabled, so its latency is predictable inside a cron
+  // budget. The interactive founder chat keeps the fast reasoning model.
   const completion = await completeChat({
     role: "draft",
     json: true,
-    model: process.env.MODEL_HARNESS?.trim() || undefined,
     thinking: "disabled",
-    signal: AbortSignal.timeout(input.timeoutMs ?? 40_000),
+    signal: AbortSignal.timeout(input.timeoutMs ?? 35_000),
     messages: [
       {
         role: "system",
