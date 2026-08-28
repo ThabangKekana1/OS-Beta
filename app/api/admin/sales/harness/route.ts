@@ -7,6 +7,8 @@
  *        top unqueued book rows. Drafts only; nothing sends from here.
  */
 import { NextResponse } from "next/server";
+
+export const maxDuration = 60;
 import { getServerAuthSession } from "@/lib/auth-server";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import { computeDealBook } from "@/lib/harness/dealbook";

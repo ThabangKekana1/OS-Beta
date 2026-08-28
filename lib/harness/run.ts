@@ -174,7 +174,13 @@ export async function runHarness(input: HarnessRunInput): Promise<HarnessRunResu
   // Harness cognition runs on its own model tier (MODEL_HARNESS, glm-5.3 flash),
   // independent of the client-facing Dawn default (MODEL_DEFAULT).
   const harnessModel = process.env.MODEL_HARNESS?.trim() || undefined;
-  const configCheck = await completeChat({ messages, role: "draft", json: true, model: harnessModel, thinking: "disabled" });
+  // Every model call in the loop is deadline-bounded, so a slow or reasoning
+  // model can never hang a founder-facing request.
+  const callDeadlineMs = Number(process.env.HARNESS_CALL_TIMEOUT_MS ?? 20_000);
+  const configCheck = await completeChat({
+    messages, role: "draft", json: true, model: harnessModel, thinking: "disabled",
+    signal: AbortSignal.timeout(callDeadlineMs),
+  });
   if (!configCheck.ok && "skipped" in configCheck && configCheck.skipped) {
     return {
       runId,
@@ -201,7 +207,10 @@ export async function runHarness(input: HarnessRunInput): Promise<HarnessRunResu
       outcome = "stopped_budget";
       break;
     }
-    last = await completeChat({ messages, role: "draft", json: true, model: harnessModel, thinking: "disabled" });
+    last = await completeChat({
+      messages, role: "draft", json: true, model: harnessModel, thinking: "disabled",
+      signal: AbortSignal.timeout(callDeadlineMs),
+    });
   }
 
   await persistHarnessRun(input, { runId, outcome, steps, startedAt });

@@ -7,6 +7,8 @@
  *                       turns land in one persistent stream.
  */
 import { NextResponse } from "next/server";
+
+export const maxDuration = 60;
 import { getServerAuthSession } from "@/lib/auth-server";
 import { runHarness } from "@/lib/harness/run";
 import { buildFounderTools, miSystemPrompt } from "@/lib/harness/founder";
