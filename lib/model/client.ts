@@ -33,6 +33,8 @@ export type ModelCompletion =
 const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_TIMEOUT_MS = 60_000;
 const DEFAULT_MAX_OUTPUT_TOKENS = 2_048;
+/** Reasoning models need headroom for thought plus the answer. */
+const MAX_REASONING_OUTPUT_TOKENS = 8_192;
 
 function env(name: string) {
   const value = process.env[name];
@@ -140,11 +142,24 @@ export async function completeChat(input: {
     }
 
     const payload = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
+      choices?: Array<{
+        finish_reason?: string;
+        message?: { content?: string; reasoning_content?: string };
+      }>;
       usage?: { prompt_tokens?: number; completion_tokens?: number };
     };
-    const text = payload.choices?.[0]?.message?.content;
+    const choice = payload.choices?.[0];
+    const text = choice?.message?.content;
     if (typeof text !== "string" || !text.trim()) {
+      // Reasoning models (glm-5.3 flash) can spend the entire budget thinking
+      // and return empty content. Retry once with room to actually answer.
+      const spentOnThinking =
+        choice?.finish_reason === "length" || Boolean(choice?.message?.reasoning_content);
+      const budget = input.maxOutputTokens ?? config.maxOutputTokens;
+      if (spentOnThinking && budget < MAX_REASONING_OUTPUT_TOKENS) {
+        clearTimeout(timeout);
+        return completeChat({ ...input, maxOutputTokens: MAX_REASONING_OUTPUT_TOKENS });
+      }
       return { ok: false, error: "Model returned an empty completion." };
     }
     return {
