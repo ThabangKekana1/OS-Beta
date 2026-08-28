@@ -178,6 +178,8 @@ export type ReflectionResult = {
 export async function runReflectionPass(input: {
   agent: ReflectAgent;
   dryRun?: boolean;
+  /** Hard deadline so a slow reflection can never overrun a cron budget. */
+  timeoutMs?: number;
 }): Promise<ReflectionResult> {
   const { agent } = input;
   const evidence = await collectReflectionEvidence(agent);
@@ -200,6 +202,7 @@ export async function runReflectionPass(input: {
     json: true,
     model: process.env.MODEL_HARNESS?.trim() || undefined,
     thinking: "disabled",
+    signal: AbortSignal.timeout(input.timeoutMs ?? 40_000),
     messages: [
       {
         role: "system",

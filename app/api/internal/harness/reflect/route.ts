@@ -22,19 +22,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
   }
 
-  const reflections = [] as unknown[];
-  for (const agent of ["sales-harness", "dawn"] as const) {
-    try {
-      reflections.push(await runReflectionPass({ agent }));
-    } catch (error) {
-      reflections.push({
-        agent,
-        evidenceCount: 0,
-        proposals: [],
-        applied: [],
-        skipped: error instanceof Error ? error.message : "reflection failed",
-      });
-    }
-  }
+  // Both agents reflect in parallel inside one budget; each carries its own
+  // deadline so the function always answers.
+  const reflections = await Promise.all(
+    (["sales-harness", "dawn"] as const).map(async (agent) => {
+      try {
+        return await runReflectionPass({ agent, timeoutMs: 40_000 });
+      } catch (error) {
+        return {
+          agent,
+          evidenceCount: 0,
+          proposals: [],
+          applied: [],
+          skipped: error instanceof Error ? error.message : "reflection failed",
+        };
+      }
+    }),
+  );
   return NextResponse.json({ ok: true, reflections, ranAt: new Date().toISOString() });
 }
