@@ -187,7 +187,7 @@ export function buildMigrationCaseNdaPdf(record: MigrationCaseNdaRecord) {
 
   const signature = foundationSignature();
   if (signature) {
-    pdf.addImage(signature, "PNG", KIT_PAGE.margin + 5, y + 8.5, 36, 23.9, undefined, "FAST");
+    pdf.addImage(signature, "PNG", KIT_PAGE.margin + 5, y + 11.5, 52, 17.6, undefined, "FAST");
   } else {
     drawText(pdf, FOUNDATION_NDA_SIGNATORY.name, KIT_PAGE.margin + 5, y + 24, { font: "times", weight: "italic", size: 13 });
   }
