@@ -13,7 +13,7 @@ import { getServerAuthSession } from "@/lib/auth-server";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 import { computeDealBook } from "@/lib/harness/dealbook";
 import { queueSendDraft, type SendQueueStatus } from "@/lib/harness/gate";
-import { buildFirstTouchDraft } from "@/lib/harness/outreach";
+import { draftFirstTouchWithModel } from "@/lib/harness/outreach";
 import { activePlaybookStamp } from "@/lib/harness/reflect";
 import { searchSalesBook } from "@/lib/harness/tools";
 
@@ -107,17 +107,23 @@ export async function POST(request: Request) {
   const stamp = await activePlaybookStamp("sales-harness").catch(() => ({}));
 
   let created = 0;
+  let guarded = 0;
   for (const lead of targets) {
     if (created >= wanted) break;
-    const draft = buildFirstTouchDraft(lead);
-    if (!draft) continue;
+    // Model-written under the learned playbook; the guard rejects anything
+    // off-standard and nothing templated ever reaches the queue.
+    const draft = await draftFirstTouchWithModel(lead);
+    if (!draft) {
+      guarded += 1;
+      continue;
+    }
     await queueSendDraft({
       ...draft,
       payload: { ...(draft.payload ?? {}), playbook: stamp },
     });
     created += 1;
   }
-  return NextResponse.json({ ok: true, created });
+  return NextResponse.json({ ok: true, created, guarded });
 }
 
 async function readPipelineSafe() {

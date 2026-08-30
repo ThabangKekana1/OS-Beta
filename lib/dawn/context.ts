@@ -156,7 +156,7 @@ export function buildCaseContext(input: {
       `4. The First Light Certificate (specimen): issued on migration day; models about ${Math.round(f.annualCo2Tonnes).toLocaleString("en-ZA")} tonnes of carbon avoided a year on about ${Math.round(f.annualKwh).toLocaleString("en-ZA")} kWh of renewable supply a year.`,
     );
     lines.push(
-      "The example bills are indicative, modelled from the audited bills; formal proposals confirm final amounts. Quote these figures freely; they are the client's own documents.",
+      "The example bills are indicative, modelled from the audited bills; formal proposals confirm final amounts. Quote these figures freely; they are the client's own documents. Partners are disclosed: Nedbank Corporate and Investment Banking owns and insures the on-site infrastructure; GreenShare VPP backs the power purchase agreement with its 56 megawatt solar farm at Matjhabeng, Free State.",
     );
   }
 

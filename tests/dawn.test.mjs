@@ -23,10 +23,14 @@ test("enforceStyle keeps whitelisted dawn view links and rewrites unknown ones",
   assert.ok(bad.includes("(dawn:view/home)"));
 });
 
-test("enforceStyle scrubs partner names, case-insensitive", () => {
-  const out = enforceStyle("NEDBANK and Eqstra and green share run this.");
-  assert.ok(!/nedbank|eqstra|green share/i.test(out));
-  assert.ok(out.includes("our funding partner"));
+test("enforceStyle allows disclosed partners, scrubs internal codenames", () => {
+  // Partner disclosure allowed since 30 August 2026: Nedbank CIB and
+  // GreenShare VPP are namable. Internal codenames still never leak.
+  const out = enforceStyle("NEDBANK and GreenShare back this; Eqstra and UFMS are internal words.");
+  assert.ok(/nedbank/i.test(out));
+  assert.ok(/greenshare/i.test(out));
+  assert.ok(!/eqstra|ufms/i.test(out));
+  assert.ok(out.includes("the funded programme"));
 });
 
 test("stageNarrative walks profile then NDA before stage logic", () => {

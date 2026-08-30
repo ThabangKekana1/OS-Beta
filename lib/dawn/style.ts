@@ -16,10 +16,13 @@ export function enforceStyle(text: string): string {
       ? match
       : "(dawn:view/home)";
   });
-  // No external links, no partner-name leaks even by accident.
+  // No external links.
   out = out.replace(/https?:\/\/\S+/g, "");
-  for (const banned of ["Nedbank", "Eqstra", "Green Share", "Greenshare", "UFMS"]) {
-    out = out.replace(new RegExp(banned, "gi"), "our funding partner");
+  // Partner disclosure is allowed since 30 August 2026 (Nedbank CIB owns the
+  // on-site infrastructure; GreenShare VPP backs the PPA). Internal product
+  // codenames still never reach a client.
+  for (const banned of ["Eqstra", "UFMS"]) {
+    out = out.replace(new RegExp(banned, "gi"), "the funded programme");
   }
   return out.trim();
 }

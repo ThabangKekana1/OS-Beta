@@ -53,7 +53,7 @@ export const ONSITE_INCLUSIONS: { index: string; item: string; detail: string }[
   { index: "04", item: "Solar water heating and borehole filtration", detail: "Integrated water and energy infrastructure" },
   { index: "05", item: "CCTV cameras and small-scale embedded generation registration", detail: "Security and grid-compliance coordination" },
   { index: "06", item: "24/7 electrician and plumber on call", detail: "Operational support when the site needs it" },
-  { index: "07", item: "Full insurance, maintenance and operations", detail: "Lifecycle cover for Foundation-1-owned infrastructure" },
+  { index: "07", item: "Full insurance, maintenance and operations", detail: "Infrastructure owned, insured and maintained by Nedbank Corporate and Investment Banking" },
 ];
 
 export const VAT_RATE = 0.15;

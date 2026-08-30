@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { AdminBadge, AdminHeader } from "@/components/admin/AdminPrimitives";
+import { DeckConversation } from "@/components/deck/ChatDock";
 
 type DeckItem = {
   id: string;
@@ -153,11 +154,13 @@ export function AdminDeckRoute() {
   }, [view]);
 
   return (
-    <div className="space-y-8">
+    <div className="grid h-full grid-cols-1 lg:grid-cols-[420px_minmax(0,1fr)]">
+      {/* LEFT RAIL: the brief and the verdict stack. Scrolls independently. */}
+      <div className="h-full space-y-6 overflow-y-auto border-r border-white/8 px-4 py-5">
       <AdminHeader
         eyebrow="Today"
         title="The verdict stack."
-        description="Everything that needs you, ordered. J/K move · Y approve · N reject · E expand."
+        description="J/K move · Y approve · N reject · E expand."
         actions={
           <button type="button" onClick={() => void refresh()} className="line-label flex items-center gap-2 hover:text-white">
             <RefreshCw className="size-3" /> sync
@@ -165,8 +168,8 @@ export function AdminDeckRoute() {
         }
       />
 
-      {/* Brief matrix: one cell row, shared borders, telemetry labels */}
-      <section className="grid grid-cols-1 overflow-hidden rounded-md border border-white/10 sm:grid-cols-3 sm:gap-px sm:bg-white/10">
+      {/* Brief matrix: stacked cells in the rail, shared borders */}
+      <section className="grid grid-cols-1 gap-px overflow-hidden rounded-md border border-white/10 bg-white/10">
         <div className="bg-[var(--canvas)] p-4">
           <p className="line-label">Deal book · term sheet gated</p>
           <p className="mt-3 font-mono text-xl tracking-tight text-white">{zar(view?.brief.dealBook?.gatedValueZar ?? 0)}</p>
@@ -177,7 +180,7 @@ export function AdminDeckRoute() {
             {goalPct}% OF R100M · {view?.brief.dealBook?.gatedCount ?? 0} GATED · PIPELINE {zar(view?.brief.dealBook?.weightedPipelineZar ?? 0)}
           </p>
         </div>
-        <div className="border-t border-white/10 bg-[var(--canvas)] p-4 sm:border-t-0">
+        <div className="bg-[var(--canvas)] p-4">
           <p className="line-label">Funnel · cumulative</p>
           <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 font-mono text-[11px] text-white/70">
             {[["sent", funnel?.counts.sent], ["replied", funnel?.counts.reply], ["bills-in", funnel?.counts.bills_in], ["term sheet", funnel?.counts.term_sheet]].map(([label, value]) => (
@@ -188,7 +191,7 @@ export function AdminDeckRoute() {
             ))}
           </dl>
         </div>
-        <div className="border-t border-white/10 bg-[var(--canvas)] p-4 sm:border-t-0">
+        <div className="bg-[var(--canvas)] p-4">
           <p className="line-label">Verdicts waiting</p>
           <p className="mt-3 flex items-baseline gap-3">
             <span className="font-mono text-xl tracking-tight text-white">{drafts.length}</span>
@@ -286,6 +289,12 @@ export function AdminDeckRoute() {
           </ul>
         </section>
       )}
+      </div>
+
+      {/* PRIMARY: the conversation is the interface. */}
+      <div className="hidden h-full min-w-0 lg:block">
+        <DeckConversation />
+      </div>
     </div>
   );
 }

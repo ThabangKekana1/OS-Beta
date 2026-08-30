@@ -76,9 +76,15 @@ export function DeckShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
+      {/* Today is conversational-first and full-bleed: the conversation IS the
+          interface. Secondary surfaces keep the reading container + the dock. */}
+      {pathname === "/admin" ? (
+        <main className="h-[calc(100dvh-3.5rem)] overflow-hidden">{children}</main>
+      ) : (
+        <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
+      )}
 
-      <ChatDock />
+      {pathname !== "/admin" && <ChatDock />}
 
       {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
     </div>

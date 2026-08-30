@@ -597,7 +597,7 @@ function buildOnsiteBillHtml(f: PackFigures): string {
     eyebrow: "PATHWAY · SOLAR AND STORAGE ON YOUR SITE",
     titleTop: "Your electricity bill,",
     titleBottom: "after the migration.",
-    strapline: "One fixed monthly amount replaces your utility bill. Everything below lives on your site, owned and carried by Foundation-1's programme, at no capital outlay from you.",
+    strapline: "One fixed monthly amount replaces your utility bill. Everything below lives on your site, funded, installed, insured and owned by Nedbank Corporate and Investment Banking, at no capital outlay from you.",
     lines: [
       { item: "Renewable energy service, solar and storage on your site", detail: "Fixed monthly amount", amount: Rc(f.onsiteMonthly) },
       { item: "Capital outlay, connection and installation", detail: "Nothing payable to switch", amount: "R0.00" },
