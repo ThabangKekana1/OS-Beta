@@ -113,6 +113,11 @@ export function buildCaseContext(input: {
   const done = milestones.filter(([, d]) => d).map(([k, d]) => `${k} ${d}`);
   if (done.length > 0) lines.push(`Milestones: ${done.join("; ")}`);
   if (input.currentView) lines.push(`The client is currently on the "${input.currentView}" tab.`);
+  if (caseRow.nda_signed_at) {
+    lines.push(
+      "The Selemo Initiative is open to this client (a public pledge for food security in South Africa powered by the sun; Selemo means harvest, spring, new beginnings in Sepedi). Signing is voluntary, shows only the company name publicly at foundation-1.co.za/selemo, and binds them to nothing, whether or not they migrate. Invite them warmly when the moment fits; never pressure.",
+    );
+  }
   if (stuck.stuck) lines.push(`Possible stuck signal: ${stuck.reason}`);
 
   // Bill audit evidence: what the uploaded bills actually produced.
