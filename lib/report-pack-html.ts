@@ -279,7 +279,7 @@ function inclusionRows(compact = false): string {
 
 function inclusionGridTwoCol(): string {
   const cell = (inclusion: typeof ONSITE_INCLUSIONS[number]) => `
-    <div style="display:flex; align-items:baseline; gap:3mm; padding:1.9mm 0;">
+    <div style="display:flex; align-items:baseline; gap:3mm; padding:1.75mm 0;">
       <span class="mono" style="font-size:5.4pt; color: rgba(253,230,138,0.72); letter-spacing:0.12em;">${inclusion.index}</span>
       <span style="flex:1;">
         <span class="ink" style="display:block; font-size:6.9pt; font-weight:500;">${esc(inclusion.item)}</span>
@@ -312,7 +312,8 @@ function buildMigrationReportHtml(f: PackFigures): string {
       <h1 class="display" style="margin-top:7mm; font-size:37pt;">Every charge audited.</h1>
       ${gradientLine("Every pathway compared.", 37)}
       <p style="margin-top:7mm; max-width:150mm; font-size:9pt; line-height:1.7;">Your utility bills, read line by line by Foundation-1's Machine Intelligence and verified by the migration desk. This is your real number, and what each migration pathway does to it.</p>
-      <div style="margin-top:8mm; display:flex; gap:2.6mm;">
+      <p class="mono" style="margin-top:6mm; font-size:6.6pt; letter-spacing:.16em; text-transform:uppercase; color:rgba(187,247,208,.78);">ABOUT ${'${num(f.annualCo2Tonnes)}'} TONNES OF CARBON OFF THE GRID EVERY YEAR · THE SUN DOING THE WORK</p>
+      <div style="margin-top:5mm; display:flex; gap:2.6mm;">
         <span class="chip">${esc(f.businessName.toUpperCase())}</span>
         <span class="chip">${esc(f.caseReference)}</span>
         ${f.city ? `<span class="chip">${esc(`${f.city}${f.province ? " · " + f.province : ""}`.toUpperCase())}</span>` : ""}
@@ -487,6 +488,24 @@ function buildMigrationReportHtml(f: PackFigures): string {
 
 type BillLine = { item: string; detail: string; amount: string };
 
+/** The carbon story, on every bill: unmissable, green, modelled honestly. */
+function envStrip(monthlyKwhRenewable: number): string {
+  const monthlyT = (monthlyKwhRenewable * GRID_EMISSION_FACTOR_KG_PER_KWH) / 1000;
+  const yearlyT = monthlyT * 12;
+  const trees = Math.round((yearlyT * 1000) / 21);
+  const cell = (v: string, l: string) => `
+    <div style="padding:3.4mm 6mm;">
+      <p class="display" style="font-size:11.5pt;color:#4ade80;">${v}</p>
+      <p class="mono" style="margin-top:1.2mm;font-size:5pt;letter-spacing:.14em;text-transform:uppercase;color:rgba(187,247,208,.55);">${l}</p>
+    </div>`;
+  return `
+  <div class="panel" style="margin-top:3.4mm;display:grid;grid-template-columns:repeat(3,1fr);overflow:hidden;background:#070c08;border-color:rgba(74,222,128,.28);">
+    ${cell(`${monthlyT.toFixed(1)} t`, "Carbon off the grid, monthly")}
+    ${cell(`${Math.round(yearlyT)} t`, "Carbon off the grid, yearly")}
+    ${cell(num(trees), "Trees working for you, modelled")}
+  </div>`;
+}
+
 function billPeriod(reference: Date): { label: string; issue: Date; due: Date } {
   const start = new Date(reference.getFullYear(), reference.getMonth() + 1, 1);
   const end = new Date(reference.getFullYear(), reference.getMonth() + 2, 0);
@@ -503,6 +522,8 @@ function buildBillHtml(f: PackFigures, spec: {
   lines: BillLine[];
   subtotal: number;
   total: number;
+  /** kWh of the client's consumption served renewably under this pathway. */
+  renewableKwh: number;
   punch: string;
   punchBody: string;
   extra: string;
@@ -571,10 +592,11 @@ function buildBillHtml(f: PackFigures, spec: {
           statCell(R(Math.max(0, f.currentMonthly - spec.total)), "Yours to keep, every month", "green"),
         ])}
       </div>
+      ${envStrip(spec.renewableKwh)}
 
       ${spec.extra}
 
-      <div class="panel" style="margin-top:3.2mm; padding:3.8mm 6.4mm; background:#ffffff; border-color:#ffffff;">
+      <div class="panel" style="margin-top:3.2mm; padding:3.2mm 6.4mm; background:#ffffff; border-color:#ffffff;">
         <p class="mono" style="font-size:5.4pt; letter-spacing:0.18em; color:rgba(0,0,0,0.5);">THE NUMBER THAT MATTERS</p>
         <p style="margin-top:2.4mm; font-size:10pt; font-weight:600; letter-spacing:-0.02em; color:#000;">${spec.punch}</p>
         <p style="margin-top:1.8mm; font-size:6.8pt; line-height:1.6; color:rgba(0,0,0,0.55);">${spec.punchBody}</p>
@@ -605,6 +627,7 @@ function buildOnsiteBillHtml(f: PackFigures): string {
     ],
     subtotal: f.onsiteMonthly,
     total: f.onsiteMonthly,
+    renewableKwh: f.monthlyKwh,
     punch: `This amount escalates at ${Math.round(f.onsiteEscalation * 100)} percent a year, fixed in your agreement.`,
     punchBody: "Eskom's trajectory is modelled at 13 percent a year, Foundation-1's standing assumption.",
     extra: inclusionsPanel,
@@ -642,6 +665,7 @@ function buildWheelingBillHtml(f: PackFigures): string {
     ],
     subtotal: f.wheelingMonthly,
     total: f.wheelingMonthly,
+    renewableKwh: f.monthlyKwh * f.wheelingShare,
     punch: `Roughly ${Math.round(f.wheelingShare * 100)} percent of your energy moves to the contracted renewable rate.`,
     punchBody: "The remainder stays with your distributor at the audited blended tariff. Eskom's trajectory is modelled at 13 percent a year, Foundation-1's standing assumption.",
     extra: routesPanel,
@@ -665,7 +689,17 @@ function buildCertificateHtml(f: PackFigures): string {
         <p style="margin-top:11mm; font-size:10pt; color:rgba(255,255,255,0.42);">This certifies that</p>
         <p class="display" style="margin-top:5mm; font-size:${f.businessName.length > 26 ? "20" : "25"}pt;">${esc(f.businessName)}</p>
         <div style="margin-top:4mm; width:100%;">${gradientLine("powers its operations with the sun.", 13, { align: "center" })}</div>
-        <p style="margin-top:9mm; max-width:126mm; font-size:7.6pt; line-height:1.8; color:rgba(255,255,255,0.45);">Migrated through the Foundation-1 platform. Renewable supply modelled at ${num(f.annualKwh)} kilowatt hours a year, avoiding about ${num(f.annualCo2Tonnes)} tonnes of carbon annually, with savings from day one.</p>
+        <p style="margin-top:8mm; max-width:126mm; font-size:7.6pt; line-height:1.8; color:rgba(255,255,255,0.45);">Migrated through the Foundation-1 platform, with savings from day one.</p>
+        <div style="margin-top:6mm; display:grid; grid-template-columns:1fr 1fr; gap:10mm; width:110mm;">
+          <div style="text-align:center;">
+            <p class="display" style="font-size:17pt; color:#4ade80;">${num(f.annualCo2Tonnes)} t</p>
+            <p class="mono" style="margin-top:1.6mm; font-size:5.4pt; letter-spacing:.2em; color:rgba(187,247,208,.6);">CARBON OFF THE GRID, EVERY YEAR</p>
+          </div>
+          <div style="text-align:center;">
+            <p class="display" style="font-size:17pt; color:#f5f5f5;">${num(f.annualKwh)}</p>
+            <p class="mono" style="margin-top:1.6mm; font-size:5.4pt; letter-spacing:.2em; color:rgba(255,255,255,.4);">KILOWATT HOURS OF SUN, EVERY YEAR</p>
+          </div>
+        </div>
         <div style="margin-top:9mm; width:34mm; border-top:0.3mm solid rgba(255,255,255,0.24);"></div>
         <p class="mono" style="margin-top:5mm; font-size:6.2pt; letter-spacing:0.22em; color:rgba(255,255,255,0.5);">CERTIFICATE ${serial}</p>
         <p class="mono" style="margin-top:2mm; font-size:5.6pt; letter-spacing:0.2em; color:rgba(255,255,255,0.3);">ISSUED AT FIRST LIGHT ON YOUR MIGRATION DAY</p>
