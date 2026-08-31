@@ -56,7 +56,7 @@ export async function searchSalesBook(input: {
   query?: string | null;
   limit?: number;
 }): Promise<BookRowScored[]> {
-  const limit = Math.min(Math.max(input.limit ?? 10, 1), 50);
+  const limit = Math.min(Math.max(input.limit ?? 10, 1), 200);
   let query = client()
     .from("foundation1_sales_book")
     .select("*")

@@ -162,7 +162,7 @@ export function buildFounderTools(): HarnessToolMap {
     "read.pipeline": () => readPipelineSummary(),
     "read.book": (input) => readBook((input ?? {}) as BookQuery),
     "read.queue": () => readQueue(),
-    "act.queueDraftBatch": (input) => queueDraftBatchFromBook(String((input as { sector?: unknown })?.sector ?? ""), Number((input as { count?: unknown })?.count ?? 10)),
+    "act.queueDraftBatch": (input) => queueDraftBatchFromBook(String((input as { sector?: unknown })?.sector ?? ""), Number((input as { count?: unknown })?.count ?? 20)),
     "act.killPendingSends": (input) => killPendingSends((input ?? {}) as { reason?: string }),
     "act.setPlan": (input) => setPlan((input ?? {}) as { plan: string }),
   };

@@ -21,7 +21,7 @@ type DeckMessage = {
   createdAt: string;
 };
 
-const QUICK = ["Brief me", "What changed since Friday?", "Prepare 10 poultry drafts", "Kill pending sends"];
+const QUICK = ["Brief me", "What changed since Friday?", "Fill today to 20 drafts", "Kill pending sends"];
 
 function useDeckThread() {
   const [messages, setMessages] = useState<DeckMessage[]>([]);
