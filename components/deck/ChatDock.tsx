@@ -108,24 +108,24 @@ function Stream({
         message.role === "event" ? (
           <div
             key={message.id}
-            className={`border-t border-dashed border-white/10 pt-2 font-mono text-[10px] leading-4 text-white/45 ${primary ? "mx-auto max-w-[880px]" : ""}`}
+            className={`border-t border-dashed border-white/10 pt-2 font-mono text-[10px] leading-4 text-white/45`}
           >
             {message.content}
           </div>
         ) : message.role === "founder" ? (
-          <div key={message.id} className={`flex justify-end ${primary ? "mx-auto max-w-[880px]" : ""}`}>
-            <div className={`whitespace-pre-wrap rounded-md border border-white/14 bg-[var(--panel-strong)] px-3 py-2 leading-5 text-white ${primary ? "max-w-[70%] text-[14px]" : "max-w-[86%] text-[13px]"}`}>
+          <div key={message.id} className={`flex justify-end`}>
+            <div className={`whitespace-pre-wrap rounded-md border border-white/14 bg-[var(--panel-strong)] px-3 py-2 leading-5 text-white ${primary ? "max-w-[560px] text-[14px]" : "max-w-[86%] text-[13px]"}`}>
               {message.content}
             </div>
           </div>
         ) : (
-          <div key={message.id} className={`border-l-2 border-[var(--electric)] pl-3 ${primary ? "mx-auto max-w-[880px]" : ""}`}>
-            <div className={`whitespace-pre-wrap leading-6 text-white/90 ${primary ? "text-[14px]" : "text-[13px] leading-5"}`}>{message.content}</div>
+          <div key={message.id} className={`border-l-2 border-[var(--electric)] pl-3`}>
+            <div className={`whitespace-pre-wrap leading-6 text-white/90 ${primary ? "max-w-[1100px] text-[14px]" : "text-[13px] leading-5"}`}>{message.content}</div>
           </div>
         ),
       )}
       {thinking && (
-        <div className={`flex items-center gap-2 pt-1 ${primary ? "mx-auto max-w-[880px] pl-3" : "pl-3"}`}>
+        <div className={`flex items-center gap-2 pt-1 ${primary ? "pl-3" : "pl-3"}`}>
           <span
             aria-hidden
             className="block size-1.5 rounded-full bg-white/85 motion-safe:animate-pulse"
@@ -148,7 +148,7 @@ function Composer({
   const { input, setInput, thinking, send } = thread;
   return (
     <div className={primary ? "border-t border-white/8" : ""}>
-      <div className={`flex flex-wrap gap-1.5 ${primary ? "mx-auto max-w-[880px] px-1 pt-3" : "px-3 pb-2"}`}>
+      <div className={`flex flex-wrap gap-1.5 ${primary ? "px-6 pt-3 md:px-10" : "px-3 pb-2"}`}>
         {QUICK.map((chip) => (
           <button
             key={chip}
@@ -168,7 +168,7 @@ function Composer({
         }}
         className={
           primary
-            ? "mx-auto flex w-full max-w-[880px] items-center gap-3 px-1 py-4"
+            ? "flex w-full items-center gap-3 px-6 py-4 md:px-10"
             : "flex items-center gap-2 border-t border-white/8 p-2.5"
         }
       >
