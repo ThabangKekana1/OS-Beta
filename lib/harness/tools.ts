@@ -49,6 +49,12 @@ export type BookRowScored = {
   status: string;
   score: number;
   reasons: string[];
+  /** Named decision maker, when the source carries one. Register rows do not. */
+  contactFirstName?: string | null;
+  contactSurname?: string | null;
+  contactRole?: string | null;
+  monthlySpendEstimateZar?: number | null;
+  source?: "register" | "named";
 };
 
 export async function searchSalesBook(input: {
@@ -105,6 +111,129 @@ export async function searchSalesBook(input: {
     .slice(0, limit);
 
   return rows;
+}
+
+// --- read.namedLeads --------------------------------------------------------
+
+/**
+ * The named lead book. `oneos_admin_leads` carries a real decision maker per
+ * row: first name, surname, job title and a personal work address, plus the
+ * company, city, industry and a monthly electricity spend estimate. The
+ * register book (`foundation1_sales_book`) carries none of that, which is why
+ * every draft written from it could only ever address "the team". Outreach
+ * reads this source first and falls back to the register only where no named
+ * contact exists.
+ *
+ * Scope is the agribusiness value chain, per the founder's instruction: food,
+ * beverage, agro-processing and food manufacturing, plus the immediately
+ * adjacent cold storage and food packaging operations.
+ */
+const VALUE_CHAIN_CORE =
+  /food|beverage|agro|farming|dairy|meat|winer|wine|brewer|poultry|milling|feed|fish|aqua|bakery|produce|fruit|grain|sugar|abattoir/i;
+const VALUE_CHAIN_ADJACENT = /cold storage|packaging|containers|plastics\/packaging/i;
+
+export function inAgriValueChain(industry: string | null | undefined): boolean {
+  const value = (industry ?? "").trim();
+  if (!value) return false;
+  return VALUE_CHAIN_CORE.test(value) || VALUE_CHAIN_ADJACENT.test(value);
+}
+
+function spendBandFor(estimate: number | null | undefined): string {
+  const value = Number(estimate ?? 0);
+  if (!Number.isFinite(value) || value <= 0) return "unknown";
+  if (value >= 250_000) return "250k+";
+  if (value >= 50_000) return "50k-250k";
+  if (value >= 10_000) return "10k-50k";
+  return "unknown";
+}
+
+export async function searchNamedLeads(input: { limit?: number } = {}): Promise<BookRowScored[]> {
+  const limit = Math.min(Math.max(input.limit ?? 50, 1), 500);
+  const rows: BookRowScored[] = [];
+  const pageSize = 1000;
+
+  for (let from = 0; from < 6000; from += pageSize) {
+    const { data, error } = await client()
+      .from("oneos_admin_leads")
+      .select("id,company,contact_name,contact_email,priority,readiness_score,payload")
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error(error.message);
+    const page = data ?? [];
+
+    for (const row of page) {
+      const payload = (row.payload ?? {}) as Record<string, unknown>;
+      const industry = typeof payload.industry === "string" ? payload.industry : null;
+      if (!inAgriValueChain(industry)) continue;
+
+      const email = String(row.contact_email ?? "").trim();
+      if (!email.includes("@")) continue;
+
+      const first = String(payload.contactFirstName ?? "").trim()
+        || String(row.contact_name ?? "").trim().split(/\s+/)[0]
+        || "";
+      if (!first) continue;
+
+      const surname = String(payload.contactSurname ?? "").trim() || null;
+      const role = String(payload.contactPosition ?? "").trim() || null;
+      const city = String(payload.city ?? "").trim() || null;
+      const province = String(payload.province ?? "").trim() || null;
+      const spend = Number(payload.monthlyElectricitySpendEstimateZar ?? 0) || null;
+      const band = spendBandFor(spend);
+
+      const scored = scoreLead({
+        sector: "other",
+        estSpendBand: band,
+        contactChannel: email,
+        website: null,
+        verification: "V",
+      });
+
+      rows.push({
+        bookId: String(row.id),
+        companyName: String(row.company ?? "").trim() || "your business",
+        sector: industry ?? "agri value chain",
+        subSector: industry,
+        siteType: null,
+        province,
+        town: city,
+        scaleSignal: role && city ? `${role} at ${String(row.company ?? "").trim()} in ${city}` : role,
+        electricityRationale: spend
+          ? `Recorded monthly electricity spend estimate of R${spend.toLocaleString("en-ZA")}`
+          : null,
+        estSpendBand: band,
+        contactChannel: email,
+        verification: "V",
+        status: String(row.priority ?? "Standard"),
+        score: scored.score + (row.priority === "Priority" ? 6 : 0),
+        reasons: [
+          ...scored.breakdown.reasons,
+          "named decision maker on file",
+          ...(row.priority === "Priority" ? ["marked priority on the dashboard"] : []),
+        ],
+        contactFirstName: first,
+        contactSurname: surname,
+        contactRole: role,
+        monthlySpendEstimateZar: spend,
+        source: "named",
+      });
+    }
+    if (page.length < pageSize) break;
+  }
+
+  return rows.sort((a, b) => b.score - a.score).slice(0, limit);
+}
+
+/**
+ * One prospect stream for the outreach engine: named people first, register
+ * rows only to fill the tail. Nothing addressed to "the team" goes out while a
+ * named contact is still unworked.
+ */
+export async function searchProspects(input: { limit?: number } = {}): Promise<BookRowScored[]> {
+  const limit = Math.min(Math.max(input.limit ?? 200, 1), 500);
+  const named = await searchNamedLeads({ limit }).catch(() => [] as BookRowScored[]);
+  if (named.length >= limit) return named.slice(0, limit);
+  const register = await searchSalesBook({ limit: limit - named.length }).catch(() => [] as BookRowScored[]);
+  return [...named, ...register.map((row) => ({ ...row, source: "register" as const }))];
 }
 
 // --- read.pipeline ----------------------------------------------------------

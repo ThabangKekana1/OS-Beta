@@ -15,7 +15,7 @@ import { computeDealBook } from "@/lib/harness/dealbook";
 import { queueSendDraft, type SendQueueStatus } from "@/lib/harness/gate";
 import { draftFirstTouchWithModel } from "@/lib/harness/outreach";
 import { activePlaybookStamp } from "@/lib/harness/reflect";
-import { searchSalesBook } from "@/lib/harness/tools";
+import { searchProspects } from "@/lib/harness/tools";
 
 async function requireAdmin() {
   const session = await getServerAuthSession();
@@ -43,7 +43,7 @@ export async function GET() {
   }
 
   const queuedProspects = new Set((queueRes.data ?? []).map((row) => row.prospect_key as string));
-  const leads = await searchSalesBook({ limit: 12 });
+  const leads = await searchProspects({ limit: 12 });
   const openLeads = leads.filter((lead) => !queuedProspects.has(lead.bookId));
 
   const [pipeline, dealBook] = await Promise.all([
@@ -99,7 +99,7 @@ export async function POST(request: Request) {
   const queued = new Set((existing.data ?? []).map((row) => row.prospect_key as string));
 
   const wanted = Math.min(Math.max(body.count ?? 10, 1), 20);
-  const all = await searchSalesBook({ limit: 200 });
+  const all = await searchProspects({ limit: 200 });
   const targets = all.filter((lead) => !queued.has(lead.bookId));
 
   // Every draft carries the playbook versions that shaped it, so each version

@@ -90,7 +90,11 @@ const BANNED_IN_OUTREACH = [/\bnedbank\b/i, /\bufms\b/i, /\bgreen\s?share\b/i, /
 
 export type ModelDraft = { subject: string; body: string };
 
-export function outreachGuard(draft: ModelDraft, companyName: string): string | null {
+export function outreachGuard(
+  draft: ModelDraft,
+  companyName: string,
+  contactFirstName?: string | null,
+): string | null {
   if (!draft.subject?.trim() || !draft.body?.trim()) return "empty subject or body";
   if (draft.subject.length > 78) return "subject too long";
   const words = draft.body.trim().split(/\s+/).length;
@@ -105,6 +109,19 @@ export function outreachGuard(draft: ModelDraft, companyName: string): string | 
   if (/registration number|register \(/i.test(draft.body.split("\n").slice(0, 3).join(" "))) {
     return "opens with raw register metadata";
   }
+  // Personalisation is enforced here, not hoped for in the prompt. When the
+  // source carries a named decision maker, the letter must use that name and
+  // may not fall back to addressing the business collectively.
+  const first = (contactFirstName ?? "").trim();
+  if (first) {
+    const opening = draft.body.split("\n").slice(0, 2).join(" ");
+    if (!opening.toLowerCase().includes(first.toLowerCase())) {
+      return `does not greet the named contact (${first})`;
+    }
+    if (/\bteam\b/i.test(opening)) {
+      return "addresses the team while a named contact exists";
+    }
+  }
   return null;
 }
 
@@ -117,10 +134,14 @@ export async function draftFirstTouchWithModel(
   if (!email) return null;
 
   const playbook = await loadPlaybookText(SALES_AGENT).catch(() => "");
+  const firstName = (row.contactFirstName ?? "").trim();
+  const fullName = [firstName, (row.contactSurname ?? "").trim()].filter(Boolean).join(" ");
   const evidence = [
+    fullName ? `Recipient: ${fullName}${row.contactRole ? `, ${row.contactRole}` : ""}` : null,
+    firstName ? `Greet them by first name: ${firstName}` : null,
     row.scaleSignal ? `Scale evidence: ${row.scaleSignal}` : null,
     row.electricityRationale ? `Electricity rationale: ${row.electricityRationale}` : null,
-    `Sector: ${row.sector}${row.subSector ? ` (${row.subSector})` : ""}`,
+    `Sector: ${row.sector}${row.subSector && row.subSector !== row.sector ? ` (${row.subSector})` : ""}`,
     row.siteType ? `Site type: ${row.siteType}` : null,
     row.town || row.province ? `Location: ${[row.town, row.province].filter(Boolean).join(", ")}` : null,
   ].filter(Boolean).join("\n");
@@ -139,10 +160,13 @@ export async function draftFirstTouchWithModel(
           "direct, specific, zero marketing gloss.",
           "",
           "HARD RULES:",
-          "- Greeting: if the evidence names a real person at this business (an owner,",
-          "  founder or director), address that person directly (e.g. 'Good day Mr Bosch,').",
-          "  Only when no person is named, address the business by name",
+          "- Greeting: when the evidence carries a Recipient, greet that person by first",
+          "  name and nothing else (e.g. 'Good day Byron,'). Never write 'the team' when a",
+          "  person is named. Only when no Recipient is given, address the business by name",
           "  (e.g. 'Good day to the Alzu team,'). Never invent a person's name.",
+          "- When a job title is given, write to that person's actual concern: an operations",
+          "  manager cares about uptime and load, a finance director about the cost line.",
+          "  Do not name their title back at them, use it to choose what you say.",
           "- The opening line must show we did our homework, written as a natural human sentence.",
           "  NEVER paste registry text, registration numbers, dates in brackets, or database fields.",
           "  Translate the evidence into what it means: their operation runs heavy, always-on load.",
@@ -168,7 +192,7 @@ export async function draftFirstTouchWithModel(
     subject: String(parsed.subject ?? "").replace(/\u2014/g, ", ").trim(),
     body: String(parsed.body ?? "").replace(/\u2014/g, ", ").trim(),
   };
-  const rejected = outreachGuard(draft, row.companyName);
+  const rejected = outreachGuard(draft, row.companyName, row.contactFirstName);
   if (rejected) return null;
 
   return {
@@ -184,6 +208,10 @@ export async function draftFirstTouchWithModel(
       score: row.score,
       scoreReasons: row.reasons,
       drafter: "model",
+      source: row.source ?? "register",
+      contactName: fullName || null,
+      contactRole: row.contactRole ?? null,
+      monthlySpendEstimateZar: row.monthlySpendEstimateZar ?? null,
     },
     channel: "email",
   };
