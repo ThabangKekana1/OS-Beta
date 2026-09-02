@@ -131,11 +131,33 @@ export async function searchSalesBook(input: {
 const VALUE_CHAIN_CORE =
   /food|beverage|agro|farming|dairy|meat|winer|wine|brewer|poultry|milling|feed|fish|aqua|bakery|produce|fruit|grain|sugar|abattoir/i;
 const VALUE_CHAIN_ADJACENT = /cold storage|packaging|containers|plastics\/packaging/i;
+/** Primary industries that are never the client, whatever tags follow them. */
+const VALUE_CHAIN_EXCLUDE =
+  /machinery|metals|engineering|automotive|mining|chemicals|pharmaceutic|textile|apparel|electrical|electronic|consumer goods|real estate|construction|building materials|printing|paper|sporting|hospitality|consulting|financial|insurance|telecom|software/i;
 
+/**
+ * Industry tags on the imported book are noisy and multi valued, e.g.
+ * "Machinery | agro-processing | metals/engineering" is a pump maker, not an
+ * agribusiness. The FIRST segment is the operation's own primary industry, and
+ * that is what the letter will describe, so the primary segment decides. A
+ * later agri tag only means they sell into the chain.
+ */
 export function inAgriValueChain(industry: string | null | undefined): boolean {
   const value = (industry ?? "").trim();
   if (!value) return false;
-  return VALUE_CHAIN_CORE.test(value) || VALUE_CHAIN_ADJACENT.test(value);
+  const primary = value.split("|")[0]!.trim();
+  if (VALUE_CHAIN_EXCLUDE.test(primary)) return false;
+  return VALUE_CHAIN_CORE.test(primary) || VALUE_CHAIN_ADJACENT.test(primary);
+}
+
+/** Foreign sites cannot be migrated onto a South African tariff. */
+const SA_PROVINCES = /gauteng|western cape|kwazulu|eastern cape|northern cape|free state|mpumalanga|limpopo|north west|south africa/i;
+const FOREIGN_CITY = /bjerringbro|london|amsterdam|dubai|nairobi|mumbai|shanghai|sydney|singapore|frankfurt|paris|madrid|lisbon|dublin|england/i;
+
+export function isSouthAfricanSite(city: string | null, province: string | null): boolean {
+  if (city && FOREIGN_CITY.test(city)) return false;
+  if (!province) return true;
+  return SA_PROVINCES.test(province);
 }
 
 function spendBandFor(estimate: number | null | undefined): string {
@@ -164,6 +186,9 @@ export async function searchNamedLeads(input: { limit?: number } = {}): Promise<
       const payload = (row.payload ?? {}) as Record<string, unknown>;
       const industry = typeof payload.industry === "string" ? payload.industry : null;
       if (!inAgriValueChain(industry)) continue;
+      const cityRaw = String(payload.city ?? "").trim() || null;
+      const provinceRaw = String(payload.province ?? "").trim() || null;
+      if (!isSouthAfricanSite(cityRaw, provinceRaw)) continue;
 
       const email = String(row.contact_email ?? "").trim();
       if (!email.includes("@")) continue;
@@ -175,8 +200,8 @@ export async function searchNamedLeads(input: { limit?: number } = {}): Promise<
 
       const surname = String(payload.contactSurname ?? "").trim() || null;
       const role = String(payload.contactPosition ?? "").trim() || null;
-      const city = String(payload.city ?? "").trim() || null;
-      const province = String(payload.province ?? "").trim() || null;
+      const city = cityRaw;
+      const province = provinceRaw;
       const spend = Number(payload.monthlyElectricitySpendEstimateZar ?? 0) || null;
       const band = spendBandFor(spend);
 
@@ -220,7 +245,18 @@ export async function searchNamedLeads(input: { limit?: number } = {}): Promise<
     if (page.length < pageSize) break;
   }
 
-  return rows.sort((a, b) => b.score - a.score).slice(0, limit);
+  // One first touch per company. Two letters landing at the same business on the
+  // same morning reads as a mailshot, which is exactly what this is not.
+  const seenCompany = new Set<string>();
+  const deduped: BookRowScored[] = [];
+  for (const row of rows.sort((a, b) => b.score - a.score)) {
+    const key = row.companyName.trim().toLowerCase();
+    if (seenCompany.has(key)) continue;
+    seenCompany.add(key);
+    deduped.push(row);
+    if (deduped.length >= limit) break;
+  }
+  return deduped;
 }
 
 /**
