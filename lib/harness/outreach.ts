@@ -15,6 +15,23 @@ import type { BookRowScored } from "./tools";
 
 export const SALES_AGENT = "sales-harness";
 
+/**
+ * The first touch exists to move them into the system, not into a meeting. The
+ * site takes their own numbers and returns their own answer in about a minute,
+ * and the campaign tag lets the case be traced back to this letter.
+ */
+function publicWebsiteOrigin(): string {
+  const configured = (process.env.NEXT_PUBLIC_WEBSITE_ORIGIN || "").trim().replace(/\/+$/, "");
+  // A local origin must never reach a client letter. Drafts are written against
+  // the production database from local runs too, so this cannot be trusted blindly.
+  if (!configured || !/^https:\/\//i.test(configured) || /localhost|127\.0\.0\.1|\.local\b/i.test(configured)) {
+    return "https://foundation-1.co.za";
+  }
+  return configured;
+}
+
+export const ASSESSMENT_URL = `${publicWebsiteOrigin()}/pricing?utm_campaign=mi-first-touch`;
+
 /** Extract one evidence-anchored sentence from the row's own fields. */
 export function firstFitLine(row: Pick<BookRowScored, "companyName" | "scaleSignal" | "electricityRationale" | "subSector" | "siteType">): string {
   const anchor = (row.scaleSignal ?? "").trim() || (row.electricityRationale ?? "").trim();
@@ -125,6 +142,8 @@ export function outreachGuard(
     if (pattern.test(draft.subject) || pattern.test(draft.body)) return `american sales register: ${pattern}`;
   }
   if (!/kind regards/i.test(draft.body)) return "no courteous close";
+  if (!draft.body.includes(ASSESSMENT_URL)) return "missing or altered the route into the system";
+  if (/\b(brief call|quick call|short call|meeting|catch up)\b/i.test(draft.body)) return "asks for a meeting instead of sending them to the system";
   const firstName = companyName.split(/\s+/)[0]?.toLowerCase() ?? "";
   if (firstName && !draft.body.toLowerCase().includes(firstName) && !draft.subject.toLowerCase().includes(firstName)) {
     return "does not address the business by name";
@@ -167,6 +186,7 @@ export async function draftFirstTouchWithModel(
     `Sector: ${row.sector}${row.subSector && row.subSector !== row.sector ? ` (${row.subSector})` : ""}`,
     row.siteType ? `Site type: ${row.siteType}` : null,
     row.town || row.province ? `Location: ${[row.town, row.province].filter(Boolean).join(", ")}` : null,
+    `The one link to send them, copy it exactly, on its own line: ${ASSESSMENT_URL}`,
   ].filter(Boolean).join("\n");
 
   const completion = await completeChat({
@@ -227,10 +247,12 @@ export async function draftFirstTouchWithModel(
           "3. One or two sentences on the compounding cost, stated as arithmetic and consequence, not doom.",
           "4. One sentence on what Foundation-1 does, in plain words, carrying the R0 until live fact.",
           "5. One short sentence of honest momentum, only if the evidence supports it.",
-          "6. ONE ask, and it must be a give. You do NOT have their bills, so never say the picture is",
-          "   computed from their bills or their own numbers. The honest give is a one page picture of what",
-          "   the next ten years of grid cost look like for an operation of their size in their area, with",
-          "   nothing signed and nothing owed. Never ask for bills, documents or data in this first email.",
+          "6. ONE ask, and it is a link, not a favour. Do not offer to send them anything and do not ask",
+          "   for a call, a meeting, bills or documents. The machine does the work, not you. Invite them to",
+          "   put their own numbers in and see their own answer, in about a minute, at the exact URL you are",
+          "   given in the evidence. Write the URL in full on its own line. Say plainly what happens when",
+          "   they do: they see their own number, nothing is signed, nothing is owed, and they can stop at",
+          "   any point. Never claim you have their bills or their figures.",
           "7. Kind regards, then Karman Kekana, then Foundation-1, on three lines.",
           "",
           "HARD RULES:",
