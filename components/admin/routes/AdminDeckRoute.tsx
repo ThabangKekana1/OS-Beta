@@ -154,9 +154,9 @@ export function AdminDeckRoute() {
   }, [view]);
 
   return (
-    <div className="grid h-full grid-cols-1 lg:grid-cols-[420px_minmax(0,1fr)]">
+    <div className="grid h-full min-h-0 grid-cols-1 overflow-hidden lg:grid-cols-[420px_minmax(0,1fr)]">
       {/* LEFT RAIL: the brief and the verdict stack. Scrolls independently. */}
-      <div className="h-full space-y-6 overflow-y-auto border-r border-white/8 px-4 py-5">
+      <div className="h-full min-h-0 space-y-6 overflow-y-auto border-r border-white/8 px-4 py-5">
       <AdminHeader
         eyebrow="Today"
         title="The verdict stack."
@@ -292,7 +292,7 @@ export function AdminDeckRoute() {
       </div>
 
       {/* PRIMARY: the conversation is the interface. */}
-      <div className="hidden h-full min-w-0 lg:block">
+      <div className="hidden h-full min-h-0 min-w-0 overflow-hidden lg:block">
         <DeckConversation />
       </div>
     </div>

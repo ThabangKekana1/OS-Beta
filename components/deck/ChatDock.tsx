@@ -40,8 +40,18 @@ function useDeckThread() {
       if (payload?.ok && Array.isArray(payload.messages) && payload.messages.length) {
         setMessages((prev) => {
           const seen = new Set(prev.map((m) => m.id));
-          const fresh = payload.messages.filter((m: DeckMessage) => !seen.has(m.id));
-          return [...prev, ...fresh];
+          const fresh = (payload.messages as DeckMessage[]).filter((m) => !seen.has(m.id));
+          if (!fresh.length) return prev;
+          // The optimistic founder bubble carries a local id, so the server copy
+          // of the same line is a different id and would render a second time.
+          // Drop any local bubble the server has now echoed back.
+          const echoed = new Set(
+            fresh.filter((m) => m.role === "founder").map((m) => m.content.trim()),
+          );
+          const kept = prev.filter(
+            (m) => !(m.id.startsWith("local-") && m.role === "founder" && echoed.has(m.content.trim())),
+          );
+          return [...kept, ...fresh];
         });
         lastIsoRef.current = payload.messages[payload.messages.length - 1].createdAt;
       }
@@ -96,7 +106,7 @@ function Stream({
   return (
     <div
       ref={scrollRef}
-      className={`flex-1 space-y-3 overflow-y-auto ${primary ? "px-6 py-6 md:px-10" : "px-3.5 py-3"}`}
+      className={`min-h-0 flex-1 space-y-3 overflow-y-auto ${primary ? "px-6 py-6 md:px-10" : "px-3.5 py-3"}`}
     >
       {!messages.length && (
         <div className={`space-y-2 text-center ${primary ? "pt-24" : "pt-8"}`}>
@@ -147,7 +157,7 @@ function Composer({
 }) {
   const { input, setInput, thinking, send } = thread;
   return (
-    <div className={primary ? "border-t border-white/8" : ""}>
+    <div className={primary ? "shrink-0 border-t border-white/8" : "shrink-0"}>
       <div className={`flex flex-wrap gap-1.5 ${primary ? "px-6 pt-3 md:px-10" : "px-3 pb-2"}`}>
         {QUICK.map((chip) => (
           <button
@@ -209,7 +219,7 @@ export function DeckConversation() {
     };
   }, []);
   return (
-    <section className="flex h-full min-w-0 flex-col" aria-label="MI, your chief of staff">
+    <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden" aria-label="MI, your chief of staff">
       <header className="flex items-center gap-3 border-b border-white/8 px-6 py-3 md:px-10">
         <span className="status-dot animate-pulse text-[var(--electric)]" style={{ animationDuration: "3.5s" }} />
         <span className="font-display text-[12px] uppercase tracking-[0.3em] text-white">MI</span>
@@ -245,7 +255,7 @@ export function ChatDock() {
         </button>
       )}
       {open && (
-        <aside className="fixed bottom-[7rem] right-4 z-[80] h-[560px] w-[380px]">
+        <aside className="fixed bottom-[6rem] right-4 z-[80] flex h-[min(78dvh,760px)] w-[min(calc(100vw-2rem),560px)] flex-col">
           <div className="app-surface flex h-full w-full flex-col overflow-hidden rounded-lg">
             <header className="flex items-center justify-between border-b border-white/8 px-3.5 py-2.5">
               <p className="flex items-center gap-2">

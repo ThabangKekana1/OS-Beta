@@ -18,9 +18,27 @@ const SURFACES = [
   { href: "/admin/briefs", label: "Briefs" },
 ];
 
+/**
+ * The legacy console carries its own full-width chrome (its own sidebar grid).
+ * Wrapping it in the reading container squashed the whole CRM into a 1024px
+ * column with dead space either side, so those routes run full bleed.
+ */
+const CONSOLE_PREFIXES = [
+  "/admin/worklist",
+  "/admin/migration-cases",
+  "/admin/leads",
+  "/admin/associations",
+  "/admin/intelligence",
+  "/admin/inbox",
+  "/admin/sales",
+  "/admin/activity",
+  "/admin/notifications",
+];
+
 export function DeckShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const isConsole = CONSOLE_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -93,11 +111,22 @@ export function DeckShell({ children }: { children: ReactNode }) {
           interface. Secondary surfaces keep the reading container + the dock. */}
       {pathname === "/admin" ? (
         <main className="h-[calc(100dvh-4rem)] overflow-hidden">{children}</main>
+      ) : isConsole ? (
+        <main className="min-h-[calc(100dvh-4rem)] w-full">{children}</main>
       ) : (
         <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
       )}
 
-      {pathname !== "/admin" && <ChatDock />}
+      {/* The dock is the only composer below lg, where Today hides the
+          conversation column. Without it there was no input box at all on a
+          narrow window. */}
+      {pathname === "/admin" ? (
+        <div className="lg:hidden">
+          <ChatDock />
+        </div>
+      ) : (
+        <ChatDock />
+      )}
 
       {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
     </div>
