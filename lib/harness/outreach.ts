@@ -30,7 +30,7 @@ function publicWebsiteOrigin(): string {
   return configured;
 }
 
-export const ASSESSMENT_URL = `${publicWebsiteOrigin()}/pricing?utm_campaign=mi-first-touch`;
+export const ASSESSMENT_URL = `${publicWebsiteOrigin()}/start`;
 
 /** Extract one evidence-anchored sentence from the row's own fields. */
 export function firstFitLine(row: Pick<BookRowScored, "companyName" | "scaleSignal" | "electricityRationale" | "subSector" | "siteType">): string {
@@ -143,6 +143,7 @@ export function outreachGuard(
   }
   if (!/kind regards/i.test(draft.body)) return "no courteous close";
   if (!draft.body.includes(ASSESSMENT_URL)) return "missing or altered the route into the system";
+  if (/utm_/i.test(draft.body)) return "raw tracking parameters in the letter";
   if (/\b(brief call|quick call|short call|meeting|catch up)\b/i.test(draft.body)) return "asks for a meeting instead of sending them to the system";
   const firstName = companyName.split(/\s+/)[0]?.toLowerCase() ?? "";
   if (firstName && !draft.body.toLowerCase().includes(firstName) && !draft.subject.toLowerCase().includes(firstName)) {
