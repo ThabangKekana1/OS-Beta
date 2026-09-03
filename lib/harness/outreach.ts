@@ -133,8 +133,8 @@ export function outreachGuard(
   if (!draft.subject?.trim() || !draft.body?.trim()) return "empty subject or body";
   if (draft.subject.length > 78) return "subject too long";
   const words = draft.body.trim().split(/\s+/).length;
-  if (words > 190) return "body too long";
-  if (words < 70) return "body too thin for a first touch";
+  if (words > 240) return "body too long";
+  if (words < 90) return "body too thin for a first touch";
   for (const pattern of BANNED_IN_OUTREACH) {
     if (pattern.test(draft.subject) || pattern.test(draft.body)) return `banned content: ${pattern}`;
   }
@@ -241,20 +241,34 @@ export async function draftFirstTouchWithModel(
           "- Offer to be redirected: if this sits with someone else in the business, ask to be pointed there.",
           "- Close with Kind regards and the full signature block.",
           "",
+          "THIS IS A FIRST EMAIL. Write it like one.",
+          "They have never heard of you. Nobody asked you to write. That means the letter earns its",
+          "place through courtesy and honesty, not through argument. Do not stack a case. Do not lecture",
+          "a person about their own industry. One plain sentence about the cost reality is enough, the",
+          "arithmetic belongs in a later conversation once they have shown interest.",
+          "Introduce yourself properly and early, the way a person does when knocking on a door. Say who",
+          "you are and what you built before you say anything about them. Be openly honest that this",
+          "arrives unannounced. Sincerity beats polish here, and there is no shame in a cold letter that",
+          "is honest about being one.",
+          "",
           "STRUCTURE, in this order, nothing extra:",
           "1. Good day <first name>,",
-          "2. One sentence that proves you know their specific operation, from the evidence given. Their site,",
-          "   their town, what they actually run. Never registry text, never a database field.",
-          "3. One or two sentences on the compounding cost, stated as arithmetic and consequence, not doom.",
-          "4. One sentence on what Foundation-1 does, in plain words, carrying the R0 until live fact.",
-          "5. One short sentence of honest momentum, only if the evidence supports it.",
-          "6. ONE ask, and it is a link, not a favour. Do not offer to send them anything and do not ask",
-          "   for a call, a meeting, bills or documents. The machine does the work, not you. Invite them to",
-          "   put their own numbers in and see their own answer, in about a minute, at the exact URL you are",
-          "   given in the evidence. Write the URL in full on its own line. Say plainly what happens when",
-          "   they do: they see their own number, nothing is signed, nothing is owed, and they can stop at",
-          "   any point. Never claim you have their bills or their figures.",
-          "7. Kind regards, then Karman Kekana, then Foundation-1, on three lines.",
+          "2. Introduce yourself in one sentence and mean it: your name, that you founded Foundation-1,",
+          "   and where you are writing from. Nothing about them yet.",
+          "3. Say honestly why you are writing to them in particular, in one or two sentences, using the",
+          "   evidence you were given about their operation. Show that this is not a mailshot. Do not",
+          "   flatter, do not exaggerate, and never quote a rand figure for their electricity.",
+          "4. One plain sentence on the reason it matters: electricity keeps climbing at around 13 percent",
+          "   a year while what they charge does not. State it once, simply, then move on.",
+          "5. One sentence on what Foundation-1 does, in ordinary words, carrying the fact that the client",
+          "   pays nothing until their new power is live.",
+          "6. One short honest line of momentum, only if the evidence supports it, said humbly.",
+          "7. The give: they can see their own numbers in about a minute at the link, put on its own line.",
+          "   Frame it as something that may be useful to them, never as a request or a next step. Say",
+          "   nothing is signed and nothing is owed.",
+          "8. A warm, human close before the sign off: acknowledge that the letter arrives unannounced and",
+          "   thank them for reading, and offer to be pointed elsewhere if this sits with a colleague.",
+          "9. Kind regards, then Karman Kekana, then Foundation-1, on three lines.",
           "",
           "HARD RULES:",
           "- Greeting: when the evidence carries a Recipient, greet that person by first name and nothing",
@@ -270,7 +284,8 @@ export async function draftFirstTouchWithModel(
           "- Write rand amounts with spaces and never commas, for example R1 250 000.",
           "- Describe the client\'s own sector accurately from the evidence. Never call an operation an",
           "  agribusiness if the evidence says otherwise, and never describe a sector you were not given.",
-          "- Between 90 and 150 words. Subject under 60 characters, specific to their operation, never a",
+          "- Between 110 and 190 words. Warmth needs room, but every sentence must earn its place.",
+          "  Subject under 60 characters, specific to their operation, never a",
           "  generic offer phrase.",
           "- Break the body into short paragraphs of one or two sentences, separated by a blank line. Never",
           "  send a single dense block of text, it does not get read.",
