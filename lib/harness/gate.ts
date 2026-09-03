@@ -19,6 +19,20 @@ export const FOLLOWUP_ROLLING_DAYS = 7;
 
 export type SendQueueStatus = "draft" | "approved" | "rejected" | "sent";
 
+/**
+ * Outreach is a letter from a person, so it leaves from that person's warmed
+ * mailbox and replies come back to him. The noreply address is transactional
+ * chrome for lifecycle mail and must never carry a first touch: a director who
+ * wants to answer has nowhere to send it, and the signature would not match the
+ * envelope.
+ */
+export function outreachSender(): { from: string; replyTo: string } {
+  const address =
+    (process.env.OUTREACH_FROM_ADDRESS || "karman@1os.foundation-1.co.za").trim();
+  const name = (process.env.OUTREACH_FROM_NAME || "Karman Kekana").trim();
+  return { from: `${name} <${address}>`, replyTo: address };
+}
+
 export type SendChannel = "email";
 
 export type SendQueueDraftInput = {

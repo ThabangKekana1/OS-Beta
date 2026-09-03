@@ -6,7 +6,7 @@
 import { NextResponse } from "next/server";
 import { getServerAuthSession } from "@/lib/auth-server";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
-import { markSent, SEND_DAILY_CAP, canDispatch } from "@/lib/harness/gate";
+import { markSent, SEND_DAILY_CAP, canDispatch, outreachSender } from "@/lib/harness/gate";
 import { say } from "@/lib/harness/voice";
 import { sendEmail } from "@/lib/email";
 
@@ -74,11 +74,14 @@ export async function POST() {
       continue;
     }
 
+    const sender = outreachSender();
     const outcome = await sendEmail({
       to: row.to_address as string,
       subject: row.subject as string,
       text: row.body_text as string,
       html: (row.body_html as string | null) ?? undefined,
+      from: sender.from,
+      replyTo: sender.replyTo,
     });
 
     if (!outcome.ok) {
