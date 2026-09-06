@@ -153,7 +153,7 @@ export async function redraftQueue(input: { match?: string; all?: boolean }): Pr
     if (!draft) { failed += 1; continue; }
     const { error: updateError } = await admin
       .from("foundation1_send_queue")
-      .update({ subject: draft.subject, body_text: draft.bodyText, payload: { ...(draft.payload ?? {}), via: "mi-redraft" } })
+      .update({ subject: draft.subject, body_text: draft.bodyText, body_html: draft.bodyHtml ?? null, payload: { ...(draft.payload ?? {}), via: "mi-redraft" } })
       .eq("id", row.id)
       .eq("status", "draft");
     if (updateError) { failed += 1; continue; }

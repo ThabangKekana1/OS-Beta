@@ -132,9 +132,12 @@ export function outreachGuard(
 ): string | null {
   if (!draft.subject?.trim() || !draft.body?.trim()) return "empty subject or body";
   if (draft.subject.length > 78) return "subject too long";
-  const words = draft.body.trim().split(/\s+/).length;
-  if (words > 240) return "body too long";
-  if (words < 90) return "body too thin for a first touch";
+  // The signature block is fixed and does not compete with the letter, so the
+  // length rule measures the letter, not the block.
+  const bodyWithoutSignature = draft.body.split(/kind regards/i)[0] ?? draft.body;
+  const letterWords = bodyWithoutSignature.trim().split(/\s+/).length;
+  if (letterWords > 270) return "body too long";
+  if (letterWords < 85) return "body too thin for a first touch";
   for (const pattern of BANNED_IN_OUTREACH) {
     if (pattern.test(draft.subject) || pattern.test(draft.body)) return `banned content: ${pattern}`;
   }
@@ -147,6 +150,8 @@ export function outreachGuard(
   if (!/\b35\b/.test(draft.body) || !/\b58\b/.test(draft.body)) return "does not carry both savings ceilings";
   if (!/(fund|finance|own)/i.test(draft.body)) return "does not say Foundation-1 funds and owns the system";
   if (!/(no capital|nothing to build|pays nothing|no cost to you|R0)/i.test(draft.body)) return "does not make the zero capital position explicit";
+  if (!/linkedin\.com\/in\/karman-kekana/i.test(draft.body)) return "signature is missing the LinkedIn profile";
+  if (!/Wedgefield Office Park/i.test(draft.body)) return "signature is missing the company address";
   if (!draft.body.includes(ASSESSMENT_URL)) return "missing or altered the route into the system";
   if (/utm_/i.test(draft.body)) return "raw tracking parameters in the letter";
   if (/\b(brief call|quick call|short call|meeting|catch up)\b/i.test(draft.body)) return "asks for a meeting instead of sending them to the system";
@@ -171,6 +176,26 @@ export function outreachGuard(
     }
   }
   return null;
+}
+
+
+/** Escape, linkify and paragraph a plain-text letter for the HTML part. */
+export function toEmailHtml(text: string): string {
+  const escaped = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  const linked = escaped.replace(/(https?:\/\/[^\s<]+)/g, (url) => {
+    const label = url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+    return `<a href="${url}" style="color:#0e7490; text-decoration:underline;">${label}</a>`;
+  });
+  const paragraphs = linked
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block) => `<p style="margin:0 0 14px;">${block.replace(/\n/g, "<br/>")}</p>`) 
+    .join("");
+  return `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; font-size:15px; line-height:1.6; color:#111;">${paragraphs}</div>`;
 }
 
 export async function draftFirstTouchWithModel(
@@ -277,7 +302,12 @@ export async function draftFirstTouchWithModel(
           "   nothing is signed and nothing is owed.",
           "8. A warm, human close before the sign off: acknowledge that the letter arrives unannounced and",
           "   thank them for reading, and offer to be pointed elsewhere if this sits with a colleague.",
-          "9. Kind regards, then Karman Kekana, then Foundation-1, on three lines.",
+          "9. The signature block, exactly these five lines and nothing else:",
+          "     Kind regards,",
+          "     Karman Kekana",
+          "     Foundation-1",
+          "     https://www.linkedin.com/in/karman-kekana-26011674",
+          "     17th Muswell Road, Wedgefield Office Park, Bryanston, Sandton, Johannesburg 2191",
           "",
           "HARD RULES:",
           "- Greeting: when the evidence carries a Recipient, greet that person by first name and nothing",
@@ -305,7 +335,8 @@ export async function draftFirstTouchWithModel(
           "- Write rand amounts with spaces and never commas, for example R1 250 000.",
           "- Describe the client\'s own sector accurately from the evidence. Never call an operation an",
           "  agribusiness if the evidence says otherwise, and never describe a sector you were not given.",
-          "- Between 110 and 190 words. Warmth needs room, but every sentence must earn its place.",
+          "- Between 130 and 250 words, excluding the signature block. The offer needs room, but every",
+          "  sentence must earn its place. Short paragraphs, one or two sentences each.",
           "  Subject under 60 characters, specific to their operation, never a",
           "  generic offer phrase.",
           "- Break the body into short paragraphs of one or two sentences, separated by a blank line. Never",
@@ -327,7 +358,17 @@ export async function draftFirstTouchWithModel(
     body: String(parsed.body ?? "").replace(/\u2014/g, ", ").trim(),
   };
   const rejected = outreachGuard(draft, row.companyName, row.contactFirstName);
-  if (rejected) return null;
+  if (rejected) {
+    // Silent rejection hides why a batch is empty. One env flag turns the
+    // reason on without changing behaviour.
+    if (process.env.OUTREACH_DEBUG) console.error(`[outreach guard] ${row.companyName}: ${rejected}`);
+    return null;
+  }
+
+  // The letter is written as plain text, but it goes out as both. Building the
+  // HTML here means the assessment link and the founder's LinkedIn profile are
+  // actually clickable in the client's inbox instead of being bare text.
+  const bodyHtml = toEmailHtml(draft.body);
 
   return {
     agent: SALES_AGENT,
@@ -336,6 +377,7 @@ export async function draftFirstTouchWithModel(
     toAddress: email,
     subject: draft.subject,
     bodyText: draft.body,
+    bodyHtml,
     payload: {
       bookId: row.bookId,
       sector: row.sector,
