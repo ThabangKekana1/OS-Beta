@@ -142,6 +142,11 @@ export function outreachGuard(
     if (pattern.test(draft.subject) || pattern.test(draft.body)) return `american sales register: ${pattern}`;
   }
   if (!/kind regards/i.test(draft.body)) return "no courteous close";
+  // The offer is the point of the letter. A first touch that does not say we
+  // fund it, and does not name what they can save, is a wasted send.
+  if (!/\b35\b/.test(draft.body) || !/\b58\b/.test(draft.body)) return "does not carry both savings ceilings";
+  if (!/(fund|finance|own)/i.test(draft.body)) return "does not say Foundation-1 funds and owns the system";
+  if (!/(no capital|nothing to build|pays nothing|no cost to you|R0)/i.test(draft.body)) return "does not make the zero capital position explicit";
   if (!draft.body.includes(ASSESSMENT_URL)) return "missing or altered the route into the system";
   if (/utm_/i.test(draft.body)) return "raw tracking parameters in the letter";
   if (/\b(brief call|quick call|short call|meeting|catch up)\b/i.test(draft.body)) return "asks for a meeting instead of sending them to the system";
@@ -260,8 +265,12 @@ export async function draftFirstTouchWithModel(
           "   flatter, do not exaggerate, and never quote a rand figure for their electricity.",
           "4. One plain sentence on the reason it matters: electricity keeps climbing at around 13 percent",
           "   a year while what they charge does not. State it once, simply, then move on.",
-          "5. One sentence on what Foundation-1 does, in ordinary words, carrying the fact that the client",
-          "   pays nothing until their new power is live.",
+          "5. THE OFFER, two or three sentences and the heart of the letter. Foundation-1 funds, installs and",
+          "   owns the system, so there is no capital cost to them and no asset on their balance sheet. They buy",
+          "   only the energy, at a lower rate. Name both pathways and their ceilings: solar and storage on their",
+          "   own site at up to 35 percent off, or clean energy wheeled to their existing meter with nothing",
+          "   installed at up to 58 percent off, or both together for up to 60 percent combined, which only",
+          "   Foundation-1 can do. Say that they pay nothing until their new power is live.",
           "6. One short honest line of momentum, only if the evidence supports it, said humbly.",
           "7. The give: they can see their own numbers in about a minute at the link, put on its own line.",
           "   Frame it as something that may be useful to them, never as a request or a next step. Say",
@@ -277,7 +286,19 @@ export async function draftFirstTouchWithModel(
           "- When a job title is given, write to that person\'s actual concern: an operations manager cares",
           "  about uptime and continuity, a finance director about the cost line and the balance sheet, an",
           "  owner about the next ten years. Do not name their title back at them, use it to choose what you say.",
-          "- No savings percentages, no invented numbers, no partner or bank names, no em dashes.",
+          "- THE OFFER MUST BE UNMISTAKABLE. Every letter has to carry three things in plain words:",
+          "  (a) ZERO CAPEX. Foundation-1 funds, installs, insures and owns the system. The client pays nothing",
+          "      to build it and buys only the energy it produces, at a lower rate than they pay now.",
+          "  (b) THE TWO PATHWAYS and their approved savings ceilings, which are the published figures on",
+          "      foundation-1.co.za and are the ONLY percentages you may ever write:",
+          "        solar and storage on their own site, up to 35 percent off from day one;",
+          "        clean energy wheeled to their existing meter with nothing installed, up to 58 percent off;",
+          "        and both together, up to 60 percent combined. Foundation-1 is the only operator in South",
+          "        Africa that can combine the two, and that is the sentence that separates this letter from",
+          "        every solar email they have ever deleted. Say it plainly, once.",
+          "      Always write them as up to, never as a promise, and never invent a different number.",
+          "  (c) R0 until the switch. They pay nothing until their new power is live.",
+          "- No invented numbers beyond those two published ceilings. No partner or bank names. No em dashes.",
           "- NEVER quote a rand figure for their electricity spend. Any spend figure you are given is",
           "  Foundation-1\'s own estimate, not their bill, and stating it back as fact is both wrong and",
           "  intrusive. Refer to the scale of the operation in words instead.",

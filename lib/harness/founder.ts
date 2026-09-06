@@ -12,7 +12,8 @@ import { computeDealBook } from "./dealbook";
 import { buildConversionInsights, readFunnelSlices, FUNNEL_STAGES } from "./outcomes";
 import { queueSendDraft } from "./gate";
 import { appendDeckMessage } from "./voice";
-import { searchSalesBook, readPipelineSummary } from "./tools";
+import { draftFirstTouchWithModel } from "./outreach";
+import { searchProspects, searchSalesBook, readPipelineSummary } from "./tools";
 import { scoreLead } from "./score";
 
 export const MI_AGENT = "mi";
@@ -28,6 +29,9 @@ export function miSystemPrompt(): string {
     "- You may propose at most one next action per reply. He approves drafts in the Today queue; when he says do it, batch the drafts via the tool so they land there.",
     "- He can kill work verbally ('kill pending sends'). Relay it through act.killPendingSends - rejections carry his authority as the reason.",
     "- You keep the plan via act.setPlan whenever strategy shifts; it renders on the Deck until replaced.",
+    "- When he changes the pitch, rewrite the work already in front of him: act.redraftQueue with {all:true}",
+    "  rewrites every pending draft against the current template, or {match:'astral'} rewrites one company's",
+    "  draft. Never tell him you cannot change a draft: redraft it and show him the new one.",
     "- Speak like a chief of staff, not a chatbot: status, risk, ask. No filler, no apologies, no em dashes.",
     "- When he asks a question, ANSWER it in the reply with the actual names and numbers your tools returned.",
     "- 'Check Today' or a pointer to a surface is only a valid reply when you actually queued or changed something there.",
@@ -43,6 +47,7 @@ type FounderToolName =
   | "read.book"
   | "read.queue"
   | "act.queueDraftBatch"
+  | "act.redraftQueue"
   | "act.killPendingSends"
   | "act.setPlan";
 
@@ -91,45 +96,70 @@ export async function currentPlan(): Promise<string | null> {
   return String(((data.content ?? {}) as Record<string, unknown>).plan ?? "");
 }
 
-export async function queueDraftBatchFromBook(sector: string, count: number): Promise<{ queued: number }> {
-  const rows = await searchSalesBook({ sector: sector || undefined, limit: Math.min(Math.max(count, 1), 20) * 3 });
-  const withAddress = rows.filter((row) => row.contactChannel?.includes("@"));
+/**
+ * MI writes with the same rail the console uses: the named lead book first, and
+ * the model drafter under the guard. The old hardcoded template here addressed
+ * nobody by name, asked for six months of bills in a first touch and carried the
+ * generic subject line the learned playbook had already rejected twice.
+ */
+export async function queueDraftBatchFromBook(sector: string, count: number): Promise<{ queued: number; guarded: number }> {
+  const wanted = Math.min(Math.max(count, 1), 20);
+  const admin = getSupabaseAdminClient();
+  const existing = admin ? await admin.from("foundation1_send_queue").select("prospect_key") : { data: [] as Array<{ prospect_key: string }> };
+  const already = new Set((existing.data ?? []).map((row) => row.prospect_key as string));
+  const rows = await searchProspects({ limit: 200 });
+  const pool = sector
+    ? rows.filter((row) => `${row.sector} ${row.subSector ?? ""}`.toLowerCase().includes(sector.toLowerCase()))
+    : rows;
   let queued = 0;
-  for (const row of withAddress) {
-    if (queued >= count) break;
-    const fitLine = row.scaleSignal ?? row.electricityRationale ?? "";
-    const body = [
-      "Good day,", "",
-      `${fitLine.slice(0, 220)}.`,
-      "",
-      "Foundation-1 helps South African agribusinesses cut electricity costs through funded solar-and-storage or wheeled clean energy: no capital outlay, you buy only the energy you use.",
-      "",
-      "The first step is a free forensic bill audit: send six months of utility bills and we return what you actually pay per unit, reconciled to the cent, and what two migration pathways would change.",
-      "",
-      "Worth a look for your site?", "", "Karman Kekana", "Foundation-1",
-    ].join("\n");
-    // Extract first email address only; POPIA business-channels rule.
-    const email = row.contactChannel?.match(/[\w.+-]+@[\w-]+\.[\w.-]+/)?.[0];
-    if (!email) continue;
-    await queueSendDraft({
-      agent: "sales-harness",
-      prospectKey: row.bookId,
-      templateKey: "direct_first_touch_v2_mi",
-      toAddress: email,
-      subject: `${row.companyName}: zero-capex energy migration worth a look?`,
-      bodyText: body,
-      payload: {
-        bookId: row.bookId,
-        sector: row.sector,
-        companyName: row.companyName,
-        score: row.score,
-        scoreReasons: row.reasons,
-        via: "mi-chat",
-      },
-    });
+  let guarded = 0;
+  for (const row of pool) {
+    if (queued >= wanted) break;
+    if (already.has(row.bookId)) continue;
+    const draft = await draftFirstTouchWithModel(row, { timeoutMs: 45_000 }).catch(() => null);
+    if (!draft) { guarded += 1; continue; }
+    await queueSendDraft({ ...draft, payload: { ...(draft.payload ?? {}), via: "mi-chat" } });
     queued += 1;
   }
-  return { queued };
+  return { queued, guarded };
+}
+
+/**
+ * Rewrite work already in the queue against the CURRENT template. The founder
+ * changes the pitch in conversation, and the batch in front of him has to be
+ * able to change with it, without him approving anything he has not re-read.
+ */
+export async function redraftQueue(input: { match?: string; all?: boolean }): Promise<{ redrafted: number; skipped: number; failed: number }> {
+  const admin = getSupabaseAdminClient();
+  if (!admin) throw new Error("Store unavailable.");
+  const { data, error } = await admin
+    .from("foundation1_send_queue")
+    .select("id,prospect_key,to_address,payload,status")
+    .eq("status", "draft");
+  if (error) throw new Error(error.message);
+  const needle = (input.match ?? "").trim().toLowerCase();
+  const rows = (data ?? []).filter((row) => {
+    if (input.all || !needle) return true;
+    const payload = (row.payload ?? {}) as { companyName?: string; contactName?: string };
+    return `${row.to_address ?? ""} ${payload.companyName ?? ""} ${payload.contactName ?? ""}`.toLowerCase().includes(needle);
+  });
+  const book = await searchProspects({ limit: 500 });
+  const byId = new Map(book.map((row) => [row.bookId, row]));
+  let redrafted = 0, skipped = 0, failed = 0;
+  for (const row of rows) {
+    const lead = byId.get(row.prospect_key as string);
+    if (!lead) { skipped += 1; continue; }
+    const draft = await draftFirstTouchWithModel(lead, { timeoutMs: 45_000 }).catch(() => null);
+    if (!draft) { failed += 1; continue; }
+    const { error: updateError } = await admin
+      .from("foundation1_send_queue")
+      .update({ subject: draft.subject, body_text: draft.bodyText, payload: { ...(draft.payload ?? {}), via: "mi-redraft" } })
+      .eq("id", row.id)
+      .eq("status", "draft");
+    if (updateError) { failed += 1; continue; }
+    redrafted += 1;
+  }
+  return { redrafted, skipped, failed };
 }
 
 /** Read-only brief used by read.status/read.brief. */
@@ -163,6 +193,7 @@ export function buildFounderTools(): HarnessToolMap {
     "read.book": (input) => readBook((input ?? {}) as BookQuery),
     "read.queue": () => readQueue(),
     "act.queueDraftBatch": (input) => queueDraftBatchFromBook(String((input as { sector?: unknown })?.sector ?? ""), Number((input as { count?: unknown })?.count ?? 20)),
+    "act.redraftQueue": (input) => redraftQueue((input ?? {}) as { match?: string; all?: boolean }),
     "act.killPendingSends": (input) => killPendingSends((input ?? {}) as { reason?: string }),
     "act.setPlan": (input) => setPlan((input ?? {}) as { plan: string }),
   };
@@ -232,7 +263,7 @@ async function readQueue() {
 }
 
 export function founderToolNames(): FounderToolName[] {
-  return ["read.status", "read.brief", "read.book", "read.queue", "act.queueDraftBatch", "act.killPendingSends", "act.setPlan"];
+  return ["read.status", "read.brief", "read.book", "read.queue", "act.queueDraftBatch", "act.redraftQueue", "act.killPendingSends", "act.setPlan"];
 }
 
 // Keep the scorer referenced for book ranking parity with the deck lead list.
