@@ -27,10 +27,11 @@ export type SendQueueStatus = "draft" | "approved" | "rejected" | "sent";
  * envelope.
  */
 export function outreachSender(): { from: string; replyTo: string } {
-  const address =
-    (process.env.OUTREACH_FROM_ADDRESS || "karman@1os.foundation-1.co.za").trim();
+  // Send from the warmed mailbox, take replies on the founder's direct address.
+  const address = (process.env.OUTREACH_FROM_ADDRESS || "karman@1os.foundation-1.co.za").trim();
+  const replyTo = (process.env.OUTREACH_REPLY_TO || "karman@foundation-1.co.za").trim();
   const name = (process.env.OUTREACH_FROM_NAME || "Karman Kekana").trim();
-  return { from: `${name} <${address}>`, replyTo: address };
+  return { from: `${name} <${address}>`, replyTo };
 }
 
 export type SendChannel = "email";

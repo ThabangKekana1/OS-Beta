@@ -140,25 +140,37 @@ export function outreachGuard(
   if (draft.subject.length > 78) return "subject too long";
   // The signature block is fixed and does not compete with the letter, so the
   // length rule measures the letter, not the block.
-  const bodyWithoutSignature = draft.body.split(/kind regards/i)[0] ?? draft.body;
+  const bodyWithoutSignature = draft.body.split(/\n\s*Karman Kekana\s*\n\s*Founder, Foundation-1/i)[0] ?? draft.body;
   const letterWords = bodyWithoutSignature.trim().split(/\s+/).length;
   if (letterWords > 290) return "body too long";
-  if (letterWords < 85) return "body too thin for a first touch";
+  if (letterWords < 70) return "body too thin for a first touch";
   for (const pattern of BANNED_IN_OUTREACH) {
     if (pattern.test(draft.subject) || pattern.test(draft.body)) return `banned content: ${pattern}`;
   }
   for (const pattern of BANNED_REGISTER) {
     if (pattern.test(draft.subject) || pattern.test(draft.body)) return `american sales register: ${pattern}`;
   }
-  if (!/kind regards/i.test(draft.body)) return "no courteous close";
+  if (!/Founder, Foundation-1/i.test(draft.body)) return "signature block is not the founder's";
+  if (/kind regards/i.test(draft.body)) return "carries a sign off the founder does not use";
   // The offer is the point of the letter. A first touch that does not say we
   // fund it, and does not name what they can save, is a wasted send.
   if (!/\b35\b/.test(draft.body) || !/\b58\b/.test(draft.body)) return "does not carry both savings ceilings";
   if (!/nedbank/i.test(draft.body)) return "does not name the bank that owns and insures the infrastructure";
+  // A letter that apologises twice reads as nervous. One acknowledgement only.
+  const unannounced = (draft.body.match(/unannounced|without introduction|out of the blue/gi) ?? []).length;
+  if (unannounced > 1) return "acknowledges the cold approach more than once";
+  const firstThird = draft.body.slice(0, Math.floor(draft.body.length / 3));
+  if (/on site infrastructure|the system|the pathways/i.test(firstThird) && !/foundation-1 (moves|helps|builds|puts)/i.test(firstThird)) {
+    return "refers to the offer before saying what Foundation-1 does";
+  }
   if (!/(own|install|maintain|insur)/i.test(draft.body)) return "does not say who owns, installs and insures the system";
-  if (!/(no capital|nothing to build|pays nothing|no cost to you|R0)/i.test(draft.body)) return "does not make the zero capital position explicit";
+  if (!/(zero capex|no capital|nothing on your balance sheet|pays? nothing|only once it)/i.test(draft.body)) return "does not make the zero capital position explicit";
   if (!/linkedin\.com\/in\/karman-kekana/i.test(draft.body)) return "signature is missing the LinkedIn profile";
   if (!/Wedgefield Office Park/i.test(draft.body)) return "signature is missing the company address";
+  if (!/karman@foundation-1\.co\.za/i.test(draft.body)) return "signature is missing the direct email address";
+  if (!/\+27 69 811 7112/.test(draft.body)) return "signature is missing the phone number";
+  if (!/\bEden\b/.test(draft.body) || !/\bAwaken\b/.test(draft.body)) return "does not name both pathways";
+  if (/good day|dear /i.test(draft.body.split("\n")[0] ?? "")) return "opens with a salutation the founder does not use";
   if (!draft.body.includes(ASSESSMENT_URL)) return "missing or altered the route into the system";
   if (/utm_/i.test(draft.body)) return "raw tracking parameters in the letter";
   if (/\b(brief call|quick call|short call|meeting|catch up)\b/i.test(draft.body)) return "asks for a meeting instead of sending them to the system";
@@ -221,7 +233,7 @@ export async function draftFirstTouchWithModel(
     firstName ? `Greet them by first name: ${firstName}` : null,
     row.scaleSignal ? `Scale evidence: ${row.scaleSignal}` : null,
     row.electricityRationale ? `Electricity rationale (OUR ESTIMATE, never quote it as their figure): ${row.electricityRationale}` : null,
-    `Sector: ${row.sector}${row.subSector && row.subSector !== row.sector ? ` (${row.subSector})` : ""}`,
+    `Sector tag on file, TREAT AS UNRELIABLE and never assert it back to them unless the scale evidence supports it: ${row.sector}${row.subSector && row.subSector !== row.sector ? ` (${row.subSector})` : ""}`,
     row.siteType ? `Site type: ${row.siteType}` : null,
     row.town || row.province ? `Location: ${[row.town, row.province].filter(Boolean).join(", ")}` : null,
     `The one link to send them, copy it exactly, on its own line: ${ASSESSMENT_URL}`,
@@ -278,42 +290,39 @@ export async function draftFirstTouchWithModel(
           "- Offer to be redirected: if this sits with someone else in the business, ask to be pointed there.",
           "- Close with Kind regards and the full signature block.",
           "",
-          "THIS IS A FIRST EMAIL. Write it like one.",
-          "They have never heard of you. Nobody asked you to write. That means the letter earns its",
-          "place through courtesy and honesty, not through argument. Do not stack a case. Do not lecture",
-          "a person about their own industry. One plain sentence about the cost reality is enough, the",
-          "arithmetic belongs in a later conversation once they have shown interest.",
-          "Introduce yourself properly and early, the way a person does when knocking on a door. Say who",
-          "you are and what you built before you say anything about them. Be openly honest that this",
-          "arrives unannounced. Sincerity beats polish here, and there is no shame in a cold letter that",
-          "is honest about being one.",
+          "THE FOUNDER HAS WRITTEN THE LETTER HIMSELF. Follow his structure exactly. Your job is to fit this",
+          "prospect into it, not to reinvent it. Short lines. No apology. No throat clearing. Nothing said twice.",
           "",
-          "STRUCTURE, in this order, nothing extra:",
-          "1. Good day <first name>,",
-          "2. Introduce yourself in one sentence and mean it: your name, that you founded Foundation-1,",
-          "   and where you are writing from. Nothing about them yet.",
-          "3. Say honestly why you are writing to them in particular, in one or two sentences, using the",
-          "   evidence you were given about their operation. Show that this is not a mailshot. Do not",
-          "   flatter, do not exaggerate, and never quote a rand figure for their electricity.",
-          "4. One plain sentence on the reason it matters: electricity keeps climbing at around 13 percent",
-          "   a year while what they charge does not. State it once, simply, then move on.",
-          "5. THE OFFER, three or four sentences and the heart of the letter. The on site infrastructure is",
-          "   fully owned, installed, maintained and insured by Nedbank Corporate and Investment Banking, so",
-          "   there is no capital cost to them and no asset on their balance sheet. They buy",
-          "   only the energy, at a lower rate. Name both pathways and their ceilings: solar and storage on their",
-          "   own site at up to 35 percent off, or clean energy wheeled to their existing meter with nothing",
-          "   installed at up to 58 percent off, or both together for up to 60 percent combined, which only",
-          "   Foundation-1 can do. Say that they pay nothing until their new power is live.",
-          "6. One short honest line of momentum, only if the evidence supports it, said humbly.",
-          "7. The give: they can see their own numbers in about a minute at the link, put on its own line.",
-          "   Frame it as something that may be useful to them, never as a request or a next step. Say",
-          "   nothing is signed and nothing is owed.",
-          "8. A warm, human close before the sign off: acknowledge that the letter arrives unannounced and",
-          "   thank them for reading, and offer to be pointed elsewhere if this sits with a colleague.",
-          "9. The signature block, exactly these five lines and nothing else:",
-          "     Kind regards,",
+          "SUBJECT: lead with the benefit and the company, under 60 characters. His pattern:",
+          "  <Company>\'s power bill: up to 60% down, zero capital outlay",
+          "",
+          "THE LETTER, in this exact order:",
+          "1. <First name>,   on its own line. No Good day, no Dear.",
+          "2. Karman Kekana, founder of Foundation-1, writing from Bryanston.   One line, exactly this form.",
+          "3. THE PROBLEM, three short sentences in his voice: their electricity cost rises about 13% a year,",
+          "   their output price does not move with it, and the gap compounds against them every year they do",
+          "   not act. Where the evidence gives you something specific about their operation, work it into the",
+          "   first of those sentences. Never assert a sector the evidence does not support.",
+          "4. The line: Foundation-1 closes it two ways:",
+          "5. A numbered list, exactly two items, then a third unnumbered line:",
+          "     1. Eden: solar and storage on your own site, up to 35% off from day one. Installed, owned,",
+          "        maintained and insured by our financing partner, Nedbank CIB. Zero capex, nothing on your",
+          "        balance sheet.",
+          "     2. Awaken: renewable power wheeled to your existing meter, nothing installed, up to 58% off.",
+          "     Both together: up to 60% combined. Foundation-1 is the only operator in South Africa running",
+          "     this stack end to end.",
+          "6. You pay only for energy delivered, and only once it is live.",
+          "7. One line of momentum, true and specific to them where possible: other operators in their sector",
+          "   or province already in the pipeline, and provincial government engaging Foundation-1 directly on",
+          "   agribusiness energy programmes. Only if the evidence supports it.",
+          "8. Run your own numbers in under a minute: https://foundation-1.co.za/start",
+          "9. No signature required to see them. If energy procurement is not their remit, ask for a pointer to",
+          "   whoever owns it at their company, by name.",
+          "10. The signature block, exactly these five lines, with NO Kind regards and no sign off line",
+          "    above it. The founder does not use one:",
           "     Karman Kekana",
-          "     Foundation-1",
+          "     Founder, Foundation-1",
+          "     karman@foundation-1.co.za  |  +27 69 811 7112",
           "     https://www.linkedin.com/in/karman-kekana-26011674",
           "     17th Muswell Road, Wedgefield Office Park, Bryanston, Sandton, Johannesburg 2191",
           "",
