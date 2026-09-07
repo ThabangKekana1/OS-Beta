@@ -7,7 +7,7 @@
  * labels, pills reserved for status, motion only for state.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Send } from "lucide-react";
 import { AdminBadge, AdminHeader } from "@/components/admin/AdminPrimitives";
 import { DeckConversation } from "@/components/deck/ChatDock";
 
@@ -40,6 +40,24 @@ type DeckView = {
 
 const zar = (v: number) =>
   new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR", maximumFractionDigits: 0 }).format(v);
+
+/**
+ * Dispatch results become one honest line: how many left, and exactly why the
+ * rest did not. A skip for missing provider config must never read as a cap.
+ */
+function summariseDispatch(results: Array<{ ok: boolean; detail?: string }>): string {
+  const sent = results.filter((r) => r.ok).length;
+  const blocked = new Map<string, number>();
+  for (const result of results) {
+    if (!result.ok) {
+      const detail = result.detail ?? "blocked";
+      blocked.set(detail, (blocked.get(detail) ?? 0) + 1);
+    }
+  }
+  const parts = [`${sent} sent`];
+  for (const [detail, count] of blocked) parts.push(`${count} × ${detail}`);
+  return parts.join(" · ");
+}
 
 export function AdminDeckRoute() {
   const [view, setView] = useState<DeckView | null>(null);
@@ -80,6 +98,26 @@ export function AdminDeckRoute() {
 
   const drafts = view?.drafts ?? [];
   const focus = drafts[cursor] ?? null;
+
+  // Dispatch lives on the deck now. Approving on this screen used to dead-end:
+  // the only send button in the product sat on the legacy sales console, so
+  // approved rows waited forever. Same route, same caps, one honest report.
+  const dispatchApproved = useCallback(async () => {
+    const approved = view?.approvedCount ?? 0;
+    if (busy || !approved) return;
+    if (!window.confirm(`Dispatch ${approved} approved send(s) now? Caps and cadence are enforced.`)) return;
+    setBusy(true);
+    const response = await fetch("/api/admin/sales/harness/dispatch", { method: "POST" });
+    const payload = await response.json().catch(() => null);
+    if (payload?.ok) {
+      const summary = summariseDispatch(payload.results ?? []);
+      setNotice(payload.dispatched > 0 ? `Dispatched: ${summary}.` : `Nothing dispatched — ${summary}.`);
+    } else {
+      setNotice(payload?.error ?? "Dispatch failed.");
+    }
+    setBusy(false);
+    await refresh();
+  }, [busy, view?.approvedCount, refresh]);
 
   const verdictFocused = useCallback(
     (action: "approve" | "reject") => {
@@ -125,13 +163,17 @@ export function AdminDeckRoute() {
           event.preventDefault();
           verdictFocused("reject");
           break;
+        case "d":
+          event.preventDefault();
+          void dispatchApproved();
+          break;
         default:
           break;
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [drafts.length, focus, verdictFocused]);
+  }, [drafts.length, focus, verdictFocused, dispatchApproved]);
 
   async function approveAllVisible() {
     if (!drafts.length) return;
@@ -160,7 +202,7 @@ export function AdminDeckRoute() {
       <AdminHeader
         eyebrow="Today"
         title="The verdict stack."
-        description="J/K move · Y approve · N reject · E expand."
+        description="J/K move · Y approve · N reject · E expand · D dispatch."
         actions={
           <button type="button" onClick={() => void refresh()} className="line-label flex items-center gap-2 hover:text-white">
             <RefreshCw className="size-3" /> sync
@@ -197,14 +239,25 @@ export function AdminDeckRoute() {
             <span className="font-mono text-xl tracking-tight text-white">{drafts.length}</span>
             <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/40">{view?.approvedCount ?? 0} APPROVED &amp; SENDABLE</span>
           </p>
-          <button
-            type="button"
-            onClick={() => void approveAllVisible()}
-            disabled={busy || !drafts.length}
-            className="mt-3 min-h-[40px] rounded-sm border border-white/16 px-3 py-1.5 text-xs text-white/80 transition hover:border-white/40 hover:text-white disabled:pointer-events-none disabled:opacity-30"
-          >
-            Batch approve…
-          </button>
+          <div className="mt-3 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => void approveAllVisible()}
+              disabled={busy || !drafts.length}
+              className="min-h-[40px] rounded-sm border border-white/16 px-3 py-1.5 text-xs text-white/80 transition hover:border-white/40 hover:text-white disabled:pointer-events-none disabled:opacity-30"
+            >
+              Batch approve…
+            </button>
+            <button
+              type="button"
+              onClick={() => void dispatchApproved()}
+              disabled={busy || !view?.approvedCount}
+              className="flex min-h-[40px] items-center justify-center gap-2 rounded-sm border border-white/16 px-3 py-1.5 text-xs text-white/80 transition hover:border-white/40 hover:text-white disabled:pointer-events-none disabled:opacity-30"
+              title="Send every approved draft. Dispatch enforces the daily cap and the weekly cadence."
+            >
+              <Send className="size-3" /> Dispatch {view?.approvedCount ?? 0} approved
+            </button>
+          </div>
         </div>
       </section>
 
