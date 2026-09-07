@@ -164,7 +164,7 @@ test("a scanned pack read from real PDF bytes walks the adapter chain and lands 
 
 test("a born-digital bill read from real PDF bytes verifies end-to-end", async () => {
   const pdfPath = join(
-    process.cwd(), "..", "1. Onboarding", "6. Ratang Liquor (Null)",
+    process.cwd(), "..", "1. Onboarding", "6. Ratang Liquor (Signed)",
     "Retang Liquor Folder Documents", "Eskom October Invoice.pdf",
   );
   const bytes = new Uint8Array(readFileSync(pdfPath));

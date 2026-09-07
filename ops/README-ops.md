@@ -13,7 +13,7 @@ Checks (each PASS/WARN/FAIL, timestamped; exits 1 on any FAIL):
 4. Node process count (WARN > 25, FAIL > 40 — healthy baseline is ~13–16 total, 3 for the two dev servers)
 
 Run it after any crash, before starting work, or cron it:
-`*/15 * * * * cd "/Users/straylight/Desktop/NEW UFMS/1OS" && node ops/healthcheck.mjs >> /tmp/f1-health.log 2>&1`
+`*/15 * * * * cd "/Users/straylight/Desktop/1-MI/1OS" && node ops/healthcheck.mjs >> /tmp/f1-health.log 2>&1`
 
 `ops/supabase-probe.mjs` / `probe2` — read-only row-count + data-sample probes.
 
