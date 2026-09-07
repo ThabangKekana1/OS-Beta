@@ -103,7 +103,13 @@ export function rankRows<T extends { sector: string; estSpendBand?: string | nul
 import { completeChat, parseJsonObject } from "@/lib/model/client";
 import { loadPlaybookText } from "./memory";
 
-const BANNED_IN_OUTREACH = [/\bnedbank\b/i, /\bufms\b/i, /\bgreen\s?share\b/i, /\beqstra\b/i, /\u2014/];
+/**
+ * Partners are disclosed with pride now, not hidden. Nedbank Corporate and
+ * Investment Banking owns, installs, maintains and insures the on site
+ * infrastructure, and saying so is the single strongest trust signal in a cold
+ * letter to a finance director. The product and vehicle names stay out.
+ */
+const BANNED_IN_OUTREACH = [/\bufms\b/i, /\beqstra\b/i, /\u2014/];
 
 /**
  * American sales register. This market reads it as pressure, and pressure reads
@@ -136,7 +142,7 @@ export function outreachGuard(
   // length rule measures the letter, not the block.
   const bodyWithoutSignature = draft.body.split(/kind regards/i)[0] ?? draft.body;
   const letterWords = bodyWithoutSignature.trim().split(/\s+/).length;
-  if (letterWords > 270) return "body too long";
+  if (letterWords > 290) return "body too long";
   if (letterWords < 85) return "body too thin for a first touch";
   for (const pattern of BANNED_IN_OUTREACH) {
     if (pattern.test(draft.subject) || pattern.test(draft.body)) return `banned content: ${pattern}`;
@@ -148,7 +154,8 @@ export function outreachGuard(
   // The offer is the point of the letter. A first touch that does not say we
   // fund it, and does not name what they can save, is a wasted send.
   if (!/\b35\b/.test(draft.body) || !/\b58\b/.test(draft.body)) return "does not carry both savings ceilings";
-  if (!/(fund|finance|own)/i.test(draft.body)) return "does not say Foundation-1 funds and owns the system";
+  if (!/nedbank/i.test(draft.body)) return "does not name the bank that owns and insures the infrastructure";
+  if (!/(own|install|maintain|insur)/i.test(draft.body)) return "does not say who owns, installs and insures the system";
   if (!/(no capital|nothing to build|pays nothing|no cost to you|R0)/i.test(draft.body)) return "does not make the zero capital position explicit";
   if (!/linkedin\.com\/in\/karman-kekana/i.test(draft.body)) return "signature is missing the LinkedIn profile";
   if (!/Wedgefield Office Park/i.test(draft.body)) return "signature is missing the company address";
@@ -290,8 +297,9 @@ export async function draftFirstTouchWithModel(
           "   flatter, do not exaggerate, and never quote a rand figure for their electricity.",
           "4. One plain sentence on the reason it matters: electricity keeps climbing at around 13 percent",
           "   a year while what they charge does not. State it once, simply, then move on.",
-          "5. THE OFFER, two or three sentences and the heart of the letter. Foundation-1 funds, installs and",
-          "   owns the system, so there is no capital cost to them and no asset on their balance sheet. They buy",
+          "5. THE OFFER, three or four sentences and the heart of the letter. The on site infrastructure is",
+          "   fully owned, installed, maintained and insured by Nedbank Corporate and Investment Banking, so",
+          "   there is no capital cost to them and no asset on their balance sheet. They buy",
           "   only the energy, at a lower rate. Name both pathways and their ceilings: solar and storage on their",
           "   own site at up to 35 percent off, or clean energy wheeled to their existing meter with nothing",
           "   installed at up to 58 percent off, or both together for up to 60 percent combined, which only",
@@ -317,8 +325,10 @@ export async function draftFirstTouchWithModel(
           "  about uptime and continuity, a finance director about the cost line and the balance sheet, an",
           "  owner about the next ten years. Do not name their title back at them, use it to choose what you say.",
           "- THE OFFER MUST BE UNMISTAKABLE. Every letter has to carry three things in plain words:",
-          "  (a) ZERO CAPEX. Foundation-1 funds, installs, insures and owns the system. The client pays nothing",
-          "      to build it and buys only the energy it produces, at a lower rate than they pay now.",
+          "  (a) ZERO CAPEX, AND WHO CARRIES IT. The on site infrastructure is fully owned, installed,",
+          "      maintained and insured by Foundation-1's partners at Nedbank Corporate and Investment Banking.",
+          "      Name them. A bank on the asset is the reason a cautious operator keeps reading. The client",
+          "      pays nothing to build it and buys only the energy it produces, at a lower rate than now.",
           "  (b) THE TWO PATHWAYS and their approved savings ceilings, which are the published figures on",
           "      foundation-1.co.za and are the ONLY percentages you may ever write:",
           "        solar and storage on their own site, up to 35 percent off from day one;",
@@ -335,7 +345,7 @@ export async function draftFirstTouchWithModel(
           "- Write rand amounts with spaces and never commas, for example R1 250 000.",
           "- Describe the client\'s own sector accurately from the evidence. Never call an operation an",
           "  agribusiness if the evidence says otherwise, and never describe a sector you were not given.",
-          "- Between 130 and 250 words, excluding the signature block. The offer needs room, but every",
+          "- Between 140 and 270 words, excluding the signature block. The offer needs room, but every",
           "  sentence must earn its place. Short paragraphs, one or two sentences each.",
           "  Subject under 60 characters, specific to their operation, never a",
           "  generic offer phrase.",
