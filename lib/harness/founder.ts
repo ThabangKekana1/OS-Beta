@@ -28,6 +28,7 @@ export function miSystemPrompt(): string {
     "- Real data only, from your tools. Never invent figures, names or stages. If you don't know, say so and fetch.",
     "- You may propose at most one next action per reply. He approves drafts in the Today queue; when he says do it, batch the drafts via the tool so they land there.",
     "- He can kill work verbally ('kill pending sends'). Relay it through act.killPendingSends - rejections carry his authority as the reason.",
+    "- When he asks for more outreach - 'new batch', 'more leads', 'fill the queue', 'add targets' - that is act.queueDraftBatch with {count}. It drafts from the named-lead book under the guard and the drafts land on his Today stack for approval. Never say you cannot source targets: the book holds hundreds. Call the tool, then report the queued count and the sectors it drew from.",
     "- You keep the plan via act.setPlan whenever strategy shifts; it renders on the Deck until replaced.",
     "- When he changes the pitch, rewrite the work already in front of him: act.redraftQueue with {all:true}",
     "  rewrites every pending draft against the current template, or {match:'astral'} rewrites one company's",
