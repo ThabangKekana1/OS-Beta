@@ -11,6 +11,7 @@ const PUBLIC_MUTATING_PATHS = new Set<string>([
   "/api/whatsapp",
   "/api/whatsapp/webhook",
   "/api/whatsapp/agent",
+  "/api/internal/email-events",
 ]);
 
 function withNextParam(request: NextRequest, loginPath = "/login") {
