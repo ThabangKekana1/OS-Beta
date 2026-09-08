@@ -169,6 +169,40 @@ export async function markSent(id: string): Promise<SendQueueRow> {
   return mapRow(data);
 }
 
+/**
+ * Delivery truth (doc 21: trust but verify). Resend's delivery webhooks land
+ * here: a send is not done when Resend accepts it, it is done when the mailbox
+ * confirms it. Events correlate back to their queue row through the Resend
+ * email id stored on the row's payload at dispatch, and land in
+ * foundation1_outcomes so the funnel and MI's brief speak delivery.
+ */
+export type DeliveryEventKind = "delivered" | "bounced" | "complained";
+
+export async function recordDeliveryEvent(input: {
+  resendId: string;
+  kind: DeliveryEventKind;
+  occurredAt?: string;
+}): Promise<{ recorded: boolean; sendQueueId?: string; prospectKey?: string }> {
+  const admin = getSupabaseAdminClient();
+  if (!admin) return { recorded: false };
+  const { data: rows } = await admin
+    .from("foundation1_send_queue")
+    .select("id,prospect_key")
+    .eq("payload->>resend_id", input.resendId)
+    .limit(1);
+  const row = rows?.[0];
+  if (!row) return { recorded: false };
+  const { error } = await admin.from("foundation1_outcomes").insert({
+    send_queue_id: row.id,
+    prospect_key: row.prospect_key,
+    event: input.kind,
+    occurred_at: input.occurredAt ?? new Date().toISOString(),
+    meta: { resend_id: input.resendId, source: "resend-webhook" },
+  });
+  if (error) return { recorded: false };
+  return { recorded: true, sendQueueId: row.id, prospectKey: row.prospect_key };
+}
+
 // ---------------------------------------------------------------------------
 // Caps and cadence — pure functions so the rules are testable without Supabase.
 // ---------------------------------------------------------------------------

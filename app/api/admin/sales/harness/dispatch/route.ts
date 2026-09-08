@@ -95,11 +95,17 @@ export async function POST() {
     }
 
     await markSent(row.id as string);
+    // Delivery truth: the Resend id is the handle the delivery webhook
+    // (api/internal/email-events) correlates delivered/bounced/complained on.
+    await admin
+      .from("foundation1_send_queue")
+      .update({ payload: { ...(row.payload ?? {}), resend_id: outcome.id } })
+      .eq("id", row.id);
     await admin.from("foundation1_outcomes").insert({
       send_queue_id: row.id,
       prospect_key: prospectKey,
       event: "sent",
-      meta: { template_key: row.template_key, dispatched_by: approver }
+      meta: { template_key: row.template_key, dispatched_by: approver, resend_id: outcome.id }
     });
     sentTodayCount += 1;
     results.push({ id: row.id, prospectKey, ok: true });

@@ -173,12 +173,29 @@ export async function briefFacts(): Promise<string> {
   const all = funnels.find((slice) => slice.sliceKey === "_all")?.counts
     ?? Object.fromEntries(FUNNEL_STAGES.map((stage) => [stage, 0]));
   const insights = await buildConversionInsights(funnels, [{ from: "sent", to: "reply" }, { from: "reply", to: "bills_in" }], 3);
+  const admin = getSupabaseAdminClient();
+  let deliveryLine = "";
+  if (admin) {
+    const { data: events } = await admin
+      .from("foundation1_outcomes")
+      .select("event")
+      .in("event", ["delivered", "bounced", "complained"]);
+    const counts = { delivered: 0, bounced: 0, complained: 0 };
+    for (const row of events ?? []) {
+      const kind = (row as { event: string }).event as keyof typeof counts;
+      if (kind in counts) counts[kind] += 1;
+    }
+    if (all.sent) {
+      deliveryLine = `DELIVERY: ${counts.delivered} delivered, ${counts.bounced} bounced, ${counts.complained} complained of ${all.sent} sent. Bounces poison the mailbox; chase the reply, not the volume.`;
+    }
+  }
   const lines = [
     `DEAL BOOK: R${(book.gatedValueZar / 1_000_000).toFixed(2)}m gated across ${book.gatedCount} deal(s); goal R100m.`,
     `Weighted pipeline (not counted): R${(book.weightedPipelineZar / 1_000_000).toFixed(2)}m.`,
     `PIPELINE: ${pipeline.totalCases} cases.`,
     `FUNNEL: sent ${all.sent ?? 0}, replied ${all.reply ?? 0}, bills-in ${all.bills_in ?? 0}, EOI ${all.eoi_signed ?? 0}, term sheets ${all.term_sheet ?? 0}.`,
   ];
+  if (deliveryLine) lines.push(deliveryLine);
   for (const insight of insights) lines.push(`RATE: ${insight.fact}`);
   return lines.join("\n");
 }
