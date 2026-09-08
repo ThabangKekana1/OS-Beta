@@ -40,12 +40,12 @@ test("the only agent-callable write is a gate-mediated queueing draft", () => {
   assert.match(runner, /startsWith\("read\."\)|startsWith\("queue\."/);
 });
 
-test("volume caps hold: 20/day platform-wide, one follow-up per prospect per week", async () => {
+test("volume caps hold: 50/day platform-wide, one follow-up per prospect per week", async () => {
   const mod = await import("../lib/harness/gate.ts");
   const now = "2026-09-01T09:00:00.000Z";
-  assert.equal(mod.SEND_DAILY_CAP, 20);
-  assert.ok(mod.withinDailyCap(new Array(19)), "19 sends leave room for one more");
-  assert.equal(mod.withinDailyCap(new Array(20)), false, "20 sends exhaust the day");
+  assert.equal(mod.SEND_DAILY_CAP, 50);
+  assert.ok(mod.withinDailyCap(new Array(49)), "49 sends leave room for one more");
+  assert.equal(mod.withinDailyCap(new Array(50)), false, "50 sends exhaust the day");
   assert.ok(mod.outsideFollowupWindow([], now));
   assert.equal(
     mod.outsideFollowupWindow(["2026-08-29T08:00:00.000Z"], now),

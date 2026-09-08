@@ -8,13 +8,14 @@
  * violations fail loudly in tests instead of silently in production.
  *
  * Volume caps are doc 15 decisions, enforced here in one place:
- *   - max 20 approved sends per calendar day, platform-wide
+ *   - max 50 approved sends per calendar day, platform-wide (raised from 20
+ *     on 8 Sep 2026 at the founder's call — watch reply and bounce quality)
  *   - max 1 send per prospect per rolling 7 days (one follow-up cadence)
  */
 import { randomUUID } from "node:crypto";
 import { getSupabaseAdminClient } from "@/lib/supabase-admin";
 
-export const SEND_DAILY_CAP = 20;
+export const SEND_DAILY_CAP = 50;
 export const FOLLOWUP_ROLLING_DAYS = 7;
 
 export type SendQueueStatus = "draft" | "approved" | "rejected" | "sent";
