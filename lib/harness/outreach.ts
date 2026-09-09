@@ -168,7 +168,7 @@ export function outreachGuard(
   if (!/linkedin\.com\/in\/karman-kekana/i.test(draft.body)) return "signature is missing the LinkedIn profile";
   if (!/karman@foundation-1\.co\.za/i.test(draft.body)) return "signature is missing the direct email address";
   if (!/\+27 69 811 7112/.test(draft.body)) return "the letter is missing the WhatsApp number";
-  if (!/\bEden\b/.test(draft.body) || !/\bLumen\b/.test(draft.body)) return "does not name both pathways (Eden and Lumen)";
+  if (!/\bEden\b/.test(draft.body) || !/\bAwaken\b/.test(draft.body)) return "does not name both pathways (Eden and Awaken)";
   if (!/based in Bryanston/i.test(draft.body)) return "missing the founder's home line (based in Bryanston)";
   if (/good day|dear /i.test(draft.body.split("\n")[0] ?? "")) return "opens with a salutation the founder does not use";
   if (!draft.body.includes(ASSESSMENT_URL)) return "missing or altered the route into the system";
@@ -308,7 +308,7 @@ export async function draftFirstTouchWithModel(
           "4. THE PITCH, one paragraph, exactly this shape and order:",
           "   Tariffs are rising roughly 13% a year, and most output pricing doesn\'t move with it.",
           "   Foundation-1 closes that gap two ways: Eden: solar and storage on-site, zero capex, up to 35%",
-          "   off from day one, financed and insured through Nedbank CIB. Lumen: renewable power wheeled to",
+          "   off from day one, financed and insured through Nedbank CIB. Awaken: renewable power wheeled to",
           "   your existing meter, nothing installed, up to 58% off. Combined, up to 60%. You only pay once",
           "   power is live.",
           "   Where the evidence gives you something specific about their operation, work one short true",
@@ -338,11 +338,11 @@ export async function draftFirstTouchWithModel(
           "      insured through Nedbank CIB. Name them. A bank on the asset is the reason a cautious",
           "      operator keeps reading. The client pays nothing to build it and buys only the energy it",
           "      produces, at a lower rate than now.",
-          "  (b) THE TWO PATHWAYS, named exactly Eden and Lumen, and their approved savings ceilings,",
+          "  (b) THE TWO PATHWAYS, named exactly Eden and Awaken, and their approved savings ceilings,",
           "      which are the published figures on foundation-1.co.za and are the ONLY percentages you",
           "      may ever write:",
           "        Eden: solar and storage on-site, up to 35 percent off from day one;",
-          "        Lumen: renewable power wheeled to their existing meter, nothing installed, up to 58 percent off;",
+          "        Awaken: renewable power wheeled to their existing meter, nothing installed, up to 58 percent off;",
           "        and both together, up to 60 percent combined.",
           "      Always write them as up to, never as a promise, and never invent a different number.",
           "  (c) R0 until the switch. You only pay once power is live.",
