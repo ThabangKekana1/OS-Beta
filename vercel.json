@@ -15,6 +15,10 @@
     {
       "path": "/api/internal/harness/reflect",
       "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/internal/email-delivery-sync",
+      "schedule": "*/15 * * * *"
     }
   ],
   "functions": {
