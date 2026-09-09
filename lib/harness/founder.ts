@@ -175,6 +175,7 @@ export async function briefFacts(): Promise<string> {
   const insights = await buildConversionInsights(funnels, [{ from: "sent", to: "reply" }, { from: "reply", to: "bills_in" }], 3);
   const admin = getSupabaseAdminClient();
   let deliveryLine = "";
+  let pricingLine = "";
   if (admin) {
     const { data: events } = await admin
       .from("foundation1_outcomes")
@@ -188,6 +189,28 @@ export async function briefFacts(): Promise<string> {
     if (all.sent) {
       deliveryLine = `DELIVERY: ${counts.delivered} delivered, ${counts.bounced} bounced, ${counts.complained} complained of ${all.sent} sent. Bounces poison the mailbox; chase the reply, not the volume.`;
     }
+    // Pricing funnel, last 7 days of first-party signals plus cases opened.
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: pricingEvents } = await admin
+      .from("foundation1_behavior_events")
+      .select("event_name,properties")
+      .eq("page_key", "/pricing")
+      .gte("received_at", since)
+      .limit(5000);
+    let views = 0;
+    let reports = 0;
+    let casesFromEvents = 0;
+    for (const row of pricingEvents ?? []) {
+      const element = (row as { properties?: { element?: string } }).properties?.element ?? "";
+      if ((row as { event_name: string }).event_name === "page_view") views += 1;
+      if (element === "pricing_report_generated") reports += 1;
+      if (element === "pricing_case_created") casesFromEvents += 1;
+    }
+    const { count: casesCount } = await admin
+      .from("migration_cases")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", since);
+    pricingLine = `PRICING (7d): ${views} pricing-page views, ${reports} calculators run, ${casesCount ?? 0} cases opened. Visitors to money in one line.`;
   }
   const lines = [
     `DEAL BOOK: R${(book.gatedValueZar / 1_000_000).toFixed(2)}m gated across ${book.gatedCount} deal(s); goal R100m.`,
@@ -196,6 +219,7 @@ export async function briefFacts(): Promise<string> {
     `FUNNEL: sent ${all.sent ?? 0}, replied ${all.reply ?? 0}, bills-in ${all.bills_in ?? 0}, EOI ${all.eoi_signed ?? 0}, term sheets ${all.term_sheet ?? 0}.`,
   ];
   if (deliveryLine) lines.push(deliveryLine);
+  if (pricingLine) lines.push(pricingLine);
   for (const insight of insights) lines.push(`RATE: ${insight.fact}`);
   return lines.join("\n");
 }
