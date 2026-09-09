@@ -109,14 +109,14 @@ import { loadPlaybookText } from "./memory";
  * infrastructure, and saying so is the single strongest trust signal in a cold
  * letter to a finance director. The product and vehicle names stay out.
  */
-const BANNED_IN_OUTREACH = [/\bufms\b/i, /\beqstra\b/i, /\u2014/];
+const BANNED_IN_OUTREACH = [/\bufms\b/i, /\beqstra\b/i, /\u2014/, /\u2013/];
 
 /**
  * American sales register. This market reads it as pressure, and pressure reads
  * as weakness, so the guard rejects the draft rather than sending it.
  */
 const BANNED_REGISTER = [
-  /\breach out\b/i,
+  /\breach out\b(?! directly)/i,
   /\bcircle back\b/i,
   /\bquick question\b/i,
   /\bhope this (email )?finds you\b/i,
@@ -163,13 +163,13 @@ export function outreachGuard(
   if (/on site infrastructure|the system|the pathways/i.test(firstThird) && !/foundation-1 (moves|helps|builds|puts)/i.test(firstThird)) {
     return "refers to the offer before saying what Foundation-1 does";
   }
-  if (!/(own|install|maintain|insur)/i.test(draft.body)) return "does not say who owns, installs and insures the system";
-  if (!/(zero capex|no capital|nothing on your balance sheet|pays? nothing|only once it)/i.test(draft.body)) return "does not make the zero capital position explicit";
+  if (!/(own|install|maintain|insur|financ)/i.test(draft.body)) return "does not say who carries the infrastructure";
+  if (!/(zero capex|no capital|nothing on your balance sheet|pays? nothing|only once it|only once power)/i.test(draft.body)) return "does not make the zero capital position explicit";
   if (!/linkedin\.com\/in\/karman-kekana/i.test(draft.body)) return "signature is missing the LinkedIn profile";
-  if (!/Wedgefield Office Park/i.test(draft.body)) return "signature is missing the company address";
   if (!/karman@foundation-1\.co\.za/i.test(draft.body)) return "signature is missing the direct email address";
-  if (!/\+27 69 811 7112/.test(draft.body)) return "signature is missing the phone number";
-  if (!/\bEden\b/.test(draft.body) || !/\bAwaken\b/.test(draft.body)) return "does not name both pathways";
+  if (!/\+27 69 811 7112/.test(draft.body)) return "the letter is missing the WhatsApp number";
+  if (!/\bEden\b/.test(draft.body) || !/\bLumen\b/.test(draft.body)) return "does not name both pathways (Eden and Lumen)";
+  if (!/based in Bryanston/i.test(draft.body)) return "missing the founder's home line (based in Bryanston)";
   if (/good day|dear /i.test(draft.body.split("\n")[0] ?? "")) return "opens with a salutation the founder does not use";
   if (!draft.body.includes(ASSESSMENT_URL)) return "missing or altered the route into the system";
   if (/utm_/i.test(draft.body)) return "raw tracking parameters in the letter";
@@ -284,11 +284,11 @@ export async function draftFirstTouchWithModel(
           "",
           "SOUTH AFRICAN REGISTER, not American:",
           "- Full sentences. Never clipped openers like Saw you run or Quick question or Hope this finds.",
-          "- Greet by first name after Good day. A short courteous line is welcome, not filler.",
+          "- Greet by first name on its own line. A short courteous line is welcome, not filler.",
           "- Understated. No hype words, no exclamation marks, no emoji, no jargon such as leverage,",
-          "  solution, synergies, unlock, game changer, reach out or circle back.",
+          "  solution, synergies, unlock, game changer or circle back.",
           "- Offer to be redirected: if this sits with someone else in the business, ask to be pointed there.",
-          "- Close with Kind regards and the full signature block.",
+          "- NEVER use an em dash or an en dash. The founder hates them. Use a comma, a colon or a full stop.",
           "",
           "THE FOUNDER HAS WRITTEN THE LETTER HIMSELF. Follow his structure exactly. Your job is to fit this",
           "prospect into it, not to reinvent it. Short lines. No apology. No throat clearing. Nothing said twice.",
@@ -298,33 +298,33 @@ export async function draftFirstTouchWithModel(
           "",
           "THE LETTER, in this exact order:",
           "1. <First name>,   on its own line. No Good day, no Dear.",
-          "2. Karman Kekana, founder of Foundation-1, writing from Bryanston.   One line, exactly this form.",
-          "3. THE PROBLEM, three short sentences in his voice: their electricity cost rises about 13% a year,",
-          "   their output price does not move with it, and the gap compounds against them every year they do",
-          "   not act. Where the evidence gives you something specific about their operation, work it into the",
-          "   first of those sentences. Never assert a sector the evidence does not support.",
-          "4. The line: Foundation-1 closes it two ways:",
-          "5. A numbered list, exactly two items, then a third unnumbered line:",
-          "     1. Eden: solar and storage on your own site, up to 35% off from day one. Installed, owned,",
-          "        maintained and insured by our financing partner, Nedbank CIB. Zero capex, nothing on your",
-          "        balance sheet.",
-          "     2. Awaken: renewable power wheeled to your existing meter, nothing installed, up to 58% off.",
-          "     Both together: up to 60% combined. Foundation-1 is the only operator in South Africa running",
-          "     this stack end to end.",
-          "6. You pay only for energy delivered, and only once it is live.",
-          "7. One line of momentum, true and specific to them where possible: other operators in their sector",
-          "   or province already in the pipeline, and provincial government engaging Foundation-1 directly on",
-          "   agribusiness energy programmes. Only if the evidence supports it.",
-          "8. Run your own numbers in under a minute: https://foundation-1.co.za/start",
-          "9. No signature required to see them. If energy procurement is not their remit, ask for a pointer to",
-          "   whoever owns it at their company, by name.",
-          "10. The signature block, exactly these five lines, with NO Kind regards and no sign off line",
-          "    above it. The founder does not use one:",
+          "2. Karman Kekana, founder of Foundation-1, based in Bryanston.   One line, exactly this form.",
+          "3. THE OPENER, exactly this shape, two sentences: I wanted to reach out directly rather than",
+          "   through the usual channels. I\'ve spent time looking at what operators around <their town or",
+          "   area from the evidence> are facing on electricity costs, and I think there\'s something here",
+          "   worth a conversation. Use their real town, city or province from the evidence. Never invent",
+          "   or guess a place, and if no location is given, write: I\'ve spent time looking at what",
+          "   operators in their industry are facing on electricity costs.",
+          "4. THE PITCH, one paragraph, exactly this shape and order:",
+          "   Tariffs are rising roughly 13% a year, and most output pricing doesn\'t move with it.",
+          "   Foundation-1 closes that gap two ways: Eden: solar and storage on-site, zero capex, up to 35%",
+          "   off from day one, financed and insured through Nedbank CIB. Lumen: renewable power wheeled to",
+          "   your existing meter, nothing installed, up to 58% off. Combined, up to 60%. You only pay once",
+          "   power is live.",
+          "   Where the evidence gives you something specific about their operation, work one short true",
+          "   detail into the first sentence. Never assert a sector the evidence does not support.",
+          "5. THE CTA, exactly this shape: If it\'s useful, you can run your own numbers in under a minute,",
+          "   no signature needed: then the link on its own line.",
+          "6. THE REDIRECT: I\'d genuinely welcome a conversation if this is relevant to you, and if energy",
+          "   procurement sits with someone else at <Company>, I\'d appreciate a name to point me to.",
+          "7. THE WHATSAPP LINE, exactly this shape: Feel free to WhatsApp me directly with any questions:",
+          "   +27 69 811 7112.",
+          "8. The signature block, exactly these four lines, with NO Kind regards and no sign off line",
+          "   above it. The founder does not use one:",
           "     Karman Kekana",
           "     Founder, Foundation-1",
-          "     karman@foundation-1.co.za  |  +27 69 811 7112",
-          "     https://www.linkedin.com/in/karman-kekana-26011674",
-          "     17th Muswell Road, Wedgefield Office Park, Bryanston, Sandton, Johannesburg 2191",
+          "     karman@foundation-1.co.za",
+          "     linkedin.com/in/karman-kekana-26011674",
           "",
           "HARD RULES:",
           "- Greeting: when the evidence carries a Recipient, greet that person by first name and nothing",
@@ -334,20 +334,19 @@ export async function draftFirstTouchWithModel(
           "  about uptime and continuity, a finance director about the cost line and the balance sheet, an",
           "  owner about the next ten years. Do not name their title back at them, use it to choose what you say.",
           "- THE OFFER MUST BE UNMISTAKABLE. Every letter has to carry three things in plain words:",
-          "  (a) ZERO CAPEX, AND WHO CARRIES IT. The on site infrastructure is fully owned, installed,",
-          "      maintained and insured by Foundation-1's partners at Nedbank Corporate and Investment Banking.",
-          "      Name them. A bank on the asset is the reason a cautious operator keeps reading. The client",
-          "      pays nothing to build it and buys only the energy it produces, at a lower rate than now.",
-          "  (b) THE TWO PATHWAYS and their approved savings ceilings, which are the published figures on",
-          "      foundation-1.co.za and are the ONLY percentages you may ever write:",
-          "        solar and storage on their own site, up to 35 percent off from day one;",
-          "        clean energy wheeled to their existing meter with nothing installed, up to 58 percent off;",
-          "        and both together, up to 60 percent combined. Foundation-1 is the only operator in South",
-          "        Africa that can combine the two, and that is the sentence that separates this letter from",
-          "        every solar email they have ever deleted. Say it plainly, once.",
+          "  (a) ZERO CAPEX, AND WHO CARRIES IT. On-site solar and storage, zero capex, financed and",
+          "      insured through Nedbank CIB. Name them. A bank on the asset is the reason a cautious",
+          "      operator keeps reading. The client pays nothing to build it and buys only the energy it",
+          "      produces, at a lower rate than now.",
+          "  (b) THE TWO PATHWAYS, named exactly Eden and Lumen, and their approved savings ceilings,",
+          "      which are the published figures on foundation-1.co.za and are the ONLY percentages you",
+          "      may ever write:",
+          "        Eden: solar and storage on-site, up to 35 percent off from day one;",
+          "        Lumen: renewable power wheeled to their existing meter, nothing installed, up to 58 percent off;",
+          "        and both together, up to 60 percent combined.",
           "      Always write them as up to, never as a promise, and never invent a different number.",
-          "  (c) R0 until the switch. They pay nothing until their new power is live.",
-          "- No invented numbers beyond those two published ceilings. No partner or bank names. No em dashes.",
+          "  (c) R0 until the switch. You only pay once power is live.",
+          "- No invented numbers beyond those two published ceilings. No partner or bank names other than Nedbank CIB. No em dashes.",
           "- NEVER quote a rand figure for their electricity spend. Any spend figure you are given is",
           "  Foundation-1\'s own estimate, not their bill, and stating it back as fact is both wrong and",
           "  intrusive. Refer to the scale of the operation in words instead.",
