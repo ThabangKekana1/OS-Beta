@@ -18,7 +18,7 @@
     },
     {
       "path": "/api/internal/email-delivery-sync",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 5 * * *"
     }
   ],
   "functions": {
